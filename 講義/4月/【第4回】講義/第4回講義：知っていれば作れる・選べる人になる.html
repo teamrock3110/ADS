@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<!-- saved from url=(0039)https://ads_lecture_4_diagram.surge.sh/ -->
+<html lang="ja"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta property="og:title" content="第4回講義：知っていれば作れる・選べる人になる">
+  <meta property="og:description" content="アイデアを企画にする4ステップとAI活用の3つの観点を図解で解説します。">
+  <meta property="og:type" content="article">
+  <title>第4回講義：知っていれば作れる・選べる人になる</title>
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns=&#39;http://www.w3.org/2000/svg&#39; viewBox=&#39;0 0 100 100&#39;&gt;&lt;rect width=&#39;100&#39; height=&#39;100&#39; rx=&#39;20&#39; fill=&#39;%23FFFFFF&#39;/&gt;&lt;rect x=&#39;8&#39; y=&#39;8&#39; width=&#39;84&#39; height=&#39;84&#39; rx=&#39;14&#39; fill=&#39;none&#39; stroke=&#39;%230D6CA7&#39; stroke-width=&#39;4&#39;/&gt;&lt;circle cx=&#39;32&#39; cy=&#39;40&#39; r=&#39;10&#39; fill=&#39;%230D6CA7&#39; opacity=&#39;0.8&#39;/&gt;&lt;circle cx=&#39;68&#39; cy=&#39;40&#39; r=&#39;10&#39; fill=&#39;%233A8FCA&#39; opacity=&#39;0.8&#39;/&gt;&lt;rect x=&#39;25&#39; y=&#39;62&#39; width=&#39;50&#39; height=&#39;6&#39; rx=&#39;3&#39; fill=&#39;%238A96A5&#39; opacity=&#39;0.6&#39;/&gt;&lt;rect x=&#39;30&#39; y=&#39;74&#39; width=&#39;40&#39; height=&#39;6&#39; rx=&#39;3&#39; fill=&#39;%238A96A5&#39; opacity=&#39;0.3&#39;/&gt;&lt;/svg&gt;">
+  <link rel="preconnect" href="https://fonts.googleapis.com/">
+  <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
+  <link href="./第4回講義：知っていれば作れる・選べる人になる_files/css2" rel="stylesheet">
+  <script src="./第4回講義：知っていれば作れる・選べる人になる_files/saved_resource"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ads: {
+              bg: '#FFFFFF',
+              surface: '#F8FAFB',
+              hover: '#F1F5F9',
+              border: '#E2E8F0',
+              accent: '#0D6CA7',
+              'accent-light': '#0D6CA7',
+              text: '#1A2332',
+              muted: '#5A6B7D',
+              dim: '#8A96A5',
+              positive: '#1B7A5A',
+              negative: '#B91C1C',
+              warning: '#92650A',
+            },
+            blue: {
+              200: '#B3D9EF',
+              300: '#7FBCDD',
+              400: '#3A8FCA',
+              500: '#0D6CA7',
+              600: '#0B5E93',
+              700: '#094D7A',
+            }
+          },
+          fontFamily: {
+            sans: ['"Noto Sans JP"', '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Yu Gothic UI"', '"Meiryo"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { border-top: none !important; }
+      .rounded-xl { break-inside: avoid; }
+      .md\:flex-row { flex-direction: row !important; }
+      .md\:hidden { display: none !important; }
+      .hidden.md\:block { display: block !important; }
+      .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+      .md\:mb-20 { margin-bottom: 5rem !important; }
+      .md\:py-16 { padding-top: 4rem !important; padding-bottom: 4rem !important; }
+      .bg-clip-text.text-transparent {
+        -webkit-background-clip: initial !important;
+        background-clip: initial !important;
+        color: #0D6CA7 !important;
+        -webkit-text-fill-color: #0D6CA7 !important;
+      }
+    }
+  </style>
+<style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(13 108 167 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(13 108 167 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:"Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", sans-serif;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.mx-auto{margin-left:auto;margin-right:auto}.mb-1{margin-bottom:0.25rem}.mb-1\.5{margin-bottom:0.375rem}.mb-10{margin-bottom:2.5rem}.mb-16{margin-bottom:4rem}.mb-2{margin-bottom:0.5rem}.mb-2\.5{margin-bottom:0.625rem}.mb-3{margin-bottom:0.75rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.mb-8{margin-bottom:2rem}.mt-0\.5{margin-top:0.125rem}.mt-1{margin-top:0.25rem}.mt-2\.5{margin-top:0.625rem}.mt-3{margin-top:0.75rem}.mt-4{margin-top:1rem}.inline-block{display:inline-block}.inline{display:inline}.flex{display:flex}.inline-flex{display:inline-flex}.grid{display:grid}.hidden{display:none}.h-10{height:2.5rem}.h-14{height:3.5rem}.h-3{height:0.75rem}.h-3\.5{height:0.875rem}.h-4{height:1rem}.h-5{height:1.25rem}.h-6{height:1.5rem}.h-7{height:1.75rem}.h-8{height:2rem}.w-10{width:2.5rem}.w-14{width:3.5rem}.w-28{width:7rem}.w-3{width:0.75rem}.w-3\.5{width:0.875rem}.w-36{width:9rem}.w-4{width:1rem}.w-5{width:1.25rem}.w-6{width:1.5rem}.w-7{width:1.75rem}.w-8{width:2rem}.max-w-3xl{max-width:48rem}.max-w-lg{max-width:32rem}.max-w-md{max-width:28rem}.max-w-xl{max-width:36rem}.flex-1{flex:1 1 0%}.flex-shrink-0{flex-shrink:0}.cursor-pointer{cursor:pointer}.grid-cols-1{grid-template-columns:repeat(1, minmax(0, 1fr))}.flex-col{flex-direction:column}.items-start{align-items:flex-start}.items-center{align-items:center}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1\.5{gap:0.375rem}.gap-2{gap:0.5rem}.gap-2\.5{gap:0.625rem}.gap-3{gap:0.75rem}.gap-4{gap:1rem}.space-y-1\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.375rem * var(--tw-space-y-reverse))}.space-y-2 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.5rem * var(--tw-space-y-reverse))}.space-y-2\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.625rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.625rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.overflow-hidden{overflow:hidden}.rounded{border-radius:0.25rem}.rounded-2xl{border-radius:1rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-xl{border-radius:0.75rem}.border{border-width:1px}.border-2{border-width:2px}.border-b{border-bottom-width:1px}.border-l-4{border-left-width:4px}.border-t{border-top-width:1px}.border-t-4{border-top-width:4px}.border-ads-accent{--tw-border-opacity:1;border-color:rgb(13 108 167 / var(--tw-border-opacity, 1))}.border-ads-accent\/10{border-color:rgb(13 108 167 / 0.1)}.border-ads-accent\/20{border-color:rgb(13 108 167 / 0.2)}.border-ads-border{--tw-border-opacity:1;border-color:rgb(226 232 240 / var(--tw-border-opacity, 1))}.border-ads-border\/30{border-color:rgb(226 232 240 / 0.3)}.border-ads-border\/50{border-color:rgb(226 232 240 / 0.5)}.border-amber-200{--tw-border-opacity:1;border-color:rgb(253 230 138 / var(--tw-border-opacity, 1))}.border-amber-500\/15{border-color:rgb(245 158 11 / 0.15)}.border-amber-500\/20{border-color:rgb(245 158 11 / 0.2)}.border-blue-200{--tw-border-opacity:1;border-color:rgb(179 217 239 / var(--tw-border-opacity, 1))}.border-blue-500\/15{border-color:rgb(13 108 167 / 0.15)}.border-blue-500\/20{border-color:rgb(13 108 167 / 0.2)}.border-cyan-500\/15{border-color:rgb(6 182 212 / 0.15)}.border-emerald-500\/15{border-color:rgb(16 185 129 / 0.15)}.border-emerald-500\/20{border-color:rgb(16 185 129 / 0.2)}.border-purple-500\/15{border-color:rgb(168 85 247 / 0.15)}.border-purple-500\/20{border-color:rgb(168 85 247 / 0.2)}.border-red-200{--tw-border-opacity:1;border-color:rgb(254 202 202 / var(--tw-border-opacity, 1))}.border-red-200\/50{border-color:rgb(254 202 202 / 0.5)}.border-red-500\/15{border-color:rgb(239 68 68 / 0.15)}.border-red-500\/20{border-color:rgb(239 68 68 / 0.2)}.border-red-500\/30{border-color:rgb(239 68 68 / 0.3)}.border-violet-200{--tw-border-opacity:1;border-color:rgb(221 214 254 / var(--tw-border-opacity, 1))}.border-violet-500\/15{border-color:rgb(139 92 246 / 0.15)}.border-violet-500\/20{border-color:rgb(139 92 246 / 0.2)}.border-l-amber-500{--tw-border-opacity:1;border-left-color:rgb(245 158 11 / var(--tw-border-opacity, 1))}.border-l-blue-500{--tw-border-opacity:1;border-left-color:rgb(13 108 167 / var(--tw-border-opacity, 1))}.border-l-cyan-500{--tw-border-opacity:1;border-left-color:rgb(6 182 212 / var(--tw-border-opacity, 1))}.border-l-emerald-500{--tw-border-opacity:1;border-left-color:rgb(16 185 129 / var(--tw-border-opacity, 1))}.border-l-purple-500{--tw-border-opacity:1;border-left-color:rgb(168 85 247 / var(--tw-border-opacity, 1))}.bg-ads-accent\/10{background-color:rgb(13 108 167 / 0.1)}.bg-ads-accent\/5{background-color:rgb(13 108 167 / 0.05)}.bg-ads-bg{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-ads-surface{--tw-bg-opacity:1;background-color:rgb(248 250 251 / var(--tw-bg-opacity, 1))}.bg-amber-500\/10{background-color:rgb(245 158 11 / 0.1)}.bg-amber-500\/5{background-color:rgb(245 158 11 / 0.05)}.bg-blue-500\/10{background-color:rgb(13 108 167 / 0.1)}.bg-blue-500\/5{background-color:rgb(13 108 167 / 0.05)}.bg-cyan-500\/10{background-color:rgb(6 182 212 / 0.1)}.bg-cyan-500\/5{background-color:rgb(6 182 212 / 0.05)}.bg-emerald-500\/10{background-color:rgb(16 185 129 / 0.1)}.bg-emerald-500\/5{background-color:rgb(16 185 129 / 0.05)}.bg-purple-500\/10{background-color:rgb(168 85 247 / 0.1)}.bg-purple-500\/5{background-color:rgb(168 85 247 / 0.05)}.bg-red-500\/10{background-color:rgb(239 68 68 / 0.1)}.bg-red-500\/5{background-color:rgb(239 68 68 / 0.05)}.bg-violet-500\/10{background-color:rgb(139 92 246 / 0.1)}.bg-violet-500\/5{background-color:rgb(139 92 246 / 0.05)}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-gradient-to-b{background-image:linear-gradient(to bottom, var(--tw-gradient-stops))}.bg-gradient-to-r{background-image:linear-gradient(to right, var(--tw-gradient-stops))}.from-ads-accent\/5{--tw-gradient-from:rgb(13 108 167 / 0.05) var(--tw-gradient-from-position);--tw-gradient-to:rgb(13 108 167 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.from-amber-600{--tw-gradient-from:#d97706 var(--tw-gradient-from-position);--tw-gradient-to:rgb(217 119 6 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.from-blue-50{--tw-gradient-from:#eff6ff var(--tw-gradient-from-position);--tw-gradient-to:rgb(239 246 255 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.from-blue-600{--tw-gradient-from:#0B5E93 var(--tw-gradient-from-position);--tw-gradient-to:rgb(11 94 147 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.from-cyan-600{--tw-gradient-from:#0891b2 var(--tw-gradient-from-position);--tw-gradient-to:rgb(8 145 178 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.from-purple-50{--tw-gradient-from:#faf5ff var(--tw-gradient-from-position);--tw-gradient-to:rgb(250 245 255 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.from-purple-600{--tw-gradient-from:#9333ea var(--tw-gradient-from-position);--tw-gradient-to:rgb(147 51 234 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.to-amber-400{--tw-gradient-to:#fbbf24 var(--tw-gradient-to-position)}.to-blue-400{--tw-gradient-to:#3A8FCA var(--tw-gradient-to-position)}.to-cyan-400{--tw-gradient-to:#22d3ee var(--tw-gradient-to-position)}.to-purple-400{--tw-gradient-to:#c084fc var(--tw-gradient-to-position)}.to-transparent{--tw-gradient-to:transparent var(--tw-gradient-to-position)}.to-white{--tw-gradient-to:#fff var(--tw-gradient-to-position)}.bg-clip-text{-webkit-background-clip:text;background-clip:text}.p-2{padding:0.5rem}.p-3{padding:0.75rem}.p-4{padding:1rem}.p-5{padding:1.25rem}.p-6{padding:1.5rem}.p-8{padding:2rem}.px-1\.5{padding-left:0.375rem;padding-right:0.375rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-4{padding-left:1rem;padding-right:1rem}.px-5{padding-left:1.25rem;padding-right:1.25rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-1\.5{padding-top:0.375rem;padding-bottom:0.375rem}.py-10{padding-top:2.5rem;padding-bottom:2.5rem}.py-3{padding-top:0.75rem;padding-bottom:0.75rem}.py-4{padding-top:1rem;padding-bottom:1rem}.py-5{padding-top:1.25rem;padding-bottom:1.25rem}.pb-10{padding-bottom:2.5rem}.pt-2{padding-top:0.5rem}.pt-4{padding-top:1rem}.pt-6{padding-top:1.5rem}.text-left{text-align:left}.text-center{text-align:center}.font-mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}.text-2xl{font-size:1.5rem;line-height:2rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}.text-base{font-size:1rem;line-height:1.5rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-black{font-weight:900}.font-bold{font-weight:700}.font-medium{font-weight:500}.leading-none{line-height:1}.leading-relaxed{line-height:1.625}.tracking-tight{letter-spacing:-0.025em}.tracking-wide{letter-spacing:0.025em}.text-ads-accent{--tw-text-opacity:1;color:rgb(13 108 167 / var(--tw-text-opacity, 1))}.text-ads-accent-light{--tw-text-opacity:1;color:rgb(13 108 167 / var(--tw-text-opacity, 1))}.text-ads-accent-light\/70{color:rgb(13 108 167 / 0.7)}.text-ads-dim{--tw-text-opacity:1;color:rgb(138 150 165 / var(--tw-text-opacity, 1))}.text-ads-muted{--tw-text-opacity:1;color:rgb(90 107 125 / var(--tw-text-opacity, 1))}.text-amber-500{--tw-text-opacity:1;color:rgb(245 158 11 / var(--tw-text-opacity, 1))}.text-amber-600{--tw-text-opacity:1;color:rgb(217 119 6 / var(--tw-text-opacity, 1))}.text-amber-600\/70{color:rgb(217 119 6 / 0.7)}.text-amber-700{--tw-text-opacity:1;color:rgb(180 83 9 / var(--tw-text-opacity, 1))}.text-amber-700\/80{color:rgb(180 83 9 / 0.8)}.text-blue-500{--tw-text-opacity:1;color:rgb(13 108 167 / var(--tw-text-opacity, 1))}.text-blue-600{--tw-text-opacity:1;color:rgb(11 94 147 / var(--tw-text-opacity, 1))}.text-blue-700{--tw-text-opacity:1;color:rgb(9 77 122 / var(--tw-text-opacity, 1))}.text-cyan-500{--tw-text-opacity:1;color:rgb(6 182 212 / var(--tw-text-opacity, 1))}.text-cyan-600{--tw-text-opacity:1;color:rgb(8 145 178 / var(--tw-text-opacity, 1))}.text-emerald-500{--tw-text-opacity:1;color:rgb(16 185 129 / var(--tw-text-opacity, 1))}.text-emerald-600{--tw-text-opacity:1;color:rgb(5 150 105 / var(--tw-text-opacity, 1))}.text-emerald-600\/70{color:rgb(5 150 105 / 0.7)}.text-emerald-700{--tw-text-opacity:1;color:rgb(4 120 87 / var(--tw-text-opacity, 1))}.text-purple-500{--tw-text-opacity:1;color:rgb(168 85 247 / var(--tw-text-opacity, 1))}.text-purple-600{--tw-text-opacity:1;color:rgb(147 51 234 / var(--tw-text-opacity, 1))}.text-red-500{--tw-text-opacity:1;color:rgb(239 68 68 / var(--tw-text-opacity, 1))}.text-red-600{--tw-text-opacity:1;color:rgb(220 38 38 / var(--tw-text-opacity, 1))}.text-red-700{--tw-text-opacity:1;color:rgb(185 28 28 / var(--tw-text-opacity, 1))}.text-slate-600{--tw-text-opacity:1;color:rgb(71 85 105 / var(--tw-text-opacity, 1))}.text-slate-700{--tw-text-opacity:1;color:rgb(51 65 85 / var(--tw-text-opacity, 1))}.text-slate-800{--tw-text-opacity:1;color:rgb(30 41 59 / var(--tw-text-opacity, 1))}.text-slate-900{--tw-text-opacity:1;color:rgb(15 23 42 / var(--tw-text-opacity, 1))}.text-transparent{color:transparent}.text-violet-400{--tw-text-opacity:1;color:rgb(167 139 250 / var(--tw-text-opacity, 1))}.text-violet-600{--tw-text-opacity:1;color:rgb(124 58 237 / var(--tw-text-opacity, 1))}.text-violet-600\/70{color:rgb(124 58 237 / 0.7)}.text-violet-700{--tw-text-opacity:1;color:rgb(109 40 217 / var(--tw-text-opacity, 1))}.underline{-webkit-text-decoration-line:underline;text-decoration-line:underline}.line-through{-webkit-text-decoration-line:line-through;text-decoration-line:line-through}.underline-offset-2{text-underline-offset:2px}.antialiased{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.transition-colors{transition-property:color, background-color, border-color, fill, stroke, -webkit-text-decoration-color;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, -webkit-text-decoration-color;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.hover\:text-ads-accent:hover{--tw-text-opacity:1;color:rgb(13 108 167 / var(--tw-text-opacity, 1))}.hover\:text-blue-400:hover{--tw-text-opacity:1;color:rgb(58 143 202 / var(--tw-text-opacity, 1))}@media (min-width: 640px){.sm\:grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}}@media (min-width: 768px){.md\:mb-10{margin-bottom:2.5rem}.md\:mb-20{margin-bottom:5rem}.md\:block{display:block}.md\:hidden{display:none}.md\:w-12{width:3rem}.md\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.md\:flex-row{flex-direction:row}.md\:gap-0{gap:0px}.md\:gap-6{gap:1.5rem}.md\:p-10{padding:2.5rem}.md\:p-8{padding:2rem}.md\:py-0{padding-top:0px;padding-bottom:0px}.md\:py-16{padding-top:4rem;padding-bottom:4rem}.md\:text-2xl{font-size:1.5rem;line-height:2rem}.md\:text-3xl{font-size:1.875rem;line-height:2.25rem}.md\:text-4xl{font-size:2.25rem;line-height:2.5rem}.md\:text-5xl{font-size:3rem;line-height:1}}</style><link href="./第4回講義：知っていれば作れる・選べる人になる_files/css2(1)" rel="stylesheet"></head>
+<body class="bg-ads-bg text-slate-600 antialiased leading-relaxed border-t-4 border-ads-accent">
+  <div class="no-print max-w-3xl mx-auto px-5 pt-2 flex justify-end">
+    <button onclick="window.print()" class="flex items-center gap-1.5 text-xs text-ads-dim hover:text-ads-accent transition-colors cursor-pointer">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="download" aria-hidden="true" class="lucide lucide-download w-3.5 h-3.5"><path d="M12 15V3"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path></svg>
+      PDF
+    </button>
+  </div>
+  <main class="max-w-3xl mx-auto px-5 py-10 md:py-16">
+<!-- CONTENT_START -->
+
+<!-- ============================================================ -->
+<!--  HERO                                                        -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-ads-accent/10 text-ads-accent-light px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="map" aria-hidden="true" class="lucide lucide-map w-4 h-4"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"></path><path d="M15 5.764v15"></path><path d="M9 3.236v15"></path></svg>
+    AI-Driven School 第4回講義
+  </div>
+  <h1 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight mb-6">
+    知っていれば<br><span class="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">作れる</span><span class="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">・</span><span class="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">選べる人</span>になる
+  </h1>
+  <p class="text-lg text-ads-muted max-w-xl mx-auto leading-relaxed">
+    漠然としたアイデアを、実際に動くツールに変える。その思考プロセスと、AI活用を深める3つの観点 ──
+  </p>
+</div>
+
+
+<!-- ============================================================ -->
+<!--  ONE-PAGE SUMMARY: 3パート構成                                -->
+<!-- ============================================================ -->
+<div class="bg-ads-surface border border-ads-border rounded-2xl p-6 md:p-8 mb-16 md:mb-20">
+  <p class="text-center text-sm text-ads-muted mb-6">この講義の3つのパート</p>
+  <div class="space-y-3">
+    <div class="flex items-start gap-4 bg-purple-500/5 border border-purple-500/15 rounded-xl px-5 py-4">
+      <div class="text-lg font-black text-purple-500 leading-none mt-0.5">1</div>
+      <div>
+        <p class="font-bold text-slate-900 text-sm">Anthropicブログの核心</p>
+        <p class="text-xs text-ads-muted mt-0.5">AI活用の本質を一言で ──「そのトークンはコンテキストを消費するに値するのか」</p>
+      </div>
+    </div>
+    <div class="flex items-start gap-4 bg-cyan-500/5 border border-cyan-500/15 rounded-xl px-5 py-4">
+      <div class="text-lg font-black text-cyan-500 leading-none mt-0.5">2</div>
+      <div>
+        <p class="font-bold text-slate-900 text-sm">AI活用が上手になる3つの観点</p>
+        <p class="text-xs text-ads-muted mt-0.5">聞き方・スキル磨き・ルール設定</p>
+      </div>
+    </div>
+    <div class="flex items-start gap-4 bg-amber-500/5 border border-amber-500/15 rounded-xl px-5 py-4">
+      <div class="text-lg font-black text-amber-500 leading-none mt-0.5">3</div>
+      <div>
+        <p class="font-bold text-slate-900 text-sm">アイデアを企画にする4つのステップ</p>
+        <p class="text-xs text-ads-muted mt-0.5">分解 → 見極め → MVP → POC</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 1: Anthropicブログの核心                               -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-purple-500/10 text-purple-600 px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="book-open" aria-hidden="true" class="lucide lucide-book-open w-4 h-4"><path d="M12 7v14"></path><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path></svg>
+    Part 1
+  </div>
+  <h2 class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight mb-4">
+    AI活用の「<span class="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent">聖書</span>」<br>Anthropicブログの核心
+  </h2>
+</div>
+
+<section class="mb-16 md:mb-20">
+  <p class="mb-6 leading-relaxed">
+    Anthropic社が公開した公式エンジニアリングブログ『<a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents" target="_blank" rel="noopener noreferrer" class="text-ads-accent-light underline underline-offset-2 hover:text-blue-400 transition-colors">Effective Context Engineering for AI Agents</a>』。AI活用のすべてはこの記事に書いてあることに収束されると言ってもいいほど重要な記事です。
+  </p>
+
+  <div class="bg-gradient-to-b from-purple-50 to-white border-2 border-purple-500/20 rounded-2xl p-6 md:p-10 mb-8 text-center">
+    <div class="inline-flex items-center gap-1.5 bg-purple-500/10 text-purple-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-6">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="quote" aria-hidden="true" class="lucide lucide-quote w-3.5 h-3.5"><path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"></path><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"></path></svg>
+      AI活用の本質を一言で
+    </div>
+    <p class="text-xl md:text-2xl font-black text-slate-900 leading-relaxed mb-4">
+      「そのトークンは<br class="md:hidden"><span class="text-purple-600">コンテキストを消費する</span>に<br class="md:hidden">値するのか」
+    </p>
+    <p class="text-sm text-ads-muted max-w-md mx-auto leading-relaxed">
+      AIに指示をする時に、少なすぎず多すぎない ── 特に多すぎるのは良くない。本当に必要な情報だけを与えることができているだろうか。これがAI活用の極意。
+    </p>
+  </div>
+
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-ads-accent/10 flex-shrink-0 mt-0.5">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="lightbulb" aria-hidden="true" class="lucide lucide-lightbulb w-4 h-4 text-ads-accent-light"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"></path><path d="M9 18h6"></path><path d="M10 22h4"></path></svg>
+      </div>
+      <div>
+        <p class="font-bold text-ads-accent-light mb-1">今はわからなくても大丈夫</p>
+        <p class="text-ads-muted leading-relaxed text-sm">
+          これはHowToというよりビジョン（指針）。自分でツールを作る中で、どこかのタイミングで腹落ちする瞬間が必ず来る。今は「そうなんだ」で置いておいて、<strong class="text-slate-800">常にこの問いが土台にある</strong>ことだけ覚えておく。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 2: AI活用の3つの観点                                   -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-cyan-500/10 text-cyan-600 px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="sparkles" aria-hidden="true" class="lucide lucide-sparkles w-4 h-4"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path><path d="M20 2v4"></path><path d="M22 4h-4"></path><circle cx="4" cy="20" r="2"></circle></svg>
+    Part 2
+  </div>
+  <h2 class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight mb-4">
+    AI活用が<span class="bg-gradient-to-r from-cyan-600 to-cyan-400 bg-clip-text text-transparent">上手になる</span>3つの観点
+  </h2>
+  <p class="text-base text-ads-muted max-w-lg mx-auto leading-relaxed">
+    講義を受けて課題に取り組んできた今だからこそ、知っておいてほしい3つのポイント。
+  </p>
+</div>
+
+<section class="mb-16 md:mb-20">
+
+  <div class="space-y-4 mb-8">
+    <!-- 観点1: わからない時のAIへの聞き方 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-blue-500/5 border-b border-ads-border/50">
+        <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="message-circle-question" aria-hidden="true" class="lucide lucide-message-circle-question w-5 h-5 text-blue-600"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"></path><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">観点1: わからない時のAIへの聞き方</h3>
+          <p class="text-xs text-ads-muted">何がわからないかを渡しやすくするのが最初</p>
+        </div>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="bg-violet-500/5 border border-violet-500/15 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2.5">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="camera" aria-hidden="true" class="lucide lucide-camera w-4 h-4 text-violet-600"><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"></path><circle cx="12" cy="13" r="3"></circle></svg>
+              <span class="font-bold text-slate-900 text-sm">スクショ共有を効率化</span>
+            </div>
+            <p class="text-xs text-ads-muted leading-relaxed">
+              画面キャプチャを一発でコピーできる環境を整えておく。手打ちより圧倒的に早い。
+            </p>
+            <div class="bg-white border border-violet-200 rounded-lg p-3 text-xs text-slate-700 leading-relaxed mt-2.5">
+              MacユーザーにはCleanShotがおすすめ
+            </div>
+          </div>
+          <div class="bg-blue-500/5 border border-blue-500/15 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2.5">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="message-square-text" aria-hidden="true" class="lucide lucide-message-square-text w-4 h-4 text-blue-600"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"></path><path d="M7 11h10"></path><path d="M7 15h6"></path><path d="M7 7h8"></path></svg>
+              <span class="font-bold text-slate-900 text-sm">AIに噛み砕かせるフレーズ</span>
+            </div>
+            <div class="bg-white border border-blue-200 rounded-lg p-3 text-xs text-slate-700 leading-relaxed mb-2.5">
+              「入社したての新卒社会人でもわかるように、専門用語は解説しながら説明して」
+            </div>
+            <p class="text-xs text-ads-muted leading-relaxed">
+              概念が複雑な時は「アスキーアートで直感的にわかるように図解して」を追加。
+            </p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="flex gap-3 bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+            <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="check-check" aria-hidden="true" class="lucide lucide-check-check w-4 h-4 text-emerald-600"><path d="M18 6 7 17l-5-5"></path><path d="m22 10-7.5 7.5L13 16"></path></svg>
+            </div>
+            <div>
+              <h4 class="font-bold text-slate-900 text-sm mb-1">理解度をAIに確かめてもらう</h4>
+              <p class="text-xs text-ads-muted leading-relaxed">「こういう理解で合っていますか」と自分の言葉で説明してフィードバックをもらう。人に説明できるレベルが「理解できた」の基準。</p>
+            </div>
+          </div>
+          <div class="flex gap-3 bg-amber-500/5 border border-amber-500/15 rounded-xl p-4">
+            <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="globe" aria-hidden="true" class="lucide lucide-globe w-4 h-4 text-amber-600"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
+            </div>
+            <div>
+              <h4 class="font-bold text-slate-900 text-sm mb-1">ウェブ検索をさせる</h4>
+              <p class="text-xs text-ads-muted leading-relaxed">AIは学習時点で知識が止まる。最新情報が欲しい時は「検索して」と伝えるか、ウェブ検索が走っているか確認する。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 観点2: 仕事を楽にする -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-violet-500/5 border-b border-ads-border/50">
+        <div class="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="zap" aria-hidden="true" class="lucide lucide-zap w-5 h-5 text-violet-600"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"></path></svg>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">観点2: 仕事を楽にする</h3>
+          <p class="text-xs text-ads-muted">スキルを磨いてコンテキストを整理するに尽きる</p>
+        </div>
+      </div>
+      <div class="px-6 py-5">
+        <p class="text-sm text-ads-muted leading-relaxed mb-4">
+          新しいエージェントを立ち上げるたびに、ゼロからプロジェクト情報を渡すのは非効率。だから<strong class="text-slate-800">コンテキストを整理してスキルを磨き続ける</strong>。
+        </p>
+        <div class="bg-violet-500/5 border border-violet-500/15 rounded-xl p-5">
+          <h4 class="text-sm font-bold text-violet-700 mb-3 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="pen-tool" aria-hidden="true" class="lucide lucide-pen-tool w-4 h-4"><path d="M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z"></path><path d="m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18"></path><path d="m2.3 2.3 7.286 7.286"></path><circle cx="11" cy="11" r="2"></circle></svg>
+            実例: Inside Stories（月額マガジン）の原稿スキル
+          </h4>
+          <div class="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-0">
+            <div class="flex flex-col items-center w-28 p-2">
+              <div class="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center mb-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="file-text" aria-hidden="true" class="lucide lucide-file-text w-5 h-5 text-violet-600"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+              </div>
+              <div class="text-xs font-bold text-slate-900">企画骨子</div>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-right" aria-hidden="true" class="lucide lucide-arrow-right w-4 h-4 text-violet-400 hidden md:block"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-down" aria-hidden="true" class="lucide lucide-arrow-down w-4 h-4 text-violet-400 md:hidden"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
+            <div class="flex flex-col items-center w-28 p-2">
+              <div class="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center mb-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="search" aria-hidden="true" class="lucide lucide-search w-5 h-5 text-violet-600"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
+              </div>
+              <div class="text-xs font-bold text-slate-900">リサーチ</div>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-right" aria-hidden="true" class="lucide lucide-arrow-right w-4 h-4 text-violet-400 hidden md:block"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-down" aria-hidden="true" class="lucide lucide-arrow-down w-4 h-4 text-violet-400 md:hidden"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
+            <div class="flex flex-col items-center w-28 p-2">
+              <div class="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center mb-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="file-pen" aria-hidden="true" class="lucide lucide-file-pen w-5 h-5 text-violet-600"><path d="M12.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v9.34"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M10.378 12.622a1 1 0 0 1 3 3.003L8.36 20.637a2 2 0 0 1-.854.506l-2.867.837a.5.5 0 0 1-.62-.62l.836-2.869a2 2 0 0 1 .506-.853z"></path></svg>
+              </div>
+              <div class="text-xs font-bold text-slate-900">叩き案作成</div>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-right" aria-hidden="true" class="lucide lucide-arrow-right w-4 h-4 text-violet-400 hidden md:block"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-down" aria-hidden="true" class="lucide lucide-arrow-down w-4 h-4 text-violet-400 md:hidden"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
+            <div class="flex flex-col items-center w-28 p-2">
+              <div class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center mb-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="eye" aria-hidden="true" class="lucide lucide-eye w-5 h-5 text-purple-600"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </div>
+              <div class="text-xs font-bold text-slate-900">サブAGレビュー</div>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-right" aria-hidden="true" class="lucide lucide-arrow-right w-4 h-4 text-violet-400 hidden md:block"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-down" aria-hidden="true" class="lucide lucide-arrow-down w-4 h-4 text-violet-400 md:hidden"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
+            <div class="flex flex-col items-center w-28 p-2">
+              <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="check-circle" aria-hidden="true" class="lucide lucide-check-circle w-5 h-5 text-emerald-600"><path d="M21.801 10A10 10 0 1 1 17 3.335"></path><path d="m9 11 3 3L22 4"></path></svg>
+              </div>
+              <div class="text-xs font-bold text-slate-900">完成</div>
+            </div>
+          </div>
+          <p class="text-xs text-ads-muted text-center mt-3">1年以上かけて磨いてきた結果、そのまま読み上げても問題ないレベルに</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 観点3: 最初から全部わかっているAIに育てる -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-emerald-500/5 border-b border-ads-border/50">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="settings" aria-hidden="true" class="lucide lucide-settings w-5 h-5 text-emerald-600"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">観点3: 最初から全部わかっているAIに育てる</h3>
+          <p class="text-xs text-ads-muted">常に適用したいルールを設定する</p>
+        </div>
+      </div>
+      <div class="px-6 py-5">
+        <p class="text-sm text-ads-muted leading-relaxed mb-4">
+          毎回「新入社員でもわかるように」と伝えるのは面倒。<strong class="text-slate-800">共通のルール設定</strong>で、どんな時もAIが自分好みに振る舞うようにできる。
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          <div class="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="user" aria-hidden="true" class="lucide lucide-user w-4 h-4 text-emerald-600"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              <span class="font-bold text-emerald-700 text-sm">ユーザールール</span>
+            </div>
+            <p class="text-xs text-ads-muted leading-relaxed">
+              どんなプロジェクトでも常に適用。例: 「専門用語を避けて説明して」「Macを使っている」「オフィスは〇〇」
+            </p>
+          </div>
+          <div class="bg-blue-500/5 border border-blue-500/15 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="folder" aria-hidden="true" class="lucide lucide-folder w-4 h-4 text-blue-600"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>
+              <span class="font-bold text-blue-700 text-sm">プロジェクトルール</span>
+            </div>
+            <p class="text-xs text-ads-muted leading-relaxed">
+              特定のリポジトリだけで適用。例: Cursor Rules、CLAUDE.md
+            </p>
+          </div>
+        </div>
+        <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
+          <div class="flex items-start gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="alert-circle" aria-hidden="true" class="lucide lucide-alert-circle w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>
+            <div class="text-sm text-ads-muted leading-relaxed">
+              <strong class="text-amber-700">注意: 優先順位がある。</strong>チャットの指示 &gt; プロジェクトルール &gt; ユーザールール。共通ルールは優先度が低いので、<strong class="text-slate-800">迷ったら余計なことは書かない方がいい</strong>。AIにとってノイズになる。
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  PART 3 HERO: アイデアを企画にする4つのステップ                  -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-amber-500/10 text-amber-600 px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="map" aria-hidden="true" class="lucide lucide-map w-4 h-4"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"></path><path d="M15 5.764v15"></path><path d="M9 3.236v15"></path></svg>
+    Part 3
+  </div>
+  <h2 class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight mb-4">
+    アイデアを<span class="bg-gradient-to-r from-amber-600 to-amber-400 bg-clip-text text-transparent">企画</span>にする4つのステップ
+  </h2>
+  <p class="text-base text-ads-muted max-w-lg mx-auto leading-relaxed">
+    無人島に地図もコンパスもなく放り出された状態から、道を作るプロセス。<br>
+    リアルタイム議事録ツールを実例に解説します。
+  </p>
+</div>
+
+<div class="bg-ads-surface border border-ads-border rounded-2xl p-6 md:p-8 mb-16 md:mb-20">
+  <div class="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-0 mb-8">
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-2.5">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="unplug" aria-hidden="true" class="lucide lucide-unplug w-7 h-7 text-amber-600"><path d="m19 5 3-3"></path><path d="m2 22 3-3"></path><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z"></path><path d="M7.5 13.5 10 11"></path><path d="M10.5 16.5 13 14"></path><path d="m12 6 6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0Z"></path></svg>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">課題を分解する</div>
+      <div class="text-[11px] text-amber-600/70 mt-0.5">Step 1</div>
+    </div>
+    <div class="flex items-center justify-center md:w-12 py-1 md:py-0">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-right" aria-hidden="true" class="lucide lucide-arrow-right w-5 h-5 text-ads-accent hidden md:block"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-down" aria-hidden="true" class="lucide lucide-arrow-down w-5 h-5 text-ads-accent md:hidden"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
+    </div>
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mb-2.5">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="search" aria-hidden="true" class="lucide lucide-search w-7 h-7 text-violet-600"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">意味を見極める</div>
+      <div class="text-[11px] text-violet-600/70 mt-0.5">Step 2</div>
+    </div>
+    <div class="flex items-center justify-center md:w-12 py-1 md:py-0">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-right" aria-hidden="true" class="lucide lucide-arrow-right w-5 h-5 text-ads-accent hidden md:block"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-down" aria-hidden="true" class="lucide lucide-arrow-down w-5 h-5 text-ads-accent md:hidden"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
+    </div>
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-ads-accent/10 border border-ads-accent/20 flex items-center justify-center mb-2.5">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="scissors" aria-hidden="true" class="lucide lucide-scissors w-7 h-7 text-ads-accent-light"><circle cx="6" cy="6" r="3"></circle><path d="M8.12 8.12 12 12"></path><path d="M20 4 8.12 15.88"></path><circle cx="6" cy="18" r="3"></circle><path d="M14.8 14.8 20 20"></path></svg>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">MVPを定義する</div>
+      <div class="text-[11px] text-ads-accent-light/70 mt-0.5">Step 3</div>
+    </div>
+    <div class="flex items-center justify-center md:w-12 py-1 md:py-0">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-right" aria-hidden="true" class="lucide lucide-arrow-right w-5 h-5 text-ads-accent hidden md:block"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-down" aria-hidden="true" class="lucide lucide-arrow-down w-5 h-5 text-ads-accent md:hidden"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
+    </div>
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2.5">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="flask-conical" aria-hidden="true" class="lucide lucide-flask-conical w-7 h-7 text-emerald-600"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"></path><path d="M6.453 15h11.094"></path><path d="M8.5 2h7"></path></svg>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">POCで検証する</div>
+      <div class="text-[11px] text-emerald-600/70 mt-0.5">Step 4</div>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 3: Step 1 課題を分解する                               -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-amber-500/10 flex-shrink-0">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="unplug" aria-hidden="true" class="lucide lucide-unplug w-5 h-5 text-amber-600"><path d="m19 5 3-3"></path><path d="m2 22 3-3"></path><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z"></path><path d="M7.5 13.5 10 11"></path><path d="M10.5 16.5 13 14"></path><path d="m12 6 6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0Z"></path></svg>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">Step 1: 課題を分解する</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    「何を作ればいいかがわからない」── 多くの人が最初にぶつかる壁。その原因は、<strong class="text-slate-900">物事を塊として見てしまっている</strong>こと。分解すればアイデアが見えてくる。
+  </p>
+
+  <!-- アンラーニングの説明 -->
+  <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-6 mb-8">
+    <h3 class="font-bold text-amber-700 mb-4 flex items-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="brain" aria-hidden="true" class="lucide lucide-brain w-5 h-5"><path d="M12 18V5"></path><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"></path><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"></path><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"></path><path d="M18 18a4 4 0 0 0 2-7.464"></path><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"></path><path d="M6 18a4 4 0 0 1-2-7.464"></path><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"></path></svg>
+      アンラーニング = 無意識を意識に変えること
+    </h3>
+    <div class="bg-white border border-amber-200 rounded-xl p-5 mb-4">
+      <div class="flex flex-col md:flex-row items-center gap-4 md:gap-6">
+        <div class="flex-1 text-center">
+          <div class="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="dumbbell" aria-hidden="true" class="lucide lucide-dumbbell w-7 h-7 text-amber-600"><path d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z"></path><path d="m2.5 21.5 1.4-1.4"></path><path d="m20.1 3.9 1.4-1.4"></path><path d="M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z"></path><path d="m9.6 14.4 4.8-4.8"></path></svg>
+          </div>
+          <p class="text-sm font-bold text-slate-900 mb-1">プロ野球選手</p>
+          <p class="text-xs text-ads-muted leading-relaxed">感覚でバットを振れる。初心者に「どうやるの？」と聞かれると困る。無意識でやっていることを<strong class="text-slate-800">言語化（＝分解）</strong>しなければ教えられない。</p>
+        </div>
+        <div class="flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="equal" aria-hidden="true" class="lucide lucide-equal w-6 h-6 text-amber-500"><line x1="5" x2="19" y1="9" y2="9"></line><line x1="5" x2="19" y1="15" y2="15"></line></svg>
+        </div>
+        <div class="flex-1 text-center">
+          <div class="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="briefcase" aria-hidden="true" class="lucide lucide-briefcase w-7 h-7 text-amber-600"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path><rect width="20" height="14" x="2" y="6" rx="2"></rect></svg>
+          </div>
+          <p class="text-sm font-bold text-slate-900 mb-1">会議に慣れた人</p>
+          <p class="text-xs text-ads-muted leading-relaxed">「会議は面倒だな」で止まっている。何が面倒なのかを<strong class="text-slate-800">分解してみると</strong>、見えていなかった課題が次々に出てくる。</p>
+        </div>
+      </div>
+    </div>
+    <p class="text-sm text-amber-700/80">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="info" aria-hidden="true" class="lucide lucide-info w-4 h-4 inline"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+      良いアイデアを出すとは、自分が無意識でやっていることを意識すること。
+    </p>
+  </div>
+
+  <!-- 分解の実例 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-3">「会議は面倒だな」を分解してみる</h3>
+    <p class="text-sm text-ads-muted text-center mb-6">漠然とした1つの不満が、9つの具体的な面倒に変わる</p>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">1</span>
+        <span class="text-xs text-ads-muted">聞き取れなかったことを確認する面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">2</span>
+        <span class="text-xs text-ads-muted">誰がいつ何を言ったか思い出す面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">3</span>
+        <span class="text-xs text-ads-muted">テキストに起こす面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">4</span>
+        <span class="text-xs text-ads-muted">要点を整理する面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">5</span>
+        <span class="text-xs text-ads-muted">タスクを抜き出す面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">6</span>
+        <span class="text-xs text-ads-muted">「なるはやで」を「4/15まで」に変換する面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">7</span>
+        <span class="text-xs text-ads-muted">決定が覆った時に修正する面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">8</span>
+        <span class="text-xs text-ads-muted">タスク管理ツールに登録する面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">9</span>
+        <span class="text-xs text-ads-muted">関係者に共有する面倒</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- AIに聞き出してもらうコツ -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-amber-500">
+    <div class="flex items-start gap-4">
+      <div class="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="message-square-plus" aria-hidden="true" class="lucide lucide-message-square-plus w-5 h-5 text-amber-600"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"></path><path d="M12 8v6"></path><path d="M9 11h6"></path></svg>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-900 mb-2">分解のコツ: AIに聞き出してもらう</h3>
+        <div class="bg-white border border-amber-200 rounded-lg p-3 text-xs text-slate-700 leading-relaxed mb-3">
+          「私が普段やっている会議の流れの解像度を上げたいので、最初から最後まで全部聞き出してほしい。<strong>質問は1つずつ</strong>お願いします」
+        </div>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          自分で書き出すとつい省略してしまう。AIに聞かれると省略できない。「何も言わないと一気に質問をぶつけられるので、<strong class="text-slate-800">1つずつ聞いて</strong>」がポイント。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 4: Step 2 自分が作る意味を見極める                      -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-violet-500/10 flex-shrink-0">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="search" aria-hidden="true" class="lucide lucide-search w-5 h-5 text-violet-600"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">Step 2: 自分が作る意味を見極める</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    課題を分解してアイデアが出たら、<strong class="text-slate-900">同じことができるものが世の中にないか</strong>を調べる。ポイントは<strong class="text-slate-900">分解した後に</strong>調べること。分解前に調べても、自分が何に困っているかわからないから良し悪しを見極められない。
+  </p>
+
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-6">既存サービスでカバーできる範囲を見極める</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+      <div class="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="check-circle" aria-hidden="true" class="lucide lucide-check-circle w-4 h-4 text-emerald-600"><path d="M21.801 10A10 10 0 1 1 17 3.335"></path><path d="m9 11 3 3L22 4"></path></svg>
+          <span class="font-bold text-emerald-700 text-sm">既存で解決できる</span>
+        </div>
+        <ul class="space-y-1.5 text-xs text-ads-muted">
+          <li class="flex items-start gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="check" aria-hidden="true" class="lucide lucide-check w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0"><path d="M20 6 9 17l-5-5"></path></svg>テキストに起こす</li>
+          <li class="flex items-start gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="check" aria-hidden="true" class="lucide lucide-check w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0"><path d="M20 6 9 17l-5-5"></path></svg>要点を整理する</li>
+          <li class="flex items-start gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="check" aria-hidden="true" class="lucide lucide-check w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0"><path d="M20 6 9 17l-5-5"></path></svg>タスクを抜き出す（精度は課題あり）</li>
+        </ul>
+      </div>
+      <div class="bg-blue-500/5 border border-blue-500/15 rounded-xl p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="plus-circle" aria-hidden="true" class="lucide lucide-plus-circle w-4 h-4 text-blue-600"><circle cx="12" cy="12" r="10"></circle><path d="M8 12h8"></path><path d="M12 8v8"></path></svg>
+          <span class="font-bold text-blue-700 text-sm">自分が作る価値がある</span>
+        </div>
+        <ul class="space-y-1.5 text-xs text-ads-muted">
+          <li class="flex items-start gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="star" aria-hidden="true" class="lucide lucide-star w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"></path></svg>リアルタイムにToDoが出る</li>
+          <li class="flex items-start gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="star" aria-hidden="true" class="lucide lucide-star w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"></path></svg>曖昧な表現を自動で具体化</li>
+          <li class="flex items-start gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="star" aria-hidden="true" class="lucide lucide-star w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"></path></svg>自社の会議に最適化</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- なぜないのかを考える -->
+  <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
+    <h3 class="font-bold text-red-700 mb-4 flex items-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="alert-triangle" aria-hidden="true" class="lucide lucide-alert-triangle w-5 h-5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+      「誰も思いついていなかった」はあり得ない
+    </h3>
+    <p class="text-sm text-ads-muted leading-relaxed mb-4">
+      アイデアは必ず思いつかれている。何かしらの<strong class="text-slate-800">ネック</strong>があって実現できないか、優先順位が下がっていると考えるべき。
+    </p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="bg-white border border-red-200 rounded-xl p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="banknote" aria-hidden="true" class="lucide lucide-banknote w-4 h-4 text-red-600"><rect width="20" height="12" x="2" y="6" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>
+          <span class="font-bold text-slate-900 text-sm">コストのネック</span>
+        </div>
+        <p class="text-xs text-ads-muted leading-relaxed">リアルタイム処理はAPIの使用量が多く、顧客に一定料金内で提供するにはコストが高すぎる</p>
+      </div>
+      <div class="bg-white border border-red-200 rounded-xl p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="shield-alert" aria-hidden="true" class="lucide lucide-shield-alert w-4 h-4 text-red-600"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>
+          <span class="font-bold text-slate-900 text-sm">プロダクトリスク</span>
+        </div>
+        <p class="text-xs text-ads-muted leading-relaxed">会議途中の曖昧な段階でToDoを表示すると間違える可能性が高く、商用プロダクトとしてリリースが難しい</p>
+      </div>
+    </div>
+    <div class="mt-4 pt-4 border-t border-red-200/50 text-sm text-ads-muted">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="lightbulb" aria-hidden="true" class="lucide lucide-lightbulb w-4 h-4 inline text-amber-500"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"></path><path d="M9 18h6"></path><path d="M10 22h4"></path></svg>
+      自分用なら利益を上乗せする必要がなく、自社に最適化するだけでいいのでハードルが下がる。
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 5: Step 3 MVPを定義する                               -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-ads-accent/10 flex-shrink-0">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="scissors" aria-hidden="true" class="lucide lucide-scissors w-5 h-5 text-ads-accent-light"><circle cx="6" cy="6" r="3"></circle><path d="M8.12 8.12 12 12"></path><path d="M20 4 8.12 15.88"></path><circle cx="6" cy="18" r="3"></circle><path d="M14.8 14.8 20 20"></path></svg>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">Step 3: MVPを定義する</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    MVP（Minimum Viable Product＝必要最小限の機能のプロダクト）。何か作り出す人は夢に溢れていて、つい機能を詰め込んでしまう。本当に必要な機能だけを見極めて、価値があるかを検証しようというスタンス。
+  </p>
+
+  <!-- コードを書いたら負け -->
+  <div class="bg-gradient-to-b from-blue-50 to-white border-2 border-blue-500/20 rounded-2xl p-6 md:p-10 mb-8 text-center">
+    <div class="inline-flex items-center gap-1.5 bg-blue-500/10 text-blue-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="alert-circle" aria-hidden="true" class="lucide lucide-alert-circle w-3.5 h-3.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>
+      MVP開発の最重要マインド
+    </div>
+    <p class="text-2xl md:text-3xl font-black text-slate-900 mb-4">
+      コードを書いたら<span class="text-red-600">負け</span>
+    </p>
+    <p class="text-sm text-ads-muted max-w-lg mx-auto leading-relaxed">
+      コードを書かずに同じような体験を作れないかと考える。ツール開発の最大の悲劇は、<strong class="text-slate-800">誰も使わないものを作ってしまう</strong>こと。
+    </p>
+  </div>
+
+  <!-- 課題仮説と解決仮説 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-base font-bold text-slate-900 text-center mb-6">MVPで検証するのは2つの仮説</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="help-circle" aria-hidden="true" class="lucide lucide-help-circle w-5 h-5 text-amber-600"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>
+          <span class="font-bold text-amber-700">課題仮説</span>
+        </div>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          「会議で決まったことを後で思い出して共有するのが面倒<strong class="text-slate-800">のはずだ</strong>」
+        </p>
+      </div>
+      <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="lightbulb" aria-hidden="true" class="lucide lucide-lightbulb w-5 h-5 text-blue-600"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"></path><path d="M9 18h6"></path><path d="M10 22h4"></path></svg>
+          <span class="font-bold text-blue-700">解決仮説</span>
+        </div>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          「リアルタイムにToDoが可視化されれば、会議が楽になる<strong class="text-slate-800">はずだ</strong>」
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 人力検証の例 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-blue-500 mb-8">
+    <div class="flex items-start gap-4">
+      <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="users" aria-hidden="true" class="lucide lucide-users w-5 h-5 text-blue-600"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-900 mb-2">コードを書かない検証の例</h3>
+        <p class="text-sm text-ads-muted leading-relaxed mb-3">
+          会議にオンラインでメンバーを1人参加させ、手打ちでリアルタイムにToDoをまとめてもらう。これだけでリアルタイムAI議事録ツールと<strong class="text-slate-800">同じ体験</strong>ができる。
+        </p>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          他のメンバーが「これはいいね、また使いたい」と言わなければ、頑張ってコードを書いてもツールを作る意味はなかった。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MVPの削り方 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+    <h3 class="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="minus-circle" aria-hidden="true" class="lucide lucide-minus-circle w-5 h-5 text-ads-accent-light"><circle cx="12" cy="12" r="10"></circle><path d="M8 12h8"></path></svg>
+      MVPの基準: 「恥ずかしい」と感じるレベル
+    </h3>
+    <div class="space-y-2.5 text-sm">
+      <div class="flex items-start gap-3">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-4 h-4 text-red-500 mt-0.5 flex-shrink-0"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+        <span class="text-ads-muted"><span class="line-through">誰もがアクセスできるウェブアプリ</span> → 自分のパソコンだけで動く状態で十分</span>
+      </div>
+      <div class="flex items-start gap-3">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-4 h-4 text-red-500 mt-0.5 flex-shrink-0"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+        <span class="text-ads-muted"><span class="line-through">ブラウザで見えるおしゃれなUI</span> → マークダウンファイルで十分</span>
+      </div>
+      <div class="flex items-start gap-3">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-4 h-4 text-red-500 mt-0.5 flex-shrink-0"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+        <span class="text-ads-muted"><span class="line-through">メンバーを自由に登録できる機能</span> → 設定ファイルに書けばいい</span>
+      </div>
+    </div>
+    <div class="mt-4 pt-4 border-t border-ads-border/50 text-sm text-ads-muted">
+      <strong class="text-slate-800">「やりたいことがだいたいできた」と思ったらやりすぎ。</strong>削って削ってみすぼらしいけど、仮説を検証できるラインを見つける。
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 6: Step 4 POCで検証する                               -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-500/10 flex-shrink-0">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="flask-conical" aria-hidden="true" class="lucide lucide-flask-conical w-5 h-5 text-emerald-600"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"></path><path d="M6.453 15h11.094"></path><path d="M8.5 2h7"></path></svg>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">Step 4: POCで検証する</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    POC（Proof of Concept＝概念実証）。自分たちのやりたいことが、既存の技術で本当にできるのかを検証する。MVPが「使う人が価値を感じるか」の検証なら、POCは<strong class="text-slate-900">「技術的にできるのか」</strong>の検証。
+  </p>
+
+  <!-- POCの考え方 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-3">処理の流れを見て、怪しいところから検証する</h3>
+    <p class="text-sm text-ads-muted text-center mb-8">できるとわかっていることは後回し。一気に全部作らない。</p>
+
+    <div class="space-y-3">
+      <!-- マイク起動 -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="mic" aria-hidden="true" class="lucide lucide-mic w-5 h-5 text-red-600"><path d="M12 19v3"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><rect x="9" y="2" width="6" height="13" rx="3"></rect></svg>
+        </div>
+        <div class="flex-1 bg-red-500/5 border border-red-500/15 rounded-lg px-4 py-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-red-700">マイクを起動して一定間隔で音声を保存</span>
+            <span class="text-[10px] bg-red-500/10 text-red-600 px-2 py-0.5 rounded-full font-bold">POC必要</span>
+          </div>
+          <p class="text-xs text-ads-muted mt-1">プログラムからマイクを起動できるのか？ 一定間隔で区切れるのか？</p>
+        </div>
+      </div>
+
+      <div class="flex justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-down" aria-hidden="true" class="lucide lucide-arrow-down w-4 h-4 text-ads-dim"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg></div>
+
+      <!-- 文字起こし -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="file-text" aria-hidden="true" class="lucide lucide-file-text w-5 h-5 text-emerald-600"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+        </div>
+        <div class="flex-1 bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-4 py-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-emerald-700">音声を文字起こし</span>
+            <span class="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-bold">できる</span>
+          </div>
+          <p class="text-xs text-ads-muted mt-1">ChatGPT / Claude / Gemini のAPIで音声を送れば文字起こしできる</p>
+        </div>
+      </div>
+
+      <div class="flex justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-down" aria-hidden="true" class="lucide lucide-arrow-down w-4 h-4 text-ads-dim"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg></div>
+
+      <!-- ToDo抽出 -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="list-todo" aria-hidden="true" class="lucide lucide-list-todo w-5 h-5 text-emerald-600"><path d="M13 5h8"></path><path d="M13 12h8"></path><path d="M13 19h8"></path><path d="m3 17 2 2 4-4"></path><rect x="3" y="4" width="6" height="6" rx="1"></rect></svg>
+        </div>
+        <div class="flex-1 bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-4 py-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-emerald-700">文字起こしからToDo抽出</span>
+            <span class="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-bold">できる</span>
+          </div>
+          <p class="text-xs text-ads-muted mt-1">文章をAIに渡してToDoを出してもらうのはブラウザのAIでもできる</p>
+        </div>
+      </div>
+
+      <div class="flex justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-down" aria-hidden="true" class="lucide lucide-arrow-down w-4 h-4 text-ads-dim"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg></div>
+
+      <!-- ファイルに反映 -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="save" aria-hidden="true" class="lucide lucide-save w-5 h-5 text-emerald-600"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"></path><path d="M7 3v4a1 1 0 0 0 1 1h7"></path></svg>
+        </div>
+        <div class="flex-1 bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-4 py-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-emerald-700">マークダウンファイルに反映</span>
+            <span class="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-bold">できる</span>
+          </div>
+          <p class="text-xs text-ads-muted mt-1">ファイルの更新は確実にできる。検証不要。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AIとの対話で進める -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-emerald-500 mb-8">
+    <div class="flex items-start gap-4">
+      <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="message-square" aria-hidden="true" class="lucide lucide-message-square w-5 h-5 text-emerald-600"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"></path></svg>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-900 mb-2">わからないことはAIに聞いて進める</h3>
+        <p class="text-sm text-ads-muted leading-relaxed mb-3">
+          10年前ならテクノロジーリテラシーがないと詰まっていた。今はAIと対話しながら、自分で作りたいツールの処理の流れを理解できる。<strong class="text-slate-800">これは革命的なこと。</strong>
+        </p>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          実際にAIと対話する中で、リアルタイム文字起こしに強い「Deepgram」というサービスの存在を知り、採用に至った。最初から全部わかる人はいない。
+        </p>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 7: まとめ                                            -->
+<!-- ============================================================ -->
+<section>
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-ads-accent/10 flex-shrink-0">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="check-circle" aria-hidden="true" class="lucide lucide-check-circle w-5 h-5 text-ads-accent-light"><path d="M21.801 10A10 10 0 1 1 17 3.335"></path><path d="m9 11 3 3L22 4"></path></svg>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">まとめ ── 第4回講義で覚えておきたいこと</h2>
+  </div>
+
+  <div class="space-y-4 mb-10">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-purple-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-purple-500 leading-none flex-shrink-0 mt-1">01</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">AI活用の本質は「必要な情報だけを渡す」こと</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            Anthropic社のブログが伝えるメッセージを一言でまとめるなら「そのトークンはコンテキストを消費するに値するのか」。少なすぎず多すぎない、特に多すぎるのは良くない。今はわからなくても、ツールを作る中で腹落ちする瞬間が来る。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-cyan-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-cyan-500 leading-none flex-shrink-0 mt-1">02</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">AI活用は3つの観点で深まる</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            わからない時の聞き方を磨く。スキルとコンテキストを育てて仕事を楽にする。共通ルールで最初から自分を理解しているAIに育てる。日々の積み重ねが品質を変える。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-amber-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-amber-500 leading-none flex-shrink-0 mt-1">03</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">アイデアは「分解」から始まる</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            何を作ればいいかわからないのは、物事を塊として見ているから。無意識でやっていることを分解（アンラーニング）すると、課題が見えてアイデアが生まれる。AIに1つずつ質問してもらうのが効果的。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-emerald-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-emerald-500 leading-none flex-shrink-0 mt-1">04</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">コードを書く前にやるべきことがある</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            自分が作る意味を見極め、MVPは恥ずかしいレベルまで削る。POCでは怪しいところから1つずつ検証する。一気に全部作らない。このプロセスはすべてのツール開発で使える。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 月次課題 -->
+  <div class="text-center bg-gradient-to-b from-ads-accent/5 to-transparent border border-ads-accent/10 rounded-xl p-8 md:p-10">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="rocket" aria-hidden="true" class="lucide lucide-rocket w-8 h-8 text-ads-accent mx-auto mb-4"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"></path><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"></path></svg>
+    <p class="text-lg font-bold text-slate-900 mb-3">次回講義: 自分で作った報告ツールの発表会</p>
+    <p class="text-ads-muted max-w-lg mx-auto leading-relaxed mb-6">
+      MVPでいいので自動報告ツールの完成を目指そう。うまく動かなかったとしても、それも含めて貴重な学び。
+    </p>
+    <div class="inline-block bg-white border border-ads-border rounded-xl p-5 text-left max-w-md mx-auto">
+      <p class="text-sm font-bold text-slate-900 mb-3">今回の4ステップを活用して:</p>
+      <div class="space-y-2 text-sm text-ads-muted">
+        <div class="flex items-start gap-2">
+          <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">1</span>
+          <span>自分の課題を<strong class="text-slate-800">分解</strong>してみる</span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-xs font-mono bg-violet-500/10 text-violet-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">2</span>
+          <span>自分が作る<strong class="text-slate-800">意味があるか</strong>を確認する</span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-xs font-mono bg-blue-500/10 text-blue-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">3</span>
+          <span><strong class="text-slate-800">恥ずかしいレベル</strong>まで削ったMVPを定義する</span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-xs font-mono bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">4</span>
+          <span>怪しいところから<strong class="text-slate-800">1つずつ</strong>検証する</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTENT_END -->
+  </main>
+  <footer class="max-w-3xl mx-auto px-5 pb-10 pt-6 border-t border-ads-border/30">
+    <p class="text-xs text-ads-dim text-center">AI-Driven School の図解ツールで作成</p>
+  </footer>
+  <script src="./第4回講義：知っていれば作れる・選べる人になる_files/lucide@latest"></script>
+  <script>lucide.createIcons();</script>
+
+
+<div class="glasp-extension-toaster" style="display: block; width: 320px; margin: unset; padding: unset; border: unset; border-radius: unset; outline: unset; background-color: unset; box-shadow: unset; position: fixed; top: 40px; right: 24px; z-index: 9999;"><template shadowrootmode="open"><div class="glasp-extension" style="font-family: inherit;"></div></template></div></body><div class="glasp-extension" style="display: block; width: unset; margin: unset; padding: unset; border: unset; border-radius: unset; outline: unset; background-color: unset; box-shadow: unset; position: fixed; bottom: 16px; right: 16px; z-index: 9999;"><div class="glasp-extension" style="font-family: inherit;"></div></div><div><template shadowrootmode="closed"><div><main><div class="sc-1uwbbvd-0 cTwtgP"></div></main><style data-styled="active" data-styled-version="6.1.12"></style></div></template></div></html>

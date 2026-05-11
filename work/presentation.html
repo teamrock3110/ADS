@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>報告自動化ツール 発表</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      overflow: hidden;
+    }
+    .slide { display: none; }
+    .slide.active { display: flex; }
+    .flow-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      font-size: 24px;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 h-screen">
+
+  <!-- Slide Counter & Navigation -->
+  <div class="fixed top-4 right-6 flex items-center gap-4 z-50">
+    <span id="counter" class="text-sm text-slate-400 font-medium">1 / 4</span>
+    <button onclick="prevSlide()" class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 shadow-sm">‹</button>
+    <button onclick="nextSlide()" class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 shadow-sm">›</button>
+  </div>
+
+  <!-- ===== SLIDE 1: タイトル ===== -->
+  <div class="slide active h-screen flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-slate-100 px-12" id="slide-1">
+    <div class="text-center">
+      <div class="inline-flex items-center gap-2 bg-blue-100 text-blue-700 text-sm font-medium px-4 py-1.5 rounded-full mb-6">
+        自動化ツール発表
+      </div>
+      <h1 class="text-5xl font-bold text-slate-900 mb-4 leading-tight">
+        チームタスク進捗の<br>報告を自動化する
+      </h1>
+      <p class="text-xl text-slate-500 mb-10">毎週月曜 AM9:00 に自動でメールが届く仕組み</p>
+      <div class="flex items-center justify-center gap-8 text-sm text-slate-500">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+          <span>JIRA（タスク管理）</span>
+        </div>
+        <div class="text-slate-300">→</div>
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-purple-500"></div>
+          <span>Google Apps Script</span>
+        </div>
+        <div class="text-slate-300">→</div>
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-green-500"></div>
+          <span>Gmail</span>
+        </div>
+      </div>
+    </div>
+    <div class="absolute bottom-8 text-xs text-slate-400">← → キーまたはボタンでページ移動</div>
+  </div>
+
+  <!-- ===== SLIDE 2: 完成イメージ ===== -->
+  <div class="slide h-screen flex-col px-12 py-8" id="slide-2">
+    <div class="mb-6">
+      <div class="text-xs font-semibold text-blue-600 uppercase tracking-widest mb-1">01 — 完成イメージ</div>
+      <h2 class="text-3xl font-bold text-slate-900">どんな報告が届くのか</h2>
+    </div>
+    <div class="flex gap-8 flex-1 min-h-0">
+
+      <!-- Left: mockup preview -->
+      <div class="flex-shrink-0 flex flex-col items-center justify-center">
+        <div class="border border-slate-200 rounded-xl overflow-hidden shadow-lg bg-white" style="transform: scale(0.72); transform-origin: top center; width: 420px;">
+          <!-- mini mockup -->
+          <div class="p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
+                  <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                </div>
+                <div>
+                  <div class="text-sm font-semibold text-slate-900">週次チーム進捗レポート</div>
+                  <div class="text-xs text-slate-400">2026年4月6日（月）</div>
+                </div>
+              </div>
+              <span class="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">JIRA 連携</span>
+            </div>
+            <div class="grid grid-cols-4 gap-1.5 mb-2">
+              <div class="bg-blue-50 rounded p-2 text-center"><div class="text-lg font-bold text-blue-700">12</div><div class="text-xs text-blue-500">進行中</div></div>
+              <div class="bg-slate-50 rounded p-2 text-center"><div class="text-lg font-bold text-slate-600">5</div><div class="text-xs text-slate-400">未対応</div></div>
+              <div class="bg-green-50 rounded p-2 text-center"><div class="text-lg font-bold text-green-700">8</div><div class="text-xs text-green-500">今週完了</div></div>
+              <div class="bg-red-50 rounded p-2 text-center"><div class="text-lg font-bold text-red-600">3</div><div class="text-xs text-red-400">期限切れ</div></div>
+            </div>
+            <div class="text-xs text-right text-blue-500 mb-2">JIRAボード全体を確認する →</div>
+            <div class="border border-green-200 rounded-lg mb-2">
+              <div class="flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50">
+                <span class="text-xs font-semibold text-green-700">✅ 今週の完了タスク</span>
+                <span class="ml-auto text-xs text-green-600">8件</span>
+                <span class="text-xs text-blue-500 ml-1">全件 →</span>
+              </div>
+              <div class="px-2.5 py-1.5 text-xs text-blue-600 underline">ダッシュボードのレイアウト修正</div>
+              <div class="px-2.5 pb-1.5 text-xs text-slate-400">担当: 田中 太郎</div>
+            </div>
+            <div class="border border-red-200 rounded-lg mb-2">
+              <div class="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-50">
+                <span class="text-xs font-semibold text-red-700">🕐 期限切れタスク</span>
+                <span class="ml-auto text-xs text-red-500">3件</span>
+                <span class="text-xs text-blue-500 ml-1">全件 →</span>
+              </div>
+              <div class="px-2.5 py-1.5 text-xs text-blue-600 underline">ユーザー認証機能のテスト</div>
+              <div class="px-2.5 pb-1.5 text-xs text-slate-400">期限: 2026-03-31</div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-2 text-center">
+          <a href="https://saitohmasakazu-auto-moc.surge.sh" target="_blank" class="text-xs text-blue-500 underline">実際のメール画面を見る →</a>
+        </div>
+      </div>
+
+      <!-- Right: points -->
+      <div class="flex-1 flex flex-col justify-center gap-5">
+        <div>
+          <div class="text-sm font-semibold text-slate-500 mb-3">こだわった3つのポイント</div>
+          <div class="space-y-4">
+            <div class="flex gap-3">
+              <div class="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold flex-shrink-0">1</div>
+              <div>
+                <div class="font-semibold text-slate-800 text-sm">完成形を先に作ってから設計した</div>
+                <div class="text-sm text-slate-500 mt-0.5">「どんなメールを送りたいか」のHTMLモックを先に作り、それを見ながらツールの設計を決めた</div>
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <div class="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-sm font-bold flex-shrink-0">2</div>
+              <div>
+                <div class="font-semibold text-slate-800 text-sm">期限切れタスクはリンクで即アクション</div>
+                <div class="text-sm text-slate-500 mt-0.5">タスク名をクリックするとJIRA（タスク管理ツール）が直接開く。メールを見てすぐ動ける</div>
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <div class="w-7 h-7 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-sm font-bold flex-shrink-0">3</div>
+              <div>
+                <div class="font-semibold text-slate-800 text-sm">メールは概要・詳細はスプレッドシートへ</div>
+                <div class="text-sm text-slate-500 mt-0.5">メールで全件詰め込まず「全件はこちら→」でスプレッドシートに誘導。役割を分けた</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SLIDE 3: 4つのパーツ ===== -->
+  <div class="slide h-screen flex-col px-12 py-8" id="slide-3">
+    <div class="mb-8">
+      <div class="text-xs font-semibold text-purple-600 uppercase tracking-widest mb-1">02 — 自動化の仕組み</div>
+      <h2 class="text-3xl font-bold text-slate-900">4つのパーツに当てはめると</h2>
+    </div>
+    <div class="flex items-center justify-center gap-3 flex-1">
+
+      <!-- 1. トリガー -->
+      <div class="flex flex-col items-center gap-3 w-52">
+        <div class="w-14 h-14 rounded-2xl bg-violet-100 flex items-center justify-center">
+          <svg class="w-7 h-7 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="text-center">
+          <div class="text-xs font-bold text-violet-600 uppercase tracking-widest mb-1">トリガー</div>
+          <div class="font-semibold text-slate-800 text-sm mb-1.5">いつ動くか</div>
+          <div class="bg-violet-50 rounded-lg px-3 py-2.5 text-sm text-slate-700 leading-relaxed">
+            <span class="font-semibold">GAS のスケジュール機能</span>で<br>毎週月曜<br>AM 9:00 に自動起動
+          </div>
+        </div>
+      </div>
+
+      <!-- arrow -->
+      <div class="flow-arrow text-2xl text-slate-300 mb-8">→</div>
+
+      <!-- 2. ソース元 -->
+      <div class="flex flex-col items-center gap-3 w-52">
+        <div class="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center">
+          <svg class="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+        </div>
+        <div class="text-center">
+          <div class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">ソース元</div>
+          <div class="font-semibold text-slate-800 text-sm mb-1.5">データはどこから</div>
+          <div class="bg-blue-50 rounded-lg px-3 py-2.5 text-sm text-slate-700 leading-relaxed">
+            <span class="font-semibold">JIRA</span>（社内タスク管理ツール）からチームのタスクデータを自動取得
+          </div>
+        </div>
+      </div>
+
+      <!-- arrow -->
+      <div class="flow-arrow text-2xl text-slate-300 mb-8">→</div>
+
+      <!-- 3. 処理 -->
+      <div class="flex flex-col items-center gap-3 w-52">
+        <div class="w-14 h-14 rounded-2xl bg-amber-100 flex items-center justify-center">
+          <svg class="w-7 h-7 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        </div>
+        <div class="text-center">
+          <div class="text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">処理する場所</div>
+          <div class="font-semibold text-slate-800 text-sm mb-1.5">どこで加工するか</div>
+          <div class="bg-amber-50 rounded-lg px-3 py-2.5 text-sm text-slate-700 leading-relaxed">
+            <span class="font-semibold">Google Apps Script</span>でデータ集計・メール本文（HTML）を生成
+          </div>
+        </div>
+      </div>
+
+      <!-- arrow -->
+      <div class="flow-arrow text-2xl text-slate-300 mb-8">→</div>
+
+      <!-- 4. 届ける先 -->
+      <div class="flex flex-col items-center gap-3 w-52">
+        <div class="w-14 h-14 rounded-2xl bg-green-100 flex items-center justify-center">
+          <svg class="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        </div>
+        <div class="text-center">
+          <div class="text-xs font-bold text-green-600 uppercase tracking-widest mb-1">届ける先</div>
+          <div class="font-semibold text-slate-800 text-sm mb-1.5">どこに送るか</div>
+          <div class="bg-green-50 rounded-lg px-3 py-2.5 text-sm text-slate-700 leading-relaxed">
+            <span class="font-semibold">Gmail</span> にHTMLメールで自動送信。リンクがそのままクリック可能
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom note -->
+    <div class="flex items-center justify-center mt-4">
+      <div class="bg-slate-100 rounded-full px-4 py-1.5 text-xs text-slate-500">
+        全て <span class="font-semibold text-slate-700">Google Apps Script</span> 内で完結。追加費用ゼロ
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SLIDE 4: 3つのコツ ===== -->
+  <div class="slide h-screen flex-col px-12 py-8" id="slide-4">
+    <div class="mb-8">
+      <div class="text-xs font-semibold text-green-600 uppercase tracking-widest mb-1">03 — 設計で意識したこと</div>
+      <h2 class="text-3xl font-bold text-slate-900">3つのコツを活用した</h2>
+    </div>
+    <div class="grid grid-cols-3 gap-6 flex-1">
+
+      <!-- コツ1 -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col shadow-sm">
+        <div class="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center mb-4">
+          <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        </div>
+        <div class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">コツ 1</div>
+        <div class="text-lg font-bold text-slate-900 mb-2 leading-snug">完成形の絵から作る</div>
+        <div class="text-sm text-slate-500 leading-relaxed flex-1">
+          ツールを作り始める前に<span class="font-semibold text-slate-700">HTMLモックで「完成後のメール画面」を先に作成</span>。デザインと内容を確定させてから実装設計に入った。
+        </div>
+        <div class="mt-4 bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700">
+          → 前のスライドの「完成イメージ」がその成果物
+        </div>
+      </div>
+
+      <!-- コツ2 -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col shadow-sm">
+        <div class="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center mb-4">
+          <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        </div>
+        <div class="text-xs font-bold text-purple-600 uppercase tracking-widest mb-1">コツ 2</div>
+        <div class="text-lg font-bold text-slate-900 mb-2 leading-snug">専門家に磨かせる</div>
+        <div class="text-sm text-slate-500 leading-relaxed flex-1">
+          GASのスクリプトを<span class="font-semibold text-slate-700">「データ取得」「集計」「HTML生成」「メール送信」の4つの関数に分離</span>。それぞれが1つの役割に専念する構成にした。
+        </div>
+        <div class="mt-4 bg-purple-50 rounded-lg px-3 py-2 text-xs text-purple-700">
+          → 修正・改善が必要な時に該当箇所だけ直せる
+        </div>
+      </div>
+
+      <!-- コツ3 -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col shadow-sm">
+        <div class="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-4">
+          <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        </div>
+        <div class="text-xs font-bold text-green-600 uppercase tracking-widest mb-1">コツ 3</div>
+        <div class="text-lg font-bold text-slate-900 mb-2 leading-snug">ブレをコードで止める</div>
+        <div class="text-sm text-slate-500 leading-relaxed flex-1">
+          <span class="font-semibold text-slate-700">メール送信・HTMLテンプレートをコードで固定</span>。毎週実行しても同じ品質のレポートが届くよう、判断をコードに委ねた。
+        </div>
+        <div class="mt-4 bg-green-50 rounded-lg px-3 py-2 text-xs text-green-700">
+          → 手作業・AIまかせにしない部分を明確に決めた
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let current = 1;
+    const total = 4;
+
+    function showSlide(n) {
+      document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+      document.getElementById('slide-' + n).classList.add('active');
+      document.getElementById('counter').textContent = n + ' / ' + total;
+      current = n;
+    }
+
+    function nextSlide() {
+      if (current < total) showSlide(current + 1);
+    }
+
+    function prevSlide() {
+      if (current > 1) showSlide(current - 1);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextSlide();
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') prevSlide();
+    });
+  </script>
+</body>
+</html>

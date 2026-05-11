@@ -1,0 +1,353 @@
+Delivered-To: team.rock3110@gmail.com
+Received: by 2002:a2e:b80c:0:b0:394:728:e1ae with SMTP id u12csp63073ljo;
+        Fri, 8 May 2026 16:24:33 -0700 (PDT)
+X-Received: by 2002:a05:690c:398:b0:7bd:73f3:7a58 with SMTP id 00721157ae682-7bf04b6ea95mr86248337b3.11.1778282672531;
+        Fri, 08 May 2026 16:24:32 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1778282672; cv=none;
+        d=google.com; s=arc-20240605;
+        b=UCR0ViEr+d/t2vq2PPi7D9K49QGMcjAHAF2H9rNz7TA0C1E4KnRKXBoOMsw4/iYNQa
+         0D+jHPi5eGgSh4ERZtSm8a/Pgvoul6/eLvWXyol8vZGamh39fzrR7tWMjW20EUJmojAR
+         6tr/4e2sSfdZ/SZhTZigaQputRjntXlbF1wX5U1dMPBojI+7COK4aDNPRUgubo0gN4E/
+         rTiuKfz88SnH04uk0JYxAqKLCHe2FyvB3hd6Dg8s24xMi6t9T0e2wILNvnHg7h0Slgrd
+         L5yYEet1KKBKb9cuf6c4K5ONg3DF90T8EGT8q0JuJv2vTfGZ2w7gwkJh0s2aGUMlCzRR
+         PYnQ==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=cc:to:from:subject:date:message-id:mime-version:dkim-signature;
+        bh=FFo37BMslfJVvtrLJAe7046kxQhoBJ49mW9kwEyd85U=;
+        fh=f0gInuZCv1w/ecTlG4MpdxpfmBMm4pmwCRRf5/Pq9CI=;
+        b=Zae0UIxqBkN6zKB/pHxyyCD11iO9gJllVvOYuBEp36u3rJv+TWQ12ms+Oa/VMr3Nls
+         sCOTwuOwqO38Ikns6WFC0QuFbMgyjmlc80KvJIXnh/IoKr/Xnqe7XMwVZiYO4dvOlYGI
+         mxE+Bbf2vpxsKrno51NX1pJUPjX/HhEa4C9BQrOZnRI2zXNXoNqS/x6vfA/h2xniCj5I
+         ghiqQPr+jx1KGzThzB9mLuU6MbIQhGa9BMZLgl7sAqd5haK7RknuxdrajGrZs78jIUpP
+         viRR3LqkaFM+9lcXHZFe86rYhp0CcYzCtPpmy51Jly1br6OSMmhwcRM395tBRe6iGVe6
+         C3GA==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@with.tver.co.jp header.s=google header.b=idiF31LK;
+       spf=pass (google.com: domain of 3shd-aqcpdeep-vdlwrzlwk.wyhu.fr.mswhdp.urfngeedjpdlo.frp@maestro.bounces.google.com designates 209.85.220.69 as permitted sender) smtp.mailfrom=3sHD-aQcPDeEP-VDLWRZLWK.WYHU.FR.MSWHDP.URFNgeedJPDLO.FRP@maestro.bounces.google.com;
+       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=with.tver.co.jp;
+       dara=pass header.i=@gmail.com
+Return-Path: <3sHD-aQcPDeEP-VDLWRZLWK.WYHU.FR.MSWHDP.URFNgeedJPDLO.FRP@maestro.bounces.google.com>
+Received: from mail-sor-f69.google.com (mail-sor-f69.google.com. [209.85.220.69])
+        by mx.google.com with SMTPS id 00721157ae682-7c11c6e1decsor1283197b3.7.2026.05.08.16.24.32
+        for <team.rock3110@gmail.com>
+        (Google Transport Security);
+        Fri, 08 May 2026 16:24:32 -0700 (PDT)
+Received-SPF: pass (google.com: domain of 3shd-aqcpdeep-vdlwrzlwk.wyhu.fr.mswhdp.urfngeedjpdlo.frp@maestro.bounces.google.com designates 209.85.220.69 as permitted sender) client-ip=209.85.220.69;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@with.tver.co.jp header.s=google header.b=idiF31LK;
+       spf=pass (google.com: domain of 3shd-aqcpdeep-vdlwrzlwk.wyhu.fr.mswhdp.urfngeedjpdlo.frp@maestro.bounces.google.com designates 209.85.220.69 as permitted sender) smtp.mailfrom=3sHD-aQcPDeEP-VDLWRZLWK.WYHU.FR.MSWHDP.URFNgeedJPDLO.FRP@maestro.bounces.google.com;
+       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=with.tver.co.jp;
+       dara=pass header.i=@gmail.com
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=with.tver.co.jp; s=google; t=1778282672; x=1778887472; dara=google.com;
+        h=cc:to:from:subject:date:message-id:mime-version:from:to:cc:subject
+         :date:message-id:reply-to;
+        bh=FFo37BMslfJVvtrLJAe7046kxQhoBJ49mW9kwEyd85U=;
+        b=idiF31LKfD0kM8PlH2fK7TIeb2KszTA5BmkHMLkEUwtSVUD+gAn5Eq2CKINDcS5S6o
+         uUen5joevxI3tsrpxsdYG1kJuNuG4jFHL1F/83ordGQSuXvchTIUTTTFrHU6VLQknOqK
+         Tq1TEh9SiOs2m2XyfyWGMKoqZX/Os0+JK/TQqI2fv9J9ukz64jYpAubtowKlu0YPw4Ig
+         X44tnvDdjB0zFR1Dam75oT26l9N9ZU7Nc8NaXzw9S+k6U79n5Cla0KWl/ui9RM/3/jJ5
+         St/n3ZvMeILKqiv9vV3fiZ/FsDUp2fAOH57ow8pYkRxMM5Q4FHpLwTlHR5xxk4Xhaaf9
+         3nng==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20251104; t=1778282672; x=1778887472;
+        h=cc:to:from:subject:date:message-id:mime-version:x-gm-message-state
+         :from:to:cc:subject:date:message-id:reply-to;
+        bh=FFo37BMslfJVvtrLJAe7046kxQhoBJ49mW9kwEyd85U=;
+        b=ZG4s2VLPkTYeLEyjNneSlWtVILbl4J3uxjIKz9SkePT8QnKAGkS23b3PLkF3dl5X1T
+         WsY6hj5x6ziHk12dygFM5k8LhiebjskAR9IVnFYzcG1iCQwI3m4GDvXBLk0amy4yAELJ
+         5dwIXM2svd04qefm4zP9ubv5revPfbSWn2pR7NnllzwujOql6iNwzn4LuaNt6W5tu2Bu
+         ba/KKXvuSkTH3mQlQXp1qFgCn/7QcEV4MDfOaa/0qZNzNcKV6dCXG4JbG/zsOHPM3ydN
+         164+TZTlKGwsLagwvQVja5KmbpXFO8YsbMZIcminyBUSoRAqH/x53JlW4rC+3Ev1Uz43
+         NqZg==
+X-Gm-Message-State: AOJu0YxEPMfj17yngOjfggXAcjZwshGOCet0WQdylrQJo1U5bJqGfrE8
+	zEB3U/2a2yqOzTGrVf592neD7CBqpcnSuoqHtXEpklHOltdVgJL7RJmg+M+peacCdYQ5FoCi+1+
+	t1k+TwHqB5GsLBw==
+MIME-Version: 1.0
+X-Received: by 2002:a05:690c:e3cf:b0:7bd:5c77:1aa5 with SMTP id
+ 00721157ae682-7bf04b1c83dmr78953737b3.3.1778282672001; Fri, 08 May 2026
+ 16:24:32 -0700 (PDT)
+Message-ID: <autogen-java-5c2fec48-3e4b-4150-b22f-de1f7839e8be@google.com>
+Date: Fri, 08 May 2026 23:24:32 +0000
+Subject: =?UTF-8?B?44CQ44K/44K544Os44Od44CRMjAyNi81LznvvIhTYXTvvIk=?=
+From: m-saito@with.tver.co.jp
+To: m-saito@with.tver.co.jp
+Cc: team.rock3110@gmail.com
+Content-Type: multipart/alternative; boundary="000000000000f9a8fb065156b244"
+
+--000000000000f9a8fb065156b244
+Content-Type: text/plain; charset="UTF-8"; format=flowed; delsp=yes
+Content-Transfer-Encoding: base64
+
+6YCx5qyh44OB44O844Og6YCy5o2X44Os44Od44O844OIIDIwMjblubQ15pyIOeaXpe+8iFNhdO+8
+iQ0KDQrpgLLooYzkuK06IHVuZGVmaW5lZOS7tuOAgOacquWvvuW/nDogNjDku7bjgIDku4rpgLHl
+rozkuoY6IDE45Lu2DQrmnJ/pmZDliIfjgow6IDbku7bjgIDmi4XlvZPmnKrlibLjgorlvZPjgaY6
+IDMz5Lu2IOKGkCDopoHlr77lv5wNCg0K44CQ5pyf6ZmQ5YiH44KM44CRDQotIDZH6Z2e5a++5b+c
+UEPlkJHjgZEg6Ieq5YuV5o6l57aa6Kit5a6aIOWxlemWi++8iOacn+mZkDogIA0KMjAyNi0wNS0w
+N++8iWh0dHBzOi8vcHJlY2FzLmF0bGFzc2lhbi5uZXQvYnJvd3NlL0lURFgtMjc5DQotIENpc2Nv
+44OV44Kh44O844Og44Ki44OD44OX5omL6aCG5L2c5oiQ77yI5pyf6ZmQOiAgDQoyMDI2LTA1LTAx
+77yJaHR0cHM6Ly9wcmVjYXMuYXRsYXNzaWFuLm5ldC9icm93c2UvSVREWC0yNjkNCi0g5pyq5a++
+5b+c6ICF44Oq44Oe44Kk44Oz44OJ77yI5pyf6ZmQOiAgDQoyMDI2LTA1LTAx77yJaHR0cHM6Ly9w
+cmVjYXMuYXRsYXNzaWFuLm5ldC9icm93c2UvSVREWC0yNTkNCi0gTlfmqZ/lmajjg5XjgqHjg7zj
+g6Djg5Djg7zjgrjjg6fjg7Pjg7vohIblvLHmgKfoqr/mn7vvvIjmnJ/pmZA6ICANCjIwMjYtMDQt
+MjTvvIlodHRwczovL3ByZWNhcy5hdGxhc3NpYW4ubmV0L2Jyb3dzZS9JVERYLTI0OA0KLSDjgqLj
+g4njg6zjgrnluLPjgqLjg5fjg6rjga7lhajnpL7lsI7lhaXvvIjjgrnjg57jg7zjg4jjg5Xjgqnj
+g7PvvInvvIjmnJ/pmZA6ICANCjIwMjYtMDMtMDTvvIlodHRwczovL3ByZWNhcy5hdGxhc3NpYW4u
+bmV0L2Jyb3dzZS9JVERYLTE1Ng0KLSBTS1lTRUHlsI7lhaVQSu+8iOacn+mZkDogIA0KMjAyNi0w
+MS0zMO+8iWh0dHBzOi8vcHJlY2FzLmF0bGFzc2lhbi5uZXQvYnJvd3NlL0lURFgtMTA1DQoNCuOA
+kOS7iumAseWujOS6huOAkQ0KLSA15pyI5YWl56S+5a++5b+c77yIay15b3NoaWRh77yJaHR0cHM6
+Ly9wcmVjYXMuYXRsYXNzaWFuLm5ldC9icm93c2UvSVREWC0yNjcNCi0gQXRsYXNzaWFu44K144Oz
+44OJ44Oc44OD44Kv44K55L2c5oiQ44O76YGL55SoIA0K77yIbS1zYWl0b++8iWh0dHBzOi8vcHJl
+Y2FzLmF0bGFzc2lhbi5uZXQvYnJvd3NlL0lURFgtMjU0DQotIHNjcmVlbmJlYW3jga7nrqHnkIbj
+grPjg7Pjgr3jg7zjg6vjga7jg5Hjgrnjg6/jg7zjg4nkv67mraMgDQrvvIhheS1pdG/vvIlodHRw
+czovL3ByZWNhcy5hdGxhc3NpYW4ubmV0L2Jyb3dzZS9JVERYLTI0Ng0KLSA05pyI57WE57mU5pS5
+57eo44Gu5a6J5ZCm56K66KqN44K344K544OG44Og44Gu5pu05paw5L2c5qWt77yI5Lit5bGxIOmf
+vyANCu+8iWh0dHBzOi8vcHJlY2FzLmF0bGFzc2lhbi5uZXQvYnJvd3NlL0lURFgtMjIzDQotIOmD
+qOe9suaDheWgseOBruODoeODs+ODhuODiuODs+OCueODleODreODvOOCkuaxuuOCgeOCi++8iO+8
+iOacquWJsuW9kyANCu+8ie+8iWh0dHBzOi8vcHJlY2FzLmF0bGFzc2lhbi5uZXQvYnJvd3NlL0lU
+RFgtMjIwDQotIOaJgOWxnuOBquOBl+OBq+OBquOBo+OBpuOBhOOCi+ODpuODvOOCtuODvOOBruaJ
+gOWxnuOCkuWFpeOCjOOCiyANCu+8iG0tc2FpdG/vvIlodHRwczovL3ByZWNhcy5hdGxhc3NpYW4u
+bmV0L2Jyb3dzZS9JVERYLTIwMA0KLSDnpL7lk6Hjg57jgrnjgr/jga5FbnRyYUlE56e76KGM77yI
+5Lit5bGxIOmfvyANCu+8iWh0dHBzOi8vcHJlY2FzLmF0bGFzc2lhbi5uZXQvYnJvd3NlL0lURFgt
+MTY1DQotIOS8muekvuOCq+ODrOODs+ODgOODvOOBruODleOCqeODvOODoOeUs+iri+OBqOiHquWL
+leeZu+mMsiANCu+8iG11cmF0Ye+8iWh0dHBzOi8vcHJlY2FzLmF0bGFzc2lhbi5uZXQvYnJvd3Nl
+L0lURFgtMTQ5DQotIEVudHJhSUTkuI3lhbflkIjmmYLjga7lr77lv5zmlbTnkIbvvIjvvIjmnKrl
+ibLlvZMgDQrvvInvvIlodHRwczovL3ByZWNhcy5hdGxhc3NpYW4ubmV0L2Jyb3dzZS9JVERYLTEz
+MA0KLSDjgJDml6fjgr/jgrnjgq/jg7vkvb/nlKjjgZfjgarjgYTjgJEgQXR0bGFzaWFu44Go44Gu
+RW50cmHntbHlkIggDQrvvIhrLXlvc2hpZGHvvIlodHRwczovL3ByZWNhcy5hdGxhc3NpYW4ubmV0
+L2Jyb3dzZS9JVERYLTk5DQotIOOCs+ODqeODnOODleODreODvOmBi+eUqOalreWLmeOBruWKueeO
+h+WMlu+8iO+8iOacquWJsuW9kyANCu+8ie+8iWh0dHBzOi8vcHJlY2FzLmF0bGFzc2lhbi5uZXQv
+YnJvd3NlL0lURFgtOTINCi0gTWlyb+OBruWIqeeUqOeKtuazgeWPr+imluWMlu+8iG9uYXJp77yJ
+aHR0cHM6Ly9wcmVjYXMuYXRsYXNzaWFuLm5ldC9icm93c2UvSVREWC05MQ0KLSDnp7vou6Ljg43j
+g4Pjg4jjg6/jg7zjgq/oqK3lrprnorroqo3jgrfjg7zjg4jlr77lv5wgDQrvvIhoLW5ha2FtdXJh
+77yJaHR0cHM6Ly9wcmVjYXMuYXRsYXNzaWFuLm5ldC9icm93c2UvSVREWC04NA0KLSBTYWFT44Gu
+5Yip55So54q25rOB44Gu5Y+v6KaW5YyW77yI5paO6JekIOaYgiANCihzLXNhaXRvKe+8iWh0dHBz
+Oi8vcHJlY2FzLmF0bGFzc2lhbi5uZXQvYnJvd3NlL0lURFgtNzENCi0gTWljcm9zb2Z0IERldGVj
+dG9yIGZvciBFbmRwb2ludOOBruimgeS7tuWumue+qeOAgVBPQ+S9nOalreihqOS9nOaIkO+8iOWc
+n+WxiyDlubjkuIkgDQrvvIlodHRwczovL3ByZWNhcy5hdGxhc3NpYW4ubmV0L2Jyb3dzZS9JVERY
+LTYzDQotIEphbUYgUHJvdGVjdCDjg4bjgrnjg4jjg6bjg7zjgrbli5/pm4blkYrnn6XjgYrjgojj
+gbPliKnnlKjjg4bjgrnjg4jjga7lrp/mlr3vvIjlnJ/lsYsg5bm45LiJIA0K77yJaHR0cHM6Ly9w
+cmVjYXMuYXRsYXNzaWFuLm5ldC9icm93c2UvSVREWC00Mw0KLSBVVE3jg6rjg5fjg6zjg7zjgrnm
+lK/mj7TvvIjlnJ/lsYsg5bm45LiJ77yJaHR0cHM6Ly9wcmVjYXMuYXRsYXNzaWFuLm5ldC9icm93
+c2UvSVREWC0zMA0KLSDlkITjgrfjgrnjg4bjg6Djgajjga7oqo3oqLzntbHlkIggDQrvvIh5LW9n
+aW5v77yJaHR0cHM6Ly9wcmVjYXMuYXRsYXNzaWFuLm5ldC9icm93c2UvSVREWC0xMA0K
+--000000000000f9a8fb065156b244
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html><html lang=3D"ja"><head><meta charset=3D"UTF-8"><meta name=
+=3D"viewport" content=3D"width=3Ddevice-width,initial-scale=3D1.0"><title>=
+=E3=82=BF=E3=82=B9=E3=83=AC=E3=83=9D</title></head><body style=3D"margin:0;=
+padding:16px;background:#ffffff;font-family:-apple-system,BlinkMacSystemFon=
+t,'Segoe UI','Hiragino Sans','Yu Gothic',sans-serif;"><div style=3D"max-wid=
+th:420px;margin:0 auto;"><div style=3D"display:flex;align-items:center;just=
+ify-content:space-between;margin-bottom:12px;"><div style=3D"display:flex;a=
+lign-items:center;gap:8px;"><div style=3D"width:32px;height:32px;border-rad=
+ius:8px;background:#2563eb;display:flex;align-items:center;justify-content:=
+center;"><svg width=3D"16" height=3D"16" fill=3D"none" stroke=3D"#fff" view=
+Box=3D"0 0 24 24" stroke-width=3D"2"><path stroke-linecap=3D"round" stroke-=
+linejoin=3D"round" d=3D"M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 =
+012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"=
+/></svg></div><div><div style=3D"font-size:15px;font-weight:600;color:#0f17=
+2a;">=E3=82=BF=E3=82=B9=E3=83=AC=E3=83=9D</div><div style=3D"font-size:11px=
+;color:#64748b;">2026=E5=B9=B45=E6=9C=889=E6=97=A5=EF=BC=88Sat=EF=BC=89</di=
+v></div></div></div><div style=3D"background:#fef2f2;border:1px solid #feca=
+ca;border-radius:8px;padding:10px 12px;font-size:12px;color:#b91c1c;margin-=
+bottom:10px;"><a href=3D"https://precas.atlassian.net/issues/jql?jql=3Dproj=
+ect%20%3D%20%22ITDX%22%20AND%20duedate%20%3C%20now()%20AND%20statusCategory=
+%20!%3D%20Done%20ORDER%20BY%20duedate%20ASC" style=3D"color:#b91c1c;text-de=
+coration:none;">=E2=8F=B0 =E6=9C=9F=E9=99=90=E5=88=87=E3=82=8C <b>6=E4=BB=
+=B6</b></a>=E3=80=80=E3=80=80<a href=3D"https://precas.atlassian.net/issues=
+/jql?jql=3Dproject%20%3D%20%22ITDX%22%20AND%20assignee%20is%20EMPTY%20AND%2=
+0statusCategory%20!%3D%20Done%20ORDER%20BY%20created%20DESC" style=3D"color=
+:#b91c1c;text-decoration:none;">=F0=9F=91=A4 =E6=9C=AA=E5=89=B2=E3=82=8A=E5=
+=BD=93=E3=81=A6 <b>33=E4=BB=B6</b></a></div><table width=3D"100%" cellpaddi=
+ng=3D"0" cellspacing=3D"0" style=3D"border-collapse:separate;border-spacing=
+:4px 0;"><tr><td style=3D"background:#f0fdf4;border-radius:8px;padding:10px=
+ 4px;text-align:center;width:25%;"><div style=3D"font-size:20px;font-weight=
+:700;color:#15803d;">18</div><div style=3D"font-size:11px;color:#16a34a;mar=
+gin-top:2px;">=E5=AE=8C=E4=BA=86</div></td><td style=3D"background:#f5f3ff;=
+border-radius:8px;padding:10px 4px;text-align:center;width:25%;"><div style=
+=3D"font-size:20px;font-weight:700;color:#6d28d9;">9</div><div style=3D"fon=
+t-size:11px;color:#7c3aed;margin-top:2px;">=E6=96=B0=E8=A6=8F</div></td><td=
+ style=3D"background:#eff6ff;border-radius:8px;padding:10px 4px;text-align:=
+center;width:25%;"><div style=3D"font-size:20px;font-weight:700;color:#1d4e=
+d8;">28</div><div style=3D"font-size:11px;color:#2563eb;margin-top:2px;">=
+=E6=9B=B4=E6=96=B0=E3=81=82=E3=82=8A</div></td><td style=3D"background:#fef=
+ce8;border-radius:8px;padding:10px 4px;text-align:center;width:25%;"><div s=
+tyle=3D"font-size:20px;font-weight:700;color:#92400e;">20</div><div style=
+=3D"font-size:11px;color:#d97706;margin-top:2px;">=E5=8B=95=E3=81=8D=E3=81=
+=AA=E3=81=97</div></td></tr></table><div style=3D"text-align:right;margin:6=
+px 0 2px;"><a href=3D"https://precas.atlassian.net/jira/software/projects/I=
+TDX/list" style=3D"font-size:11px;color:#3b82f6;text-decoration:underline;"=
+>JIRA=E3=83=9C=E3=83=BC=E3=83=89=E5=85=A8=E4=BD=93=E3=82=92=E7=A2=BA=E8=AA=
+=8D=E3=81=99=E3=82=8B =E2=86=92</a></div><div style=3D"border:1px solid #bb=
+f7d0;border-radius:8px;overflow:hidden;margin-bottom:10px;"><div style=3D"d=
+isplay:flex;align-items:center;padding:8px 12px;background:#dcfce7;border-b=
+ottom:1px solid #86efac;"><span style=3D"font-size:11px;font-weight:600;col=
+or:#15803d;">=E2=9C=85 =E4=BB=8A=E9=80=B1=E3=81=AE=E5=AE=8C=E4=BA=86</span>=
+<span style=3D"margin-left:auto;font-size:11px;font-weight:700;color:#16a34=
+a;">18=E4=BB=B6</span></div><div style=3D"padding:3px 12px;border-top:1px s=
+olid #f1f5f9;"><a href=3D"https://precas.atlassian.net/browse/ITDX-267" sty=
+le=3D"font-size:11px;color:#334155;text-decoration:none;white-space:nowrap;=
+overflow:hidden;text-overflow:ellipsis;display:block;">5=E6=9C=88=E5=85=A5=
+=E7=A4=BE=E5=AF=BE=E5=BF=9C</a></div><div style=3D"padding:3px 12px;border-=
+top:1px solid #f1f5f9;"><a href=3D"https://precas.atlassian.net/browse/ITDX=
+-254" style=3D"font-size:11px;color:#334155;text-decoration:none;white-spac=
+e:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">Atlassian=
+=E3=82=B5=E3=83=B3=E3=83=89=E3=83=9C=E3=83=83=E3=82=AF=E3=82=B9=E4=BD=9C=E6=
+=88=90=E3=83=BB=E9=81=8B=E7=94=A8</a></div><div style=3D"padding:3px 12px;b=
+order-top:1px solid #f1f5f9;"><a href=3D"https://precas.atlassian.net/brows=
+e/ITDX-246" style=3D"font-size:11px;color:#334155;text-decoration:none;whit=
+e-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">scree=
+nbeam=E3=81=AE=E7=AE=A1=E7=90=86=E3=82=B3=E3=83=B3=E3=82=BD=E3=83=BC=E3=83=
+=AB=E3=81=AE=E3=83=91=E3=82=B9=E3=83=AF=E3=83=BC=E3=83=89=E4=BF=AE=E6=AD=A3=
+</a></div><div style=3D"padding:6px 12px;background:#f8fafc;font-size:11px;=
+color:#94a3b8;">+ =E4=BB=96 13 =E4=BB=B6=E3=80=80<a href=3D"https://precas.=
+atlassian.net/issues/jql?jql=3Dproject%20%3D%20%22ITDX%22%20AND%20status%20=
+in%20(%22%E5%AE%8C%E4%BA%86%22)%20AND%20resolutiondate%20%3E%3D%20-7d%20ORD=
+ER%20BY%20resolutiondate%20DESC" style=3D"color:#3b82f6;text-decoration:und=
+erline;">JIRA=E3=81=A7=E5=85=A8=E4=BB=B6=E7=A2=BA=E8=AA=8D =E2=86=92</a></d=
+iv></div><div style=3D"border:1px solid #ddd6fe;border-radius:8px;overflow:=
+hidden;margin-bottom:10px;"><div style=3D"display:flex;align-items:center;p=
+adding:8px 12px;background:#ede9fe;border-bottom:1px solid #c4b5fd;"><span =
+style=3D"font-size:11px;font-weight:600;color:#6d28d9;">=F0=9F=86=95 =E4=BB=
+=8A=E9=80=B1=E3=81=AE=E6=96=B0=E8=A6=8F</span><span style=3D"margin-left:au=
+to;font-size:11px;font-weight:700;color:#7c3aed;">9=E4=BB=B6</span></div><d=
+iv style=3D"padding:3px 12px;border-top:1px solid #f1f5f9;"><a href=3D"http=
+s://precas.atlassian.net/browse/ITDX-306" style=3D"font-size:11px;color:#33=
+4155;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:=
+ellipsis;display:block;">Backlog API=E3=82=AD=E3=83=BC=E7=99=BA=E8=A1=8C</a=
+></div><div style=3D"padding:3px 12px;border-top:1px solid #f1f5f9;"><a hre=
+f=3D"https://precas.atlassian.net/browse/ITDX-305" style=3D"font-size:11px;=
+color:#334155;text-decoration:none;white-space:nowrap;overflow:hidden;text-=
+overflow:ellipsis;display:block;">=E6=97=A7SSID=E3=81=AE=E5=81=9C=E6=AD=A2<=
+/a></div><div style=3D"padding:3px 12px;border-top:1px solid #f1f5f9;"><a h=
+ref=3D"https://precas.atlassian.net/browse/ITDX-304" style=3D"font-size:11p=
+x;color:#334155;text-decoration:none;white-space:nowrap;overflow:hidden;tex=
+t-overflow:ellipsis;display:block;">RADIUS=E9=9A=9C=E5=AE=B3=E6=99=82=E3=81=
+=AE=E3=83=90=E3=83=83=E3=82=AF=E3=82=A2=E3=83=83=E3=83=97=E6=89=8B=E6=AE=B5=
+=E3=81=AE=E6=B1=BA=E5=AE=9A</a></div><div style=3D"padding:6px 12px;backgro=
+und:#f8fafc;font-size:11px;color:#94a3b8;">+ =E4=BB=96 4 =E4=BB=B6=E3=80=80=
+<a href=3D"https://precas.atlassian.net/issues/jql?jql=3Dproject%20%3D%20%2=
+2ITDX%22%20AND%20created%20%3E%3D%20-7d%20ORDER%20BY%20created%20DESC" styl=
+e=3D"color:#3b82f6;text-decoration:underline;">JIRA=E3=81=A7=E5=85=A8=E4=BB=
+=B6=E7=A2=BA=E8=AA=8D =E2=86=92</a></div></div><div style=3D"border:1px sol=
+id #bfdbfe;border-radius:8px;overflow:hidden;margin-bottom:10px;"><div styl=
+e=3D"display:flex;align-items:center;padding:8px 12px;background:#dbeafe;bo=
+rder-bottom:1px solid #93c5fd;"><span style=3D"font-size:11px;font-weight:6=
+00;color:#1d4ed8;">=F0=9F=94=84 =E9=80=B2=E8=A1=8C=E4=B8=AD=E3=83=BB=E6=9B=
+=B4=E6=96=B0=E3=81=82=E3=82=8A</span><span style=3D"margin-left:auto;font-s=
+ize:11px;font-weight:700;color:#2563eb;">28=E4=BB=B6</span></div><div style=
+=3D"padding:3px 12px;border-top:1px solid #f1f5f9;"><a href=3D"https://prec=
+as.atlassian.net/browse/ITDX-296" style=3D"font-size:11px;color:#334155;tex=
+t-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis=
+;display:block;">Github=E3=81=AE=E4=BB=95=E6=A7=98=E8=AA=BF=E6=9F=BB</a></d=
+iv><div style=3D"padding:3px 12px;border-top:1px solid #f1f5f9;"><a href=3D=
+"https://precas.atlassian.net/browse/ITDX-289" style=3D"font-size:11px;colo=
+r:#334155;text-decoration:none;white-space:nowrap;overflow:hidden;text-over=
+flow:ellipsis;display:block;">=E8=A6=81=E4=BB=B6=E8=AA=BF=E6=95=B4=E3=83=BB=
+=E7=99=BA=E6=B3=A8=E3=83=BB=E4=BD=9C=E6=A5=AD=E6=97=A5=E6=B1=BA=E5=AE=9A</a=
+></div><div style=3D"padding:3px 12px;border-top:1px solid #f1f5f9;"><a hre=
+f=3D"https://precas.atlassian.net/browse/ITDX-279" style=3D"font-size:11px;=
+color:#334155;text-decoration:none;white-space:nowrap;overflow:hidden;text-=
+overflow:ellipsis;display:block;">6G=E9=9D=9E=E5=AF=BE=E5=BF=9CPC=E5=90=91=
+=E3=81=91 =E8=87=AA=E5=8B=95=E6=8E=A5=E7=B6=9A=E8=A8=AD=E5=AE=9A =E5=B1=95=
+=E9=96=8B</a></div><div style=3D"padding:6px 12px;background:#f8fafc;font-s=
+ize:11px;color:#94a3b8;">+ =E4=BB=96 23 =E4=BB=B6=E3=80=80<a href=3D"https:=
+//precas.atlassian.net/issues/jql?jql=3Dproject%20%3D%20%22ITDX%22%20AND%20=
+status%20in%20(%22%E9%80%B2%E8%A1%8C%E4%B8%AD%22)%20AND%20updated%20%3E%3D%=
+20-7d%20ORDER%20BY%20updated%20DESC" style=3D"color:#3b82f6;text-decoration=
+:underline;">JIRA=E3=81=A7=E5=85=A8=E4=BB=B6=E7=A2=BA=E8=AA=8D =E2=86=92</a=
+></div></div><div style=3D"border:1px solid #e2e8f0;border-radius:8px;overf=
+low:hidden;margin-bottom:10px;"><div style=3D"display:flex;align-items:cent=
+er;padding:8px 12px;background:#f8fafc;border-bottom:1px solid #f1f5f9;"><s=
+pan style=3D"font-size:11px;font-weight:600;color:#334155;">=F0=9F=91=A5 =
+=E3=83=A1=E3=83=B3=E3=83=90=E3=83=BC=E5=88=A5 =E6=89=80=E6=8C=81=E3=82=BF=
+=E3=82=B9=E3=82=AF=E6=95=B0</span></div><table width=3D"100%" cellpadding=
+=3D"0" cellspacing=3D"0"><tr><td style=3D"padding:6px 12px;border-top:1px s=
+olid #f1f5f9;"><table width=3D"100%" cellpadding=3D"0" cellspacing=3D"0"><t=
+r><td style=3D"width:24px;vertical-align:middle;"><div style=3D"width:24px;=
+height:24px;border-radius:50%;background:#bfdbfe;display:flex;align-items:c=
+enter;justify-content:center;font-size:11px;font-weight:600;color:#1d4ed8;t=
+ext-align:center;line-height:24px;">y</div></td><td style=3D"padding-left:8=
+px;vertical-align:middle;"><table width=3D"100%" cellpadding=3D"0" cellspac=
+ing=3D"0"><tr><td style=3D"font-size:11px;color:#334155;">y-ogino</td><td s=
+tyle=3D"text-align:right;font-size:11px;font-weight:600;color:#1e293b;">21 =
+=E4=BB=B6</td></tr><tr><td colspan=3D"2" style=3D"padding-top:3px;"><table =
+width=3D"100%" cellpadding=3D"0" cellspacing=3D"0" style=3D"background:#f1f=
+5f9;border-radius:4px;height:6px;"><tr><td style=3D"width:100%;background:#=
+3b82f6;border-radius:4px;height:6px;"></td><td></td></tr></table></td></tr>=
+</table></td></tr></table></td></tr><tr><td style=3D"padding:6px 12px;borde=
+r-top:1px solid #f1f5f9;"><table width=3D"100%" cellpadding=3D"0" cellspaci=
+ng=3D"0"><tr><td style=3D"width:24px;vertical-align:middle;"><div style=3D"=
+width:24px;height:24px;border-radius:50%;background:#bbf7d0;display:flex;al=
+ign-items:center;justify-content:center;font-size:11px;font-weight:600;colo=
+r:#15803d;text-align:center;line-height:24px;">m</div></td><td style=3D"pad=
+ding-left:8px;vertical-align:middle;"><table width=3D"100%" cellpadding=3D"=
+0" cellspacing=3D"0"><tr><td style=3D"font-size:11px;color:#334155;">m-sait=
+o</td><td style=3D"text-align:right;font-size:11px;font-weight:600;color:#1=
+e293b;">16 =E4=BB=B6</td></tr><tr><td colspan=3D"2" style=3D"padding-top:3p=
+x;"><table width=3D"100%" cellpadding=3D"0" cellspacing=3D"0" style=3D"back=
+ground:#f1f5f9;border-radius:4px;height:6px;"><tr><td style=3D"width:76%;ba=
+ckground:#22c55e;border-radius:4px;height:6px;"></td><td></td></tr></table>=
+</td></tr></table></td></tr></table></td></tr><tr><td style=3D"padding:6px =
+12px;border-top:1px solid #f1f5f9;"><table width=3D"100%" cellpadding=3D"0"=
+ cellspacing=3D"0"><tr><td style=3D"width:24px;vertical-align:middle;"><div=
+ style=3D"width:24px;height:24px;border-radius:50%;background:#e9d5ff;displ=
+ay:flex;align-items:center;justify-content:center;font-size:11px;font-weigh=
+t:600;color:#7e22ce;text-align:center;line-height:24px;">a</div></td><td st=
+yle=3D"padding-left:8px;vertical-align:middle;"><table width=3D"100%" cellp=
+adding=3D"0" cellspacing=3D"0"><tr><td style=3D"font-size:11px;color:#33415=
+5;">akutagawa</td><td style=3D"text-align:right;font-size:11px;font-weight:=
+600;color:#1e293b;">13 =E4=BB=B6</td></tr><tr><td colspan=3D"2" style=3D"pa=
+dding-top:3px;"><table width=3D"100%" cellpadding=3D"0" cellspacing=3D"0" s=
+tyle=3D"background:#f1f5f9;border-radius:4px;height:6px;"><tr><td style=3D"=
+width:62%;background:#a855f7;border-radius:4px;height:6px;"></td><td></td><=
+/tr></table></td></tr></table></td></tr></table></td></tr><tr><td style=3D"=
+padding:6px 12px;border-top:1px solid #f1f5f9;"><table width=3D"100%" cellp=
+adding=3D"0" cellspacing=3D"0"><tr><td style=3D"width:24px;vertical-align:m=
+iddle;"><div style=3D"width:24px;height:24px;border-radius:50%;background:#=
+fde68a;display:flex;align-items:center;justify-content:center;font-size:11p=
+x;font-weight:600;color:#b45309;text-align:center;line-height:24px;">k</div=
+></td><td style=3D"padding-left:8px;vertical-align:middle;"><table width=3D=
+"100%" cellpadding=3D"0" cellspacing=3D"0"><tr><td style=3D"font-size:11px;=
+color:#334155;">k-yoshida</td><td style=3D"text-align:right;font-size:11px;=
+font-weight:600;color:#1e293b;">11 =E4=BB=B6</td></tr><tr><td colspan=3D"2"=
+ style=3D"padding-top:3px;"><table width=3D"100%" cellpadding=3D"0" cellspa=
+cing=3D"0" style=3D"background:#f1f5f9;border-radius:4px;height:6px;"><tr><=
+td style=3D"width:52%;background:#f59e0b;border-radius:4px;height:6px;"></t=
+d><td></td></tr></table></td></tr></table></td></tr></table></td></tr><tr><=
+td style=3D"padding:6px 12px;border-top:1px solid #f1f5f9;"><table width=3D=
+"100%" cellpadding=3D"0" cellspacing=3D"0"><tr><td style=3D"width:24px;vert=
+ical-align:middle;"><div style=3D"width:24px;height:24px;border-radius:50%;=
+background:#fecdd3;display:flex;align-items:center;justify-content:center;f=
+ont-size:11px;font-weight:600;color:#be185d;text-align:center;line-height:2=
+4px;">=E6=96=8E</div></td><td style=3D"padding-left:8px;vertical-align:midd=
+le;"><table width=3D"100%" cellpadding=3D"0" cellspacing=3D"0"><tr><td styl=
+e=3D"font-size:11px;color:#334155;">=E6=96=8E=E8=97=A4 =E6=98=82(s-saito)</=
+td><td style=3D"text-align:right;font-size:11px;font-weight:600;color:#1e29=
+3b;">7 =E4=BB=B6</td></tr><tr><td colspan=3D"2" style=3D"padding-top:3px;">=
+<table width=3D"100%" cellpadding=3D"0" cellspacing=3D"0" style=3D"backgrou=
+nd:#f1f5f9;border-radius:4px;height:6px;"><tr><td style=3D"width:33%;backgr=
+ound:#f43f5e;border-radius:4px;height:6px;"></td><td></td></tr></table></td=
+></tr></table></td></tr></table></td></tr><tr><td style=3D"padding:6px 12px=
+;border-top:1px solid #f1f5f9;"><table width=3D"100%" cellpadding=3D"0" cel=
+lspacing=3D"0"><tr><td style=3D"width:24px;vertical-align:middle;"><div sty=
+le=3D"width:24px;height:24px;border-radius:50%;background:#bfdbfe;display:f=
+lex;align-items:center;justify-content:center;font-size:11px;font-weight:60=
+0;color:#1d4ed8;text-align:center;line-height:24px;">a</div></td><td style=
+=3D"padding-left:8px;vertical-align:middle;"><table width=3D"100%" cellpadd=
+ing=3D"0" cellspacing=3D"0"><tr><td style=3D"font-size:11px;color:#334155;"=
+>ay-ito</td><td style=3D"text-align:right;font-size:11px;font-weight:600;co=
+lor:#1e293b;">6 =E4=BB=B6</td></tr><tr><td colspan=3D"2" style=3D"padding-t=
+op:3px;"><table width=3D"100%" cellpadding=3D"0" cellspacing=3D"0" style=3D=
+"background:#f1f5f9;border-radius:4px;height:6px;"><tr><td style=3D"width:2=
+9%;background:#3b82f6;border-radius:4px;height:6px;"></td><td></td></tr></t=
+able></td></tr></table></td></tr></table></td></tr></table></div><div style=
+=3D"display:flex;justify-content:space-between;padding-top:4px;"><span styl=
+e=3D"font-size:11px;color:#94a3b8;">=E6=AF=8E=E9=80=B1=E6=9C=88=E6=9B=9C AM=
+9:00 =E8=87=AA=E5=8B=95=E7=94=9F=E6=88=90</span><span style=3D"font-size:11=
+px;color:#94a3b8;">Powered by JIRA + GAS</span></div></div></body></html>
+--000000000000f9a8fb065156b244--
