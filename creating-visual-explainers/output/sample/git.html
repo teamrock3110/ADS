@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta property="og:title" content="Gitの仕組み">
+  <meta property="og:description" content="Gitの仕組みを、身近なたとえとビジュアルでわかりやすく図解します。">
+  <meta property="og:type" content="article">
+  <title>Gitの仕組み</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFFFFF'/><rect x='8' y='8' width='84' height='84' rx='14' fill='none' stroke='%233B82F6' stroke-width='4'/><circle cx='32' cy='40' r='10' fill='%233B82F6' opacity='0.8'/><circle cx='68' cy='40' r='10' fill='%2360A5FA' opacity='0.8'/><rect x='25' y='62' width='50' height='6' rx='3' fill='%2394A3B8' opacity='0.6'/><rect x='30' y='74' width='40' height='6' rx='3' fill='%2394A3B8' opacity='0.3'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ads: {
+              bg: '#FFFFFF',
+              surface: '#F8FAFC',
+              hover: '#F1F5F9',
+              border: '#E2E8F0',
+              accent: '#3B82F6',
+              'accent-light': '#2563EB',
+              text: '#1E293B',
+              muted: '#64748B',
+              dim: '#94A3B8',
+              positive: '#10B981',
+              negative: '#EF4444',
+              warning: '#F59E0B',
+            }
+          },
+          fontFamily: {
+            sans: ['"Noto Sans JP"', '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Yu Gothic UI"', '"Meiryo"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { border-top: none !important; }
+      .rounded-xl { break-inside: avoid; }
+      .md\:flex-row { flex-direction: row !important; }
+      .md\:hidden { display: none !important; }
+      .hidden.md\:block { display: block !important; }
+      .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+      .md\:mb-20 { margin-bottom: 5rem !important; }
+      .md\:py-16 { padding-top: 4rem !important; padding-bottom: 4rem !important; }
+      .bg-clip-text.text-transparent {
+        -webkit-background-clip: initial !important;
+        background-clip: initial !important;
+        color: #2563EB !important;
+        -webkit-text-fill-color: #2563EB !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-ads-bg text-slate-600 antialiased leading-relaxed border-t-4 border-ads-accent">
+  <div class="no-print max-w-3xl mx-auto px-5 pt-2 flex justify-end">
+    <button onclick="window.print()" class="flex items-center gap-1.5 text-xs text-ads-dim hover:text-ads-accent transition-colors cursor-pointer">
+      <i data-lucide="download" class="w-3.5 h-3.5"></i>
+      PDF
+    </button>
+  </div>
+  <main class="max-w-3xl mx-auto px-5 py-10 md:py-16">
+<!-- CONTENT_START -->
+
+<!-- ============================================================ -->
+<!--  HERO                                                        -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-ads-accent/10 text-ads-accent-light px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <i data-lucide="git-branch" class="w-4 h-4"></i>
+    開発ツール
+  </div>
+  <h1 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight mb-6">
+    <span class="bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Git</span>の仕組み
+  </h1>
+  <p class="text-lg text-ads-muted max-w-xl mx-auto leading-relaxed">
+    「Git？バージョン管理？」と聞いてもピンとこない。<br>
+    ひとことで言うと ──
+  </p>
+</div>
+
+
+<!-- ============================================================ -->
+<!--  ONE-PAGE SUMMARY                                             -->
+<!-- ============================================================ -->
+<div class="bg-ads-surface border border-ads-border rounded-2xl p-6 md:p-10 mb-6">
+  <div class="text-center mb-8 md:mb-10">
+    <p class="text-xl md:text-2xl font-black text-slate-900 mb-2">
+      Git = コードの<span class="text-ads-accent-light">「タイムマシン」</span>
+    </p>
+    <p class="text-sm text-ads-muted">
+      いつでも過去の状態に戻れて、複数人で同時に安全に作業できる仕組み
+    </p>
+  </div>
+
+  <!-- Core flow: Working Dir → Staging → Repo -->
+  <div class="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-0 mb-8">
+    <!-- Working Directory -->
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="folder" class="w-7 h-7 text-blue-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">作業ディレクトリ</div>
+      <div class="text-[11px] text-blue-600/70 mt-0.5">ファイルを編集</div>
+    </div>
+
+    <!-- Arrow 1: add -->
+    <div class="flex items-center justify-center md:w-16 py-1 md:py-0">
+      <div class="flex flex-col items-center gap-0.5">
+        <span class="text-[9px] font-medium text-ads-accent tracking-wider">git add</span>
+        <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+      </div>
+    </div>
+
+    <!-- Staging Area (centerpiece) -->
+    <div class="flex flex-col items-center w-40 p-4 bg-ads-accent/5 border-2 border-ads-accent/20 rounded-2xl">
+      <div class="w-16 h-16 rounded-2xl bg-ads-accent/15 border-2 border-ads-accent/30 flex items-center justify-center mb-2.5">
+        <i data-lucide="package" class="w-8 h-8 text-ads-accent-light"></i>
+      </div>
+      <div class="font-bold text-ads-accent-light text-base">ステージング</div>
+      <div class="text-[11px] text-ads-muted mt-0.5 mb-2">記録する変更を選ぶ</div>
+      <div class="text-[10px] text-ads-muted bg-white rounded-lg px-2.5 py-1 border border-ads-border/50">「次のセーブに含める」</div>
+    </div>
+
+    <!-- Arrow 2: commit -->
+    <div class="flex items-center justify-center md:w-16 py-1 md:py-0">
+      <div class="flex flex-col items-center gap-0.5">
+        <span class="text-[9px] font-medium text-ads-accent tracking-wider">commit</span>
+        <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+      </div>
+    </div>
+
+    <!-- Repository -->
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="database" class="w-7 h-7 text-emerald-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">リポジトリ</div>
+      <div class="text-[11px] text-emerald-600/70 mt-0.5">変更履歴を保管</div>
+    </div>
+  </div>
+
+  <!-- Remote -->
+  <div class="flex justify-center mb-8">
+    <div class="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-500/5 border border-emerald-500/15 rounded-full px-4 py-1.5">
+      <i data-lucide="cloud" class="w-3.5 h-3.5"></i>
+      push でクラウドへ送信 / pull でクラウドから取得
+    </div>
+  </div>
+
+  <!-- Divider with label -->
+  <div class="flex items-center gap-4 mb-6">
+    <div class="flex-1 border-t border-ads-border/50"></div>
+    <div class="text-[11px] text-ads-dim font-medium">似た体験、ありますよね</div>
+    <div class="flex-1 border-t border-ads-border/50"></div>
+  </div>
+
+  <!-- Everyday examples as pills -->
+  <div class="flex flex-wrap justify-center gap-2 mb-8">
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="bookmark" class="w-3.5 h-3.5 text-purple-500"></i>
+      ゲームのセーブ&ロード
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="history" class="w-3.5 h-3.5 text-blue-500"></i>
+      Googleドキュメントの変更履歴
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="undo-2" class="w-3.5 h-3.5 text-cyan-500"></i>
+      Ctrl+Z で「元に戻す」
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-emerald-500"></i>
+      Dropboxの過去バージョン復元
+    </div>
+  </div>
+</div>
+
+<p class="text-center text-ads-muted mb-16 md:mb-20">
+  ここから先で、この仕組みをひとつずつ丁寧に解説していきます。
+</p>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 1: そもそもGitって何？                                -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-500/10 flex-shrink-0">
+      <i data-lucide="help-circle" class="w-5 h-5 text-blue-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">そもそもGitって何？</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed text-lg md:text-xl">
+    Gitはコードの<strong class="text-slate-900">「セーブ＆ロード」</strong>ができるツールです。
+  </p>
+
+  <!-- ゲームのセーブ画面モックアップ -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-base font-bold text-slate-900 text-center mb-6">ゲームで考えるGitの役割</h3>
+    <div class="rounded-xl overflow-hidden border border-slate-700/50">
+      <div class="flex items-center gap-3 bg-slate-800 px-4 py-2.5">
+        <div class="flex gap-1.5">
+          <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+          <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+          <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+        </div>
+        <div class="text-xs text-slate-400">RPG — ボス戦前</div>
+      </div>
+      <div class="bg-slate-900 p-5">
+        <div class="flex items-center justify-between mb-4">
+          <div class="text-sm text-slate-300 font-medium">セーブデータ</div>
+          <div class="flex gap-2">
+            <div class="flex items-center gap-1.5 bg-blue-500/20 border border-blue-500/30 rounded-lg px-3 py-1.5 text-xs text-blue-300">
+              <i data-lucide="save" class="w-3.5 h-3.5"></i> セーブ
+            </div>
+            <div class="flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/30 rounded-lg px-3 py-1.5 text-xs text-emerald-300">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> ロード
+            </div>
+          </div>
+        </div>
+        <div class="space-y-2">
+          <div class="flex items-center gap-3 bg-slate-800 rounded-lg px-3 py-2">
+            <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+            <span class="text-xs text-slate-300">Slot 1</span>
+            <span class="text-xs text-slate-500 ml-auto">5分前 — ボス戦前</span>
+          </div>
+          <div class="flex items-center gap-3 bg-slate-800 rounded-lg px-3 py-2">
+            <div class="w-2 h-2 rounded-full bg-slate-500"></div>
+            <span class="text-xs text-slate-300">Slot 2</span>
+            <span class="text-xs text-slate-500 ml-auto">3時間前 — 街の探索中</span>
+          </div>
+          <div class="flex items-center gap-3 bg-slate-800 rounded-lg px-3 py-2">
+            <div class="w-2 h-2 rounded-full bg-slate-500"></div>
+            <span class="text-xs text-slate-300">Slot 3</span>
+            <span class="text-xs text-slate-500 ml-auto">昨日 — 前の街</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="text-sm text-ads-muted text-center mt-4">Gitはこの「セーブ＆ロード」を、コードに対してやってくれるツール</p>
+  </div>
+
+  <p class="mb-6 leading-relaxed text-ads-muted">
+    もしGitがなかったら、コードの管理はこうなります。
+  </p>
+
+  <!-- Before / After 比較 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <!-- Before -->
+    <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
+      <div class="inline-flex items-center gap-1.5 bg-red-500/10 text-red-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-5">
+        <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
+        BEFORE — Gitがない世界
+      </div>
+      <ul class="space-y-3">
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"></i>
+          <span>ファイル名が<strong class="text-red-700">「企画書_最終版_v2_本当の最終版.docx」</strong>だらけになる</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"></i>
+          <span>同僚の変更で<strong class="text-red-700">自分が書いたコードが上書きされて消える</strong></span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"></i>
+          <span><strong class="text-red-700">「昨日まで動いてたのに...」</strong>と途方に暮れる</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"></i>
+          <span>なぜこの変更をしたのか、<strong class="text-red-700">理由を誰も覚えていない</strong></span>
+        </li>
+      </ul>
+      <div class="mt-5 pt-4 border-t border-red-500/10 text-sm text-red-700/70 flex items-center gap-2">
+        <i data-lucide="alert-circle" class="w-4 h-4"></i>
+        元に戻したくても戻せない。原因の特定に何時間もかかる。
+      </div>
+    </div>
+
+    <!-- After -->
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-6">
+      <div class="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-5">
+        <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+        AFTER — Gitがある世界
+      </div>
+      <ul class="space-y-3">
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+          <span>すべての変更に<strong class="text-emerald-700">日時・作者・説明メッセージ</strong>が自動で付く</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+          <span>複数人が同時に編集しても<strong class="text-emerald-700">安全に統合（マージ）</strong>できる</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+          <span>任意の過去の状態に<strong class="text-emerald-700">いつでも一瞬で戻せる</strong></span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+          <span><strong class="text-emerald-700">「誰が、いつ、なぜ変えたか」</strong>が全部記録されている</span>
+        </li>
+      </ul>
+      <div class="mt-5 pt-4 border-t border-emerald-500/10 text-sm text-emerald-700/70 flex items-center gap-2">
+        <i data-lucide="zap" class="w-4 h-4"></i>
+        怖がらずに変更でき、問題があってもすぐ原因を特定できる。
+      </div>
+    </div>
+  </div>
+
+  <!-- 技術的な定義 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 mb-8 text-center">
+    <div class="text-xs text-ads-dim font-medium tracking-widest uppercase mb-3">技術的な定義</div>
+    <p class="text-lg md:text-xl font-bold text-slate-900 leading-relaxed">
+      Git = ファイルの変更履歴を記録・追跡し、<br class="hidden md:block">
+      いつでも過去の状態に復元できる分散型バージョン管理システム
+    </p>
+    <p class="text-xs text-ads-dim mt-3">出典: <a href="https://git-scm.com/about" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">git-scm.com — About Git</a></p>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    Gitは2005年に、Linux（リナックス）というOSを開発した<strong class="text-slate-900">リーナス・トーバルズ</strong>が作りました。Linuxは世界中の何百人もの開発者が同時にコードを変更するプロジェクトです。その膨大な変更を安全に管理するために生まれたのがGitでした。つまりGitは最初から、<strong class="text-slate-900">大規模なチーム開発のために設計されたツール</strong>なのです。
+  </p>
+
+  <!-- ポイントボックス -->
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-ads-accent/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="lightbulb" class="w-4 h-4 text-ads-accent-light"></i>
+      </div>
+      <div>
+        <p class="font-bold text-ads-accent-light mb-1">ここがポイント</p>
+        <p class="text-ads-muted leading-relaxed">
+          Gitは<strong class="text-slate-800">「コードのタイムマシン」</strong>であり、同時に<strong class="text-slate-800">「チームの交通整理係」</strong>でもあります。過去に戻る力と、複数人の作業を安全にまとめる力。この2つがGitの本質です。現在、プロの開発者の<strong class="text-slate-800">96%がGitを使っています</strong>。
+        </p>
+        <p class="text-xs text-ads-dim mt-2">出典: <a href="https://survey.stackoverflow.co/2022" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">Stack Overflow Developer Survey 2022</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 2: Gitの「3つの場所」を理解する                       -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-purple-500/10 flex-shrink-0">
+      <i data-lucide="layers" class="w-5 h-5 text-purple-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">Gitの「3つの場所」を理解する</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    Gitを使うとき、ファイルは<strong class="text-slate-900">3つの場所</strong>を行き来します。この3つの関係がわかれば、Gitの仕組みの大半は理解できたと言っても過言ではありません。
+  </p>
+
+  <p class="mb-8 leading-relaxed">
+    わかりやすいように、<strong class="text-slate-900">「手紙を書いて送る」</strong>プロセスにたとえてみましょう。
+  </p>
+
+  <!-- 3つの場所 図解 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-8">Gitの3つの場所 — 手紙で考える</h3>
+
+    <div class="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-0">
+      <!-- 作業ディレクトリ -->
+      <div class="w-44 bg-blue-500/10 border border-blue-500/20 rounded-xl p-5 text-center">
+        <div class="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="pencil" class="w-6 h-6 text-blue-600"></i>
+        </div>
+        <div class="font-bold text-blue-700 mb-1">作業ディレクトリ</div>
+        <div class="text-xs text-blue-600/70">Working Directory</div>
+        <div class="text-xs text-ads-muted mt-3 bg-slate-100/80 rounded-lg px-3 py-1.5">手紙を書いている机</div>
+      </div>
+
+      <!-- 矢印 1 -->
+      <div class="flex items-center justify-center md:w-16 py-2 md:py-0">
+        <div class="flex flex-col items-center gap-1">
+          <span class="text-[10px] text-ads-accent font-medium">git add</span>
+          <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+          <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+        </div>
+      </div>
+
+      <!-- ステージング -->
+      <div class="w-44 bg-ads-accent/10 border-2 border-ads-accent/30 rounded-xl p-5 text-center">
+        <div class="w-12 h-12 rounded-full bg-ads-accent/20 flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="package" class="w-6 h-6 text-ads-accent-light"></i>
+        </div>
+        <div class="font-bold text-ads-accent-light mb-1">ステージング</div>
+        <div class="text-xs text-ads-accent/70">Staging Area</div>
+        <div class="text-xs text-ads-muted mt-3 bg-slate-100/80 rounded-lg px-3 py-1.5">封筒に入れた手紙</div>
+      </div>
+
+      <!-- 矢印 2 -->
+      <div class="flex items-center justify-center md:w-16 py-2 md:py-0">
+        <div class="flex flex-col items-center gap-1">
+          <span class="text-[10px] text-ads-accent font-medium">commit</span>
+          <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+          <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+        </div>
+      </div>
+
+      <!-- リポジトリ -->
+      <div class="w-44 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-5 text-center">
+        <div class="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="archive" class="w-6 h-6 text-emerald-600"></i>
+        </div>
+        <div class="font-bold text-emerald-700 mb-1">リポジトリ</div>
+        <div class="text-xs text-emerald-600/70">Repository</div>
+        <div class="text-xs text-ads-muted mt-3 bg-slate-100/80 rounded-lg px-3 py-1.5">郵便局の配達記録</div>
+      </div>
+    </div>
+
+    <div class="flex justify-center mt-6">
+      <div class="flex items-center gap-2 text-ads-muted text-sm">
+        <i data-lucide="corner-down-left" class="w-4 h-4"></i>
+        過去のどの記録にも、いつでも戻れる
+      </div>
+    </div>
+  </div>
+
+  <!-- 各場所の詳しい説明 -->
+  <div class="space-y-6 mb-8">
+    <div class="flex gap-4">
+      <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="pencil" class="w-5 h-5 text-blue-600"></i>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-900 mb-2">作業ディレクトリ（Working Directory）</h3>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          あなたが実際にファイルを編集している場所です。手紙のたとえで言えば、<strong class="text-slate-800">机の上で手紙を書いたり、消しゴムで書き直したりしている段階</strong>です。この段階の変更はまだGitに記録されていません。ただの「書きかけ」の状態です。自由に書き直し、試行錯誤できます。
+        </p>
+      </div>
+    </div>
+
+    <div class="flex gap-4">
+      <div class="w-10 h-10 rounded-lg bg-ads-accent/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="package" class="w-5 h-5 text-ads-accent-light"></i>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-900 mb-2">ステージングエリア（Staging Area）</h3>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          「次のコミットに含める変更」を選んで置いておく場所です。手紙のたとえで言えば、<strong class="text-slate-800">書き終わった手紙を封筒に入れた状態</strong>です。まだポストに投函していないので、「やっぱりこの手紙は出さない」と封筒から出すこともできます。<strong class="text-slate-800">「10ファイル変更したけど、今回は3ファイルだけ記録したい」</strong>ということが可能になるのが、この場所の存在意義です。
+        </p>
+      </div>
+    </div>
+
+    <div class="flex gap-4">
+      <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="archive" class="w-5 h-5 text-emerald-600"></i>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-900 mb-2">リポジトリ（Repository）</h3>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          変更履歴が永久に保管される場所です。手紙のたとえで言えば、<strong class="text-slate-800">郵便局が「いつ、誰が、どんな手紙を送ったか」をすべて記録している</strong>のと同じです。リポジトリに記録された変更（これを<strong class="text-slate-800">コミット（Commit）</strong>と呼びます）は消えることがなく、いつでも確認でき、いつでもその時点の状態に戻れます。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 補足ボックス -->
+  <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="info" class="w-4 h-4 text-amber-600"></i>
+      </div>
+      <div>
+        <p class="font-bold text-amber-700 mb-1">なぜ「ステージング」が必要なの？</p>
+        <p class="text-ads-muted leading-relaxed text-sm">
+          「編集したら即座に記録すればいいのでは？」と思うかもしれません。しかし実際の開発では、<strong class="text-slate-800">バグ修正と新機能の追加を同時進行している</strong>ことがよくあります。ステージングがあることで、「バグ修正だけ先に記録して、新機能の開発は後から記録する」という<strong class="text-slate-800">意味のある単位で履歴を残す</strong>ことができるのです。これにより、後から「どの変更が原因でバグが起きたか」を特定しやすくなります。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 3: 基本操作の流れ                                     -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-cyan-500/10 flex-shrink-0">
+      <i data-lucide="terminal" class="w-5 h-5 text-cyan-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">基本操作の流れ — edit, add, commit, push</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    Gitの日常的な作業は、たった<strong class="text-slate-900">4つのステップ</strong>の繰り返しです。開発者が毎日何十回と繰り返すこの流れを、順番に見ていきましょう。
+  </p>
+
+  <!-- 4ステップフロー図 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-8">Gitの基本サイクル</h3>
+
+    <div class="flex flex-col md:flex-row items-stretch justify-center gap-3 md:gap-0">
+      <div class="flex-1 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-blue-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">1</div>
+        <i data-lucide="pencil" class="w-6 h-6 text-blue-600 mx-auto mb-2"></i>
+        <div class="font-bold text-blue-700 text-sm mb-1">ファイルを編集</div>
+        <div class="text-xs text-ads-muted leading-relaxed">コードを書く・修正する<br>（ここはGit関係なし）</div>
+      </div>
+
+      <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+        <i data-lucide="chevron-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="chevron-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+
+      <div class="flex-1 bg-purple-500/10 border border-purple-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-purple-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">2</div>
+        <i data-lucide="package" class="w-6 h-6 text-purple-600 mx-auto mb-2"></i>
+        <div class="font-bold text-purple-700 text-sm mb-1">git add</div>
+        <div class="text-xs text-ads-muted leading-relaxed">記録したいファイルを<br>ステージングに追加する</div>
+      </div>
+
+      <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+        <i data-lucide="chevron-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="chevron-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+
+      <div class="flex-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-emerald-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">3</div>
+        <i data-lucide="save" class="w-6 h-6 text-emerald-600 mx-auto mb-2"></i>
+        <div class="font-bold text-emerald-700 text-sm mb-1">git commit</div>
+        <div class="text-xs text-ads-muted leading-relaxed">ステージングの内容を<br>メッセージ付きで記録</div>
+      </div>
+
+      <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+        <i data-lucide="chevron-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="chevron-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+
+      <div class="flex-1 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-amber-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">4</div>
+        <i data-lucide="upload-cloud" class="w-6 h-6 text-amber-600 mx-auto mb-2"></i>
+        <div class="font-bold text-amber-700 text-sm mb-1">git push</div>
+        <div class="text-xs text-ads-muted leading-relaxed">ローカルの記録を<br>クラウドに送信する</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    では実際に、ターミナル（コマンドを入力する黒い画面）で打つコマンドを見てみましょう。たったこれだけのコマンドで、変更が記録されてクラウドに送信されます。
+  </p>
+
+  <!-- ターミナル例: 基本操作 -->
+  <div class="mb-6">
+    <div class="rounded-xl overflow-hidden border border-slate-700/50">
+      <div class="flex items-center gap-3 bg-slate-800 px-4 py-2.5">
+        <div class="flex gap-1.5">
+          <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+          <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+          <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+        </div>
+        <div class="flex items-center gap-1.5 text-xs text-slate-400">
+          <i data-lucide="terminal" class="w-3.5 h-3.5"></i>
+          ターミナル — Gitの基本操作
+        </div>
+      </div>
+      <pre class="bg-slate-950 p-5 overflow-x-auto text-sm leading-loose"><code><span class="text-slate-500"># 1. ファイルを編集する（普通にコードを書く。Gitの操作は不要）</span>
+
+<span class="text-slate-500"># 2. 変更したファイルをステージングに追加する</span>
+<span class="text-emerald-400">$</span> git add index.html
+
+<span class="text-slate-500"># 3. メッセージ付きで変更を記録する</span>
+<span class="text-emerald-400">$</span> git commit -m <span class="text-amber-400">"ログインページのデザインを変更"</span>
+
+<span class="text-slate-500"># 4. 記録をリモート（クラウド）に送信する</span>
+<span class="text-emerald-400">$</span> git push origin main</code></pre>
+    </div>
+  </div>
+
+  <!-- コマンド解説 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-5 mb-8">
+    <h4 class="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+      <i data-lucide="file-text" class="w-4 h-4 text-ads-accent"></i>
+      コマンドの解説（1つずつ読み解く）
+    </h4>
+    <div class="space-y-4 text-sm">
+      <div class="flex items-start gap-3">
+        <span class="text-xs font-mono bg-purple-500/10 text-purple-600 px-2 py-0.5 rounded flex-shrink-0 mt-0.5">add</span>
+        <span class="leading-relaxed"><code class="text-emerald-700 text-xs bg-slate-100 px-1.5 py-0.5 rounded">git add index.html</code> は「index.htmlの変更を、次のコミットに含める」という宣言です。複数ファイルをスペース区切りで指定したり、<code class="text-emerald-700 text-xs bg-slate-100 px-1.5 py-0.5 rounded">git add .</code> で全ファイルを一括追加することもできます。手紙のたとえで言えば「この手紙を封筒に入れる」にあたります。</span>
+      </div>
+      <div class="flex items-start gap-3">
+        <span class="text-xs font-mono bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded flex-shrink-0 mt-0.5">commit</span>
+        <span class="leading-relaxed"><code class="text-emerald-700 text-xs bg-slate-100 px-1.5 py-0.5 rounded">git commit -m "メッセージ"</code> は「ステージングの内容を、説明メッセージ付きで永久に記録する」コマンドです。<code class="text-emerald-700 text-xs bg-slate-100 px-1.5 py-0.5 rounded">-m</code> はmessage（メッセージ）の頭文字。ゲームで言えば「セーブする」瞬間です。メッセージには「何を、なぜ変えたか」を簡潔に書きます。</span>
+      </div>
+      <div class="flex items-start gap-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded flex-shrink-0 mt-0.5">push</span>
+        <span class="leading-relaxed"><code class="text-emerald-700 text-xs bg-slate-100 px-1.5 py-0.5 rounded">git push origin main</code> は「自分のパソコンに記録した履歴を、GitHubなどのクラウドに送信する」コマンドです。<code class="text-emerald-700 text-xs bg-slate-100 px-1.5 py-0.5 rounded">origin</code> はリモートリポジトリのデフォルト名、<code class="text-emerald-700 text-xs bg-slate-100 px-1.5 py-0.5 rounded">main</code> はブランチ名（次のセクションで説明します）です。</span>
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-4 leading-relaxed">
+    逆に、チームメンバーがクラウドに送った変更を自分のパソコンに取り込むときは、<code class="text-emerald-700 text-xs bg-slate-100 px-1.5 py-0.5 rounded">git pull</code> を使います。
+  </p>
+
+  <!-- ターミナル例: pull & log -->
+  <div class="mb-8">
+    <div class="rounded-xl overflow-hidden border border-slate-700/50">
+      <div class="flex items-center gap-3 bg-slate-800 px-4 py-2.5">
+        <div class="flex gap-1.5">
+          <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+          <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+          <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+        </div>
+        <div class="flex items-center gap-1.5 text-xs text-slate-400">
+          <i data-lucide="terminal" class="w-3.5 h-3.5"></i>
+          ターミナル — 履歴の取得と確認
+        </div>
+      </div>
+      <pre class="bg-slate-950 p-5 overflow-x-auto text-sm leading-loose"><code><span class="text-slate-500"># リモートの最新状態を自分のパソコンに取り込む</span>
+<span class="text-emerald-400">$</span> git pull origin main
+
+<span class="text-slate-500"># 変更履歴を確認する（誰が何をしたか一覧で見える）</span>
+<span class="text-emerald-400">$</span> git log --oneline
+<span class="text-amber-400">a1b2c3d</span> ログインページのデザインを変更
+<span class="text-amber-400">e4f5g6h</span> ユーザー登録機能を追加
+<span class="text-amber-400">i7j8k9l</span> データベース接続設定を修正</code></pre>
+    </div>
+  </div>
+
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-ads-accent/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="lightbulb" class="w-4 h-4 text-ads-accent-light"></i>
+      </div>
+      <div>
+        <p class="font-bold text-ads-accent-light mb-1">覚えるのは4つだけ</p>
+        <p class="text-ads-muted leading-relaxed">
+          日常的に使うGitコマンドは、<strong class="text-slate-800">add（選ぶ） → commit（記録する） → push（送る） → pull（もらう）</strong>の4つです。この4つさえ覚えれば、基本的なバージョン管理はすぐに始められます。実際の開発で使うコマンドの大半は、この4つの組み合わせです。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 4: ブランチ                                          -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-amber-500/10 flex-shrink-0">
+      <i data-lucide="git-branch" class="w-5 h-5 text-amber-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">ブランチ — 平行世界で安全に実験する</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    Gitの最も強力な機能のひとつが<strong class="text-slate-900">ブランチ（Branch = 枝）</strong>です。ブランチとは、開発のメインラインから「枝分かれ」して、独立した作業空間を作る仕組みのことです。
+  </p>
+
+  <p class="mb-8 leading-relaxed">
+    たとえ話で考えてみましょう。あなたは小説を書いています。本筋はほぼ完成していますが、「この登場人物を追加したらどうなるだろう？」と実験したい。でも本筋を直接書き換えて失敗したら大変です。そこで<strong class="text-slate-900">原稿をまるごとコピーして、コピーの方で思い切り実験する</strong>。うまくいったら本筋に反映する。ダメだったらコピーを捨てるだけ。これがブランチの考え方です。
+  </p>
+
+  <!-- ブランチフロー図 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-8">ブランチの流れ — 3ステップ</h3>
+
+    <div class="flex flex-col md:flex-row items-stretch justify-center gap-3 md:gap-0">
+      <!-- Step 1: 枝分かれ -->
+      <div class="flex-1 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-blue-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">1</div>
+        <i data-lucide="git-branch" class="w-6 h-6 text-blue-600 mx-auto mb-2"></i>
+        <div class="font-bold text-blue-700 text-sm mb-1">枝分かれ（branch）</div>
+        <div class="text-xs text-ads-muted leading-relaxed">mainブランチから<br>新しいブランチを作成<br>（コピーのようなもの）</div>
+      </div>
+
+      <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+        <i data-lucide="chevron-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="chevron-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+
+      <!-- Step 2: 自由に実験 -->
+      <div class="flex-1 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-amber-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">2</div>
+        <i data-lucide="pencil" class="w-6 h-6 text-amber-600 mx-auto mb-2"></i>
+        <div class="font-bold text-amber-700 text-sm mb-1">自由に開発</div>
+        <div class="text-xs text-ads-muted leading-relaxed">ブランチ上で自由に<br>コードを変更する<br>（mainには一切影響なし）</div>
+      </div>
+
+      <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+        <i data-lucide="chevron-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="chevron-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+
+      <!-- Step 3: 統合 -->
+      <div class="flex-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-emerald-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">3</div>
+        <i data-lucide="git-merge" class="w-6 h-6 text-emerald-600 mx-auto mb-2"></i>
+        <div class="font-bold text-emerald-700 text-sm mb-1">統合（merge）</div>
+        <div class="text-xs text-ads-muted leading-relaxed">完成したらmainに<br>マージして合流<br>（失敗なら捨てるだけ）</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    ここでのポイントは、<strong class="text-slate-900">featureブランチでの作業中も、mainブランチには一切影響がない</strong>ということです。小説のたとえで言えば、コピー原稿をどんなに書き換えても、金庫にしまった本筋の原稿は無傷のまま。だからこそ安心して大胆な実験ができるのです。
+  </p>
+
+  <!-- ターミナル例: ブランチ操作 -->
+  <div class="mb-8">
+    <div class="rounded-xl overflow-hidden border border-slate-700/50">
+      <div class="flex items-center gap-3 bg-slate-800 px-4 py-2.5">
+        <div class="flex gap-1.5">
+          <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+          <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+          <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+        </div>
+        <div class="flex items-center gap-1.5 text-xs text-slate-400">
+          <i data-lucide="terminal" class="w-3.5 h-3.5"></i>
+          ターミナル — ブランチの基本操作
+        </div>
+      </div>
+      <pre class="bg-slate-950 p-5 overflow-x-auto text-sm leading-loose"><code><span class="text-slate-500"># 新しいブランチを作って、そこに切り替える</span>
+<span class="text-emerald-400">$</span> git switch -c feature-login
+
+<span class="text-slate-500"># ブランチ上で自由にコードを書く（mainには影響しない）</span>
+<span class="text-emerald-400">$</span> git add login.html
+<span class="text-emerald-400">$</span> git commit -m <span class="text-amber-400">"ログイン機能を実装"</span>
+
+<span class="text-slate-500"># mainブランチに戻る</span>
+<span class="text-emerald-400">$</span> git switch main
+
+<span class="text-slate-500"># featureブランチの変更をmainに統合する</span>
+<span class="text-emerald-400">$</span> git merge feature-login</code></pre>
+    </div>
+  </div>
+
+  <!-- ブランチのメリット 2列カード -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="flex gap-4 bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="shield" class="w-5 h-5 text-blue-600"></i>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-900 mb-2">mainを壊さない安全性</h3>
+        <p class="text-sm text-ads-muted leading-relaxed">実験的な変更はブランチ上で行い、完成してからmainに統合する。本番環境が壊れるリスクを大幅に減らせます。</p>
+      </div>
+    </div>
+    <div class="flex gap-4 bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="users" class="w-5 h-5 text-emerald-600"></i>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-900 mb-2">同時並行で作業できる</h3>
+        <p class="text-sm text-ads-muted leading-relaxed">Aさんはログイン機能、Bさんは検索機能と、それぞれ別のブランチで独立して開発を進められます。お互いの作業が衝突しません。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 5: GitとGitHubは別物                                 -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-500/10 flex-shrink-0">
+      <i data-lucide="search" class="w-5 h-5 text-blue-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">GitとGitHubは別物</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    「Git」と「GitHub（ギットハブ）」は名前が似ていますが、<strong class="text-slate-900">まったく別のもの</strong>です。混同している人がとても多いので、ここで明確に区別しておきましょう。ひとことで言えば、<strong class="text-slate-900">GitはWordのような「ツール」、GitHubはGoogle Driveのような「サービス」</strong>です。
+  </p>
+
+  <!-- Git vs GitHub 比較 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="monitor" class="w-5 h-5 text-blue-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-blue-700">Git</h3>
+          <div class="text-xs text-blue-600/70">ツール（ソフトウェア）</div>
+        </div>
+      </div>
+      <ul class="space-y-3 text-sm">
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0"></i>
+          <span>自分のパソコンにインストールして使う</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0"></i>
+          <span>ファイルのバージョン管理機能を提供</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0"></i>
+          <span>コマンドライン（ターミナル）で操作</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0"></i>
+          <span>完全無料のオープンソースソフトウェア</span>
+        </li>
+      </ul>
+      <div class="mt-5 pt-4 border-t border-blue-500/10 text-sm text-blue-700/70 flex items-center gap-2">
+        <i data-lucide="info" class="w-4 h-4"></i>
+        インターネットなしでも使える
+      </div>
+    </div>
+
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="globe" class="w-5 h-5 text-emerald-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-emerald-700">GitHub</h3>
+          <div class="text-xs text-emerald-600/70">Webサービス（プラットフォーム）</div>
+        </div>
+      </div>
+      <ul class="space-y-3 text-sm">
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+          <span>インターネット上で動くクラウドサービス</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+          <span>Gitリポジトリのホスティング（保管場所）を提供</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+          <span>ブラウザ上でコードレビューや議論ができる</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+          <span>無料プランと有料プランがある</span>
+        </li>
+      </ul>
+      <div class="mt-5 pt-4 border-t border-emerald-500/10 text-sm text-emerald-700/70 flex items-center gap-2">
+        <i data-lucide="info" class="w-4 h-4"></i>
+        世界で1億人以上の開発者が利用
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 mb-8">
+    <h4 class="text-sm font-bold text-slate-900 mb-4 text-center">身近なたとえで整理すると</h4>
+    <div class="flex flex-col md:flex-row items-center justify-center gap-4">
+      <div class="text-center">
+        <div class="text-sm font-bold text-blue-700 mb-1">Git</div>
+        <div class="text-xs text-ads-muted">Wordのような<br>「文書作成ツール」</div>
+      </div>
+      <div class="text-2xl text-ads-dim font-bold">:</div>
+      <div class="text-center">
+        <div class="text-sm font-bold text-emerald-700 mb-1">GitHub</div>
+        <div class="text-xs text-ads-muted">Google Driveのような<br>「クラウド保管&共有サービス」</div>
+      </div>
+    </div>
+    <p class="text-xs text-ads-dim text-center mt-4">Wordがなくてもファイルは作れるし、Google Driveがなくてもファイルは保存できる。でも両方使うと圧倒的に便利。</p>
+  </div>
+
+  <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="info" class="w-4 h-4 text-amber-600"></i>
+      </div>
+      <div>
+        <p class="font-bold text-amber-700 mb-1">GitHub以外の選択肢もある</p>
+        <p class="text-ads-muted leading-relaxed text-sm">
+          GitHubは最も有名ですが、同じ「Gitリポジトリのホスティングサービス」には<strong class="text-slate-800">GitLab</strong>や<strong class="text-slate-800">Bitbucket</strong>もあります。どれも中身で使っている技術はGitです。Gmail、Outlook、Yahoo!メールのように、「サービスは違うけど、やっていることは同じ（メールの送受信）」というイメージに近いです。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 6: よくある誤解                                      -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-red-500/10 flex-shrink-0">
+      <i data-lucide="alert-circle" class="w-5 h-5 text-red-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">よくある誤解</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    Gitについて学び始めると、多くの人が同じところでつまずきます。ここでは、よくある3つの誤解を取り上げて、正しい理解に修正します。
+  </p>
+
+  <div class="space-y-4">
+    <!-- 誤解1 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-red-500/5 border-b border-ads-border/50">
+        <div class="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="x" class="w-3.5 h-3.5 text-red-600"></i>
+        </div>
+        <h3 class="font-bold text-red-700 text-sm">誤解: 「Gitはプログラマーだけが使うもの」</h3>
+      </div>
+      <div class="px-6 py-5">
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-emerald-700 mb-2">実際は:</p>
+            <p class="text-sm text-ads-muted leading-relaxed">
+              Gitはテキストファイルならなんでもバージョン管理できます。デザイナーがデザインデータを管理したり、ライターが原稿の変更履歴を追ったり、研究者が論文の共同執筆に使ったり。<strong class="text-slate-800">「ファイルの変更を追いたい」すべての人</strong>にとって有益なツールです。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 誤解2 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-red-500/5 border-b border-ads-border/50">
+        <div class="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="x" class="w-3.5 h-3.5 text-red-600"></i>
+        </div>
+        <h3 class="font-bold text-red-700 text-sm">誤解: 「一度削除したファイルは戻せない」</h3>
+      </div>
+      <div class="px-6 py-5">
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-emerald-700 mb-2">実際は:</p>
+            <p class="text-sm text-ads-muted leading-relaxed">
+              Gitで一度コミットした変更は、<strong class="text-slate-800">事実上消えません</strong>。ファイルを削除しても、過去のコミットにそのファイルが存在していた記録が残っています。<code class="text-emerald-700 text-xs bg-slate-100 px-1.5 py-0.5 rounded">git checkout</code> や <code class="text-emerald-700 text-xs bg-slate-100 px-1.5 py-0.5 rounded">git restore</code> コマンドで、過去の状態からいつでも復元できます。まさに「タイムマシン」の真骨頂です。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 誤解3 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-red-500/5 border-b border-ads-border/50">
+        <div class="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="x" class="w-3.5 h-3.5 text-red-600"></i>
+        </div>
+        <h3 class="font-bold text-red-700 text-sm">誤解: 「Gitを使うにはインターネットが必要」</h3>
+      </div>
+      <div class="px-6 py-5">
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-emerald-700 mb-2">実際は:</p>
+            <p class="text-sm text-ads-muted leading-relaxed">
+              Gitは<strong class="text-slate-800">「分散型」</strong>のバージョン管理システムです。「分散型」とは、リポジトリの完全なコピーが自分のパソコンにあるという意味です。だからインターネットに接続していなくても、コミット（記録）も履歴の確認もブランチの作成もすべてできます。<strong class="text-slate-800">インターネットが必要になるのは、pushやpullでクラウド上のリモートリポジトリとやり取りするときだけ</strong>です。飛行機の中でもコーディングとコミットは問題なくできます。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 7: まとめ                                            -->
+<!-- ============================================================ -->
+<section>
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-ads-accent/10 flex-shrink-0">
+      <i data-lucide="check-circle" class="w-5 h-5 text-ads-accent-light"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">まとめ — 覚えておきたい3つのこと</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    最後に、この図解で伝えたかったことを3つに絞ってまとめます。
+  </p>
+
+  <div class="space-y-4 mb-10">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-blue-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-blue-500 leading-none flex-shrink-0 mt-1">01</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">Gitは「コードのタイムマシン」</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            ファイルの変更を「いつ、誰が、何を、なぜ」変えたかという情報とともに記録し、いつでも過去の状態に戻れます。ゲームのセーブ&ロードを、コードの世界で実現する仕組みです。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-emerald-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-emerald-500 leading-none flex-shrink-0 mt-1">02</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">基本は「add → commit → push → pull」の4つ</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            作業ディレクトリ・ステージング・リポジトリの3つの場所を、4つのコマンドでファイルが行き来する。この流れさえ理解すれば、Gitの基本操作は身につきます。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-amber-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-amber-500 leading-none flex-shrink-0 mt-1">03</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">ブランチで「安全な実験場」を作れる</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            メインの開発ラインを壊さずに新しい機能を試せるブランチの仕組みが、Gitの最大の武器です。チーム全員が安心して同時に開発を進められます。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-center bg-gradient-to-b from-ads-accent/5 to-transparent border border-ads-accent/10 rounded-xl p-8 md:p-10">
+    <i data-lucide="git-branch" class="w-8 h-8 text-ads-accent mx-auto mb-4"></i>
+    <p class="text-lg font-bold text-slate-900 mb-3">Gitは、現代のソフトウェア開発を支える「共通言語」です。</p>
+    <p class="text-ads-muted max-w-lg mx-auto leading-relaxed">
+      世界中の開発者の96%が使うGit。最初はコマンドに戸惑うかもしれませんが、基本の4つのコマンドを覚えれば、もう「最終版_v2_本当の最終版」に悩まされることはありません。まずは小さなプロジェクトで <code class="text-emerald-700 text-xs bg-slate-100 px-1.5 py-0.5 rounded">git init</code> と打つところから始めてみてください。
+    </p>
+    <p class="text-xs text-ads-dim mt-4">出典: <a href="https://git-scm.com/" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">git-scm.com</a> / <a href="https://survey.stackoverflow.co/2022" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">Stack Overflow Developer Survey 2022</a></p>
+  </div>
+</section>
+
+<!-- CONTENT_END -->
+  </main>
+  <footer class="max-w-3xl mx-auto px-5 pb-10 pt-6 border-t border-ads-border/30">
+    <p class="text-xs text-ads-dim text-center">AI-Driven School の図解ツールで作成</p>
+  </footer>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

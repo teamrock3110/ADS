@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta property="og:title" content="Cursorの仕組み">
+  <meta property="og:description" content="AIが組み込まれたコードエディタ「Cursor」の仕組みを、身近な例とビジュアルでわかりやすく図解します。">
+  <meta property="og:type" content="article">
+  <title>Cursorの仕組み</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFFFFF'/><rect x='8' y='8' width='84' height='84' rx='14' fill='none' stroke='%233B82F6' stroke-width='4'/><circle cx='32' cy='40' r='10' fill='%233B82F6' opacity='0.8'/><circle cx='68' cy='40' r='10' fill='%2360A5FA' opacity='0.8'/><rect x='25' y='62' width='50' height='6' rx='3' fill='%2394A3B8' opacity='0.6'/><rect x='30' y='74' width='40' height='6' rx='3' fill='%2394A3B8' opacity='0.3'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ads: {
+              bg: '#FFFFFF',
+              surface: '#F8FAFC',
+              hover: '#F1F5F9',
+              border: '#E2E8F0',
+              accent: '#3B82F6',
+              'accent-light': '#2563EB',
+              text: '#1E293B',
+              muted: '#64748B',
+              dim: '#94A3B8',
+              positive: '#10B981',
+              negative: '#EF4444',
+              warning: '#F59E0B',
+            }
+          },
+          fontFamily: {
+            sans: ['"Noto Sans JP"', '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Yu Gothic UI"', '"Meiryo"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { border-top: none !important; }
+      .rounded-xl { break-inside: avoid; }
+      .md\:flex-row { flex-direction: row !important; }
+      .md\:hidden { display: none !important; }
+      .hidden.md\:block { display: block !important; }
+      .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+      .md\:mb-20 { margin-bottom: 5rem !important; }
+      .md\:py-16 { padding-top: 4rem !important; padding-bottom: 4rem !important; }
+      .bg-clip-text.text-transparent {
+        -webkit-background-clip: initial !important;
+        background-clip: initial !important;
+        color: #2563EB !important;
+        -webkit-text-fill-color: #2563EB !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-ads-bg text-slate-600 antialiased leading-relaxed border-t-4 border-ads-accent">
+  <div class="no-print max-w-3xl mx-auto px-5 pt-2 flex justify-end">
+    <button onclick="window.print()" class="flex items-center gap-1.5 text-xs text-ads-dim hover:text-ads-accent transition-colors cursor-pointer">
+      <i data-lucide="download" class="w-3.5 h-3.5"></i>
+      PDF
+    </button>
+  </div>
+  <main class="max-w-3xl mx-auto px-5 py-10 md:py-16">
+<!-- CONTENT_START -->
+
+<!-- ============================================================ -->
+<!--  HERO                                                        -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-ads-accent/10 text-ads-accent-light px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <i data-lucide="code-2" class="w-4 h-4"></i>
+    開発ツール
+  </div>
+  <h1 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight mb-6">
+    <span class="bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">Cursor</span>の仕組み
+  </h1>
+  <p class="text-lg text-ads-muted max-w-xl mx-auto leading-relaxed">
+    「AIでコードを書くって、どういうこと？」<br>
+    ひとことで言うと ──
+  </p>
+</div>
+
+
+<!-- ============================================================ -->
+<!--  ONE-PAGE SUMMARY                                            -->
+<!-- ============================================================ -->
+<div class="bg-ads-surface border border-ads-border rounded-2xl p-6 md:p-10 mb-6">
+  <div class="text-center mb-8 md:mb-10">
+    <p class="text-xl md:text-2xl font-black text-slate-900 mb-2">
+      Cursor = コードエディタに<span class="text-ads-accent-light">「AIの頭脳」</span>を融合させた開発環境
+    </p>
+    <p class="text-sm text-ads-muted">
+      あなたがコードを書くそばで、AIが文脈を読み、補完し、修正し、新しいコードまで生成する
+    </p>
+  </div>
+
+  <!-- Core flow: You → Cursor → AI Models -->
+  <div class="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-0 mb-8">
+    <!-- You -->
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="user" class="w-7 h-7 text-blue-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">あなた</div>
+      <div class="text-[11px] text-blue-600/70 mt-0.5">コードを書く・指示する</div>
+    </div>
+
+    <!-- Arrow 1 -->
+    <div class="flex items-center justify-center md:w-16 py-1 md:py-0">
+      <div class="flex flex-col items-center gap-0.5">
+        <span class="text-[9px] font-medium text-ads-accent tracking-wider">操作・質問</span>
+        <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+      </div>
+    </div>
+
+    <!-- Cursor (centerpiece) -->
+    <div class="flex flex-col items-center w-44 p-4 bg-ads-accent/5 border-2 border-ads-accent/20 rounded-2xl">
+      <div class="w-16 h-16 rounded-2xl bg-ads-accent/15 border-2 border-ads-accent/30 flex items-center justify-center mb-2.5">
+        <i data-lucide="monitor" class="w-8 h-8 text-ads-accent-light"></i>
+      </div>
+      <div class="font-bold text-ads-accent-light text-base">Cursor</div>
+      <div class="text-[11px] text-ads-muted mt-0.5 mb-2">VS Code + AIの頭脳</div>
+      <div class="text-[10px] text-ads-muted bg-white rounded-lg px-2.5 py-1 border border-ads-border/50">エディタとAIが一体化</div>
+    </div>
+
+    <!-- Arrow 2 -->
+    <div class="flex items-center justify-center md:w-16 py-1 md:py-0">
+      <div class="flex flex-col items-center gap-0.5">
+        <span class="text-[9px] font-medium text-ads-accent tracking-wider">問い合わせ</span>
+        <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+      </div>
+    </div>
+
+    <!-- AI Models -->
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="cpu" class="w-7 h-7 text-violet-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">AIモデル群</div>
+      <div class="text-[11px] text-violet-600/70 mt-0.5">Claude, GPT, Gemini...</div>
+    </div>
+  </div>
+
+  <!-- Return flow -->
+  <div class="flex justify-center mb-8">
+    <div class="flex items-center gap-2 text-xs text-violet-600 bg-violet-500/5 border border-violet-500/15 rounded-full px-4 py-1.5">
+      <i data-lucide="corner-down-left" class="w-3.5 h-3.5"></i>
+      AIの提案・修正がエディタにそのまま反映される
+    </div>
+  </div>
+
+  <!-- Divider with label -->
+  <div class="flex items-center gap-4 mb-6">
+    <div class="flex-1 border-t border-ads-border/50"></div>
+    <div class="text-[11px] text-ads-dim font-medium">Cursorでできること</div>
+    <div class="flex-1 border-t border-ads-border/50"></div>
+  </div>
+
+  <!-- Feature pills -->
+  <div class="flex flex-wrap justify-center gap-2 mb-8">
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="keyboard" class="w-3.5 h-3.5 text-blue-500"></i>
+      コード自動補完
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="message-square" class="w-3.5 h-3.5 text-emerald-500"></i>
+      チャットで質問
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="bot" class="w-3.5 h-3.5 text-purple-500"></i>
+      ファイル横断で修正
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="cloud" class="w-3.5 h-3.5 text-rose-500"></i>
+      自律的にタスク実行
+    </div>
+  </div>
+
+</div>
+
+<p class="text-center text-ads-muted mb-16 md:mb-20">
+  ここから先で、Cursorの仕組みをひとつずつ丁寧に解説していきます。
+</p>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 1: そもそもCursorって何？                              -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-500/10 flex-shrink-0">
+      <i data-lucide="help-circle" class="w-5 h-5 text-blue-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">そもそもCursorって何？</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    ひとことで言えば、CursorはAIが組み込まれたコードエディタです。世界標準のエディタ「VS Code」に、AIの力を融合させたものです。
+  </p>
+
+  <!-- アナロジー図: VS Code + AI = Cursor -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-8">CursorとVS Codeの関係</h3>
+
+    <div class="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-0">
+      <!-- VS Code -->
+      <div class="w-44 bg-blue-500/10 border border-blue-500/20 rounded-xl p-5 text-center">
+        <div class="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="code-2" class="w-6 h-6 text-blue-600"></i>
+        </div>
+        <div class="font-bold text-blue-700 mb-1">VS Code</div>
+        <div class="text-xs text-blue-600/70">世界標準のエディタ</div>
+        <div class="text-xs text-ads-muted mt-3 bg-slate-100/80 rounded-lg px-3 py-1.5">高性能な「作業机」</div>
+      </div>
+
+      <!-- Plus sign -->
+      <div class="flex items-center justify-center md:w-16 py-2 md:py-0">
+        <div class="w-8 h-8 rounded-full bg-ads-accent/10 flex items-center justify-center">
+          <span class="text-lg font-bold text-ads-accent">+</span>
+        </div>
+      </div>
+
+      <!-- AI -->
+      <div class="w-44 bg-violet-500/10 border border-violet-500/20 rounded-xl p-5 text-center">
+        <div class="w-12 h-12 rounded-full bg-violet-500/20 flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="cpu" class="w-6 h-6 text-violet-600"></i>
+        </div>
+        <div class="font-bold text-violet-700 mb-1">AI</div>
+        <div class="text-xs text-violet-600/70">大規模言語モデル</div>
+        <div class="text-xs text-ads-muted mt-3 bg-slate-100/80 rounded-lg px-3 py-1.5">専属の「ベテラン助手」</div>
+      </div>
+
+      <!-- Equals sign -->
+      <div class="flex items-center justify-center md:w-16 py-2 md:py-0">
+        <div class="w-8 h-8 rounded-full bg-ads-accent/10 flex items-center justify-center">
+          <span class="text-lg font-bold text-ads-accent">=</span>
+        </div>
+      </div>
+
+      <!-- Cursor -->
+      <div class="w-44 bg-ads-accent/10 border-2 border-ads-accent/30 rounded-xl p-5 text-center">
+        <div class="w-12 h-12 rounded-full bg-ads-accent/20 flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="monitor" class="w-6 h-6 text-ads-accent-light"></i>
+        </div>
+        <div class="font-bold text-ads-accent-light mb-1">Cursor</div>
+        <div class="text-xs text-ads-accent/70">AI搭載エディタ</div>
+        <div class="text-xs text-ads-muted mt-3 bg-slate-100/80 rounded-lg px-3 py-1.5">助手が常駐する作業環境</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    <strong class="text-slate-900">コードエディタ</strong>とは、プログラマーがプログラムを書くための専用ソフトです。Wordで文章を書くように、プログラマーはコードエディタで色分け表示・自動インデント・入力ミス検出などの機能を使いながらコードを書きます。
+  </p>
+
+  <p class="mb-6 leading-relaxed">
+    <strong class="text-slate-900">VS Code</strong>（Visual Studio Code）は、Microsoftが開発した無料のコードエディタで、世界中の開発者の約70%が使用しています。拡張機能で自分好みにカスタマイズできるのが魅力です。
+  </p>
+
+  <p class="mb-8 leading-relaxed">
+    <strong class="text-slate-900">フォーク</strong>とは、オープンソースのコードをコピーし、それを土台に独自に発展させること。CursorはVS Codeをフォークして作られており、見た目も操作感もほぼ同じですが、<strong class="text-slate-900">AIがエディタの中核に組み込まれている</strong>点が根本的に違います。
+  </p>
+
+  <p class="mb-4 leading-relaxed">
+    実際のCursorの画面を模して見てみましょう。
+  </p>
+
+  <div class="rounded-xl overflow-hidden border border-slate-700/50 mb-8">
+    <!-- タイトルバー -->
+    <div class="flex items-center gap-3 bg-slate-800 px-4 py-2.5">
+      <div class="flex gap-1.5">
+        <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+        <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+        <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+      </div>
+      <div class="flex items-center gap-1.5 text-xs text-slate-400">
+        <i data-lucide="code" class="w-3.5 h-3.5"></i>
+        Cursor — my-project
+      </div>
+    </div>
+    <!-- エディタ本体 -->
+    <div class="bg-slate-900 flex">
+      <!-- サイドバー -->
+      <div class="w-36 bg-slate-800 border-r border-slate-700/50 p-3 hidden md:block">
+        <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Explorer</div>
+        <div class="space-y-1 text-xs">
+          <div class="flex items-center gap-1.5 text-slate-400 px-1.5 py-0.5">
+            <i data-lucide="folder" class="w-3 h-3 text-blue-400"></i> src
+          </div>
+          <div class="flex items-center gap-1.5 text-white bg-slate-700/50 rounded px-1.5 py-0.5 ml-3">
+            <i data-lucide="file-code" class="w-3 h-3 text-blue-400"></i> app.py
+          </div>
+          <div class="flex items-center gap-1.5 text-slate-500 px-1.5 py-0.5 ml-3">
+            <i data-lucide="file-code" class="w-3 h-3 text-slate-500"></i> utils.py
+          </div>
+          <div class="flex items-center gap-1.5 text-slate-400 px-1.5 py-0.5">
+            <i data-lucide="file" class="w-3 h-3 text-slate-400"></i> README.md
+          </div>
+        </div>
+      </div>
+      <!-- コードペイン -->
+      <div class="flex-1 p-4 min-h-[180px]">
+        <div class="flex items-center gap-2 text-xs text-slate-500 mb-3 border-b border-slate-700/50 pb-2">
+          <span class="text-slate-300 bg-slate-800 px-2 py-0.5 rounded">app.py</span>
+        </div>
+        <pre class="text-xs leading-relaxed"><code><span class="text-slate-500">1</span>  <span class="text-purple-400">def</span> <span class="text-blue-400">greet</span>(name):
+<span class="text-slate-500">2</span>      <span class="text-purple-400">return</span> <span class="text-emerald-400">f"Hello, {name}!"</span>
+<span class="text-slate-500">3</span>
+<span class="text-slate-500">4</span>  <span class="text-slate-600"># ここにユーザー一覧を返す関数を追加したい</span>
+<span class="text-emerald-400/30 bg-emerald-500/5 block -mx-4 px-4">5  def get_users():</span>
+<span class="text-emerald-400/30 bg-emerald-500/5 block -mx-4 px-4">6      return db.query("SELECT * FROM users")</span></code></pre>
+      </div>
+      <!-- AIチャットパネル -->
+      <div class="w-48 border-l border-slate-700/50 p-3 hidden md:block">
+        <div class="flex items-center gap-1.5 text-[10px] text-slate-500 uppercase tracking-wider mb-3">
+          <i data-lucide="message-circle" class="w-3 h-3"></i> AI Chat
+        </div>
+        <div class="space-y-2">
+          <div class="bg-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-400">
+            ユーザー一覧を返す関数を追加して
+          </div>
+          <div class="bg-blue-500/10 border border-blue-500/20 rounded-lg px-2.5 py-1.5 text-[11px] text-blue-300">
+            get_users()を追加しました。5〜6行目をご確認ください。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    左がファイル一覧、中央がコード、右がAIとのチャット。AIにやりたいことを伝えるだけで、コードが提案されます（緑の部分）。
+  </p>
+
+  <p class="mb-6 leading-relaxed">
+    ここで重要な区別があります。VS Codeに後からAIプラグイン（GitHub Copilotなど）を追加するのと、Cursorを使うのは<strong class="text-slate-900">本質的に異なります</strong>。たとえで言えば、普通の車にカーナビを後付けするのと、最初から自動運転システムが組み込まれた車を買うくらいの違い。Cursorでは、AIがファイル編集、ターミナル操作（コマンド実行）、ブラウザでのテスト、ウェブ検索までを一体的に操作できます。
+  </p>
+
+  <!-- ポイントボックス -->
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-ads-accent/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="lightbulb" class="w-4 h-4 text-ads-accent-light"></i>
+      </div>
+      <div>
+        <p class="font-bold text-ads-accent-light mb-1">ここがポイント</p>
+        <p class="text-ads-muted leading-relaxed">
+          CursorはVS Codeの「拡張版」ではなく<strong class="text-slate-800">「進化版」</strong>です。AIがエディタの操作系統そのものに組み込まれているから、プラグインの後付けでは実現できない<strong class="text-slate-800">深い統合</strong>が成り立っています。VS Codeでできることはすべてそのまま使えて、さらにAIの力が加わります。
+        </p>
+        <p class="text-xs text-ads-dim mt-2">出典: <a href="https://www.cursor.com/" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">Cursor公式サイト</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 2: AIはどうやってコードを理解するのか                    -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-violet-500/10 flex-shrink-0">
+      <i data-lucide="search" class="w-5 h-5 text-violet-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">AIはどうやってコードを理解するのか</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    Cursorの最大の強みは、<strong class="text-slate-900">「あなたのプロジェクト全体を理解している」</strong>ことです。
+  </p>
+
+  <p class="mb-8 leading-relaxed">
+    たとえばChatGPTにコードの質問をする場合、関連するコードを自分でコピペして渡す必要がありますよね。Cursorは違います。プロジェクトの全ファイルを自動的に解析し、<strong class="text-slate-900">ファイル間の関係や構造を把握した上で</strong>回答します。1万行のコードがあっても、AIはその全体像を「地図」のように掴んでいるのです。
+  </p>
+
+  <!-- 4ステップフロー図 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-8">CursorのAIが動く4ステップ</h3>
+
+    <div class="flex flex-col md:flex-row items-stretch justify-center gap-3 md:gap-0">
+      <div class="flex-1 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-blue-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">1</div>
+        <i data-lucide="search" class="w-6 h-6 text-blue-600 mx-auto mb-2"></i>
+        <div class="font-bold text-blue-700 text-sm mb-1">インデックス化</div>
+        <div class="text-xs text-ads-muted leading-relaxed">プロジェクト全体を読み取り<br>意味的な「地図」を作成<br>（ファイル間の関係も把握）</div>
+      </div>
+
+      <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+        <i data-lucide="chevron-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="chevron-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+
+      <div class="flex-1 bg-purple-500/10 border border-purple-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-purple-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">2</div>
+        <i data-lucide="layers" class="w-6 h-6 text-purple-600 mx-auto mb-2"></i>
+        <div class="font-bold text-purple-700 text-sm mb-1">文脈の構築</div>
+        <div class="text-xs text-ads-muted leading-relaxed">今開いているファイル、<br>カーソル位置、編集履歴から<br>「何をしたいか」を推測</div>
+      </div>
+
+      <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+        <i data-lucide="chevron-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="chevron-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+
+      <div class="flex-1 bg-violet-500/10 border border-violet-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-violet-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">3</div>
+        <i data-lucide="cpu" class="w-6 h-6 text-violet-600 mx-auto mb-2"></i>
+        <div class="font-bold text-violet-700 text-sm mb-1">AIモデルに問い合わせ</div>
+        <div class="text-xs text-ads-muted leading-relaxed">構築した文脈を<br>Claude・GPT等に送信<br>（最適なモデルを選択）</div>
+      </div>
+
+      <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+        <i data-lucide="chevron-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="chevron-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+
+      <div class="flex-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-emerald-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">4</div>
+        <i data-lucide="check-circle" class="w-6 h-6 text-emerald-600 mx-auto mb-2"></i>
+        <div class="font-bold text-emerald-700 text-sm mb-1">結果をエディタに反映</div>
+        <div class="text-xs text-ads-muted leading-relaxed">AIの回答をコードとして<br>エディタに表示・適用<br>（差分の確認も可能）</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    ここで重要なのが<strong class="text-slate-900">「文脈」</strong>（コンテキスト）の精度です。同じ「ボタンを追加して」という指示でも、ECサイトなら「カートに入れるボタン」、ブログなら「いいねボタン」が適切ですよね。Cursorはプロジェクト全体を読んでいるから、<strong class="text-slate-900">あなたのプロジェクトにフィットした提案</strong>を返すことができます。一般的なAIチャットとの決定的な違いがここにあります。
+  </p>
+
+  <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="info" class="w-4 h-4 text-amber-600"></i>
+      </div>
+      <div>
+        <p class="font-bold text-amber-700 mb-1">ちょっと補足: 対応AIモデル</p>
+        <p class="text-ads-muted leading-relaxed text-sm">
+          Cursorは <strong class="text-slate-800">Claude</strong>（Anthropic社）、<strong class="text-slate-800">GPT</strong>（OpenAI社）、<strong class="text-slate-800">Gemini</strong>（Google社）など複数のAIモデルに対応しています。さらに独自の<strong class="text-slate-800">「Composer」</strong>というモデルも開発しており、通常のモデルの4倍の速度でコーディングタスクを処理できます。用途に応じてモデルを切り替えられるのも、Cursorの大きな特徴です。
+        </p>
+        <p class="text-xs text-ads-dim mt-2">出典: <a href="https://cursor.com/blog/2-0" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">Cursor公式ブログ — Introducing Cursor 2.0 and Composer</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 3: 5つの主要機能                                      -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-cyan-500/10 flex-shrink-0">
+      <i data-lucide="layout" class="w-5 h-5 text-cyan-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">5つの主要機能を図解する</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    Cursorには数多くの機能がありますが、大きく<strong class="text-slate-900">5つの柱</strong>に分けられます。それぞれを「何ができるのか」「何がうれしいのか」という視点で図解します。
+  </p>
+
+  <!-- Feature 1 & 2: 横並び -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+    <!-- Tab補完 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="keyboard" class="w-5 h-5 text-blue-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">Tab補完</h3>
+          <div class="text-xs text-blue-600 font-medium">「次に書きたいこと」を先読み</div>
+        </div>
+      </div>
+      <p class="text-sm text-ads-muted leading-relaxed mb-4">
+        コードを数文字打ち始めると、AIが続きを予測して薄い文字で提案します。
+      </p>
+      <div class="rounded-lg overflow-hidden border border-slate-700/50 mb-4">
+        <div class="flex items-center gap-2 bg-slate-800 px-3 py-1.5">
+          <div class="flex gap-1">
+            <div class="w-2 h-2 rounded-full bg-red-500/80"></div>
+            <div class="w-2 h-2 rounded-full bg-yellow-500/80"></div>
+            <div class="w-2 h-2 rounded-full bg-green-500/80"></div>
+          </div>
+          <span class="text-[10px] text-slate-500">app.py</span>
+        </div>
+        <div class="bg-slate-950 px-4 py-3">
+          <div class="text-xs font-mono leading-loose">
+            <span class="text-purple-400">def</span> <span class="text-blue-400">calc_total</span><span class="text-slate-300">(items):</span>
+          </div>
+          <div class="text-xs font-mono leading-loose">
+            <span class="text-slate-300 ml-4">return </span><span class="text-slate-500/50">sum(item.price for item in items)</span>
+          </div>
+          <div class="mt-1.5">
+            <span class="text-[9px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded font-mono">Tab ↹ で採用</span>
+          </div>
+        </div>
+      </div>
+      <p class="text-sm text-ads-muted leading-relaxed">
+        関数まるごとの予測もでき、入力量が劇的に減るため<strong class="text-slate-800">「考えること」に集中</strong>できます。
+      </p>
+    </div>
+
+    <!-- エージェントモード -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="bot" class="w-5 h-5 text-purple-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">エージェントモード</h3>
+          <div class="text-xs text-purple-600 font-medium">AIに「丸投げ」する</div>
+        </div>
+      </div>
+      <p class="text-sm text-ads-muted leading-relaxed mb-4">
+        「このボタンのデザインを変えて」「テストを書いて」と<strong class="text-slate-800">日本語で指示するだけ</strong>で、AIが必要なファイルを特定し、コードを編集し、ターミナルでコマンドを実行します。
+      </p>
+      <p class="text-sm text-ads-muted leading-relaxed">
+        2025年2月からCursorのメインインターフェースになりました。複数ファイルにまたがる修正も、エージェントが一気に片付けてくれます。
+      </p>
+      <p class="text-xs text-ads-dim mt-3">出典: <a href="https://cursor.com/docs/agent/overview" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">Cursor Docs — Agent Overview</a></p>
+    </div>
+  </div>
+
+  <!-- Feature 3 & 4: 横並び -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+    <!-- チャット -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="message-square" class="w-5 h-5 text-emerald-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">チャット</h3>
+          <div class="text-xs text-emerald-600 font-medium">コードについて「会話」する</div>
+        </div>
+      </div>
+      <p class="text-sm text-ads-muted leading-relaxed mb-4">
+        エディタの中でAIに直接質問できます。「この関数は何をしている？」「なぜこのエラーが出る？」と聞けば、<strong class="text-slate-800">あなたのプロジェクトの文脈を踏まえて</strong>回答が返ってきます。
+      </p>
+      <p class="text-sm text-ads-muted leading-relaxed">
+        コードを範囲選択して「これをもっとシンプルにして」と依頼することもできます。検索エンジンで調べるのとは違い、「あなたのコード」に即した回答が得られるのが強みです。
+      </p>
+    </div>
+
+    <!-- MCP -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="plug" class="w-5 h-5 text-amber-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">MCP</h3>
+          <div class="text-xs text-amber-600 font-medium">外部ツールとの「橋渡し」</div>
+        </div>
+      </div>
+      <p class="text-sm text-ads-muted leading-relaxed mb-4">
+        MCP（Model Context Protocol = AIが外部サービスを操作するための共通規格）を使うと、<strong class="text-slate-800">AIの「手」がエディタの外まで伸びます</strong>。
+      </p>
+      <p class="text-sm text-ads-muted leading-relaxed">
+        たとえば、Figma（デザインツール）からデザインデータを取得したり、Slack（チャットツール）にメッセージを送ったり、データベースを直接操作したり。AIが外部の道具を自在に使えるようになる仕組みです。
+      </p>
+    </div>
+  </div>
+
+  <!-- Feature 5: 全幅 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-10 h-10 rounded-lg bg-rose-500/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="cloud" class="w-5 h-5 text-rose-600"></i>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-900">バックグラウンドエージェント</h3>
+        <div class="text-xs text-rose-600 font-medium">クラウドで並列作業</div>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <p class="text-sm text-ads-muted leading-relaxed mb-4">
+          2026年2月に発表された最新機能です。AIがクラウド上の仮想マシン（インターネット上にある遠隔のコンピュータ）で作業するため、<strong class="text-slate-800">あなたのPCには負荷がかかりません</strong>。
+        </p>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          これまでは1〜3つの作業を順番にこなしていましたが、バックグラウンドエージェントでは<strong class="text-slate-800">10〜20のタスクを同時並行</strong>で進められます。あなたが別の仕事をしている間に、AIが裏で黙々とコードを書き、テストを実行し、結果を報告してくれます。
+        </p>
+      </div>
+      <div class="bg-rose-500/5 border border-rose-500/15 rounded-xl p-4">
+        <div class="text-xs text-rose-600 font-medium mb-3">指示を出せる場所</div>
+        <div class="space-y-2">
+          <div class="flex items-center gap-2 text-sm text-ads-muted">
+            <i data-lucide="monitor" class="w-4 h-4 text-rose-500 flex-shrink-0"></i>
+            デスクトップアプリ
+          </div>
+          <div class="flex items-center gap-2 text-sm text-ads-muted">
+            <i data-lucide="globe" class="w-4 h-4 text-rose-500 flex-shrink-0"></i>
+            Webブラウザ
+          </div>
+          <div class="flex items-center gap-2 text-sm text-ads-muted">
+            <i data-lucide="smartphone" class="w-4 h-4 text-rose-500 flex-shrink-0"></i>
+            モバイルアプリ
+          </div>
+          <div class="flex items-center gap-2 text-sm text-ads-muted">
+            <i data-lucide="message-square" class="w-4 h-4 text-rose-500 flex-shrink-0"></i>
+            Slack / GitHub
+          </div>
+        </div>
+        <p class="text-xs text-ads-dim mt-3">出典: <a href="https://www.cnbc.com/2026/02/24/cursor-announces-major-update-as-ai-coding-agent-battle-heats-up.html" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">CNBC (2026/2/24)</a></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 機能の関係図 -->
+  <div class="mt-8 bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-ads-accent/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="lightbulb" class="w-4 h-4 text-ads-accent-light"></i>
+      </div>
+      <div>
+        <p class="font-bold text-ads-accent-light mb-1">5つの機能はバラバラではない</p>
+        <p class="text-ads-muted leading-relaxed text-sm">
+          これらの機能は独立しているように見えて、<strong class="text-slate-800">裏側ではすべて同じ「文脈理解エンジン」を共有</strong>しています。Tab補完もチャットもエージェントも、あなたのプロジェクト全体を理解した上で動いている。だからどの機能を使っても、的外れな提案が出にくいのです。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 4: コーディングがどう変わるのか                         -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-500/10 flex-shrink-0">
+      <i data-lucide="trending-up" class="w-5 h-5 text-emerald-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">コーディングがどう変わるのか</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    機能の説明だけでは実感が湧きにくいかもしれません。ここでは、<strong class="text-slate-900">具体的に「何がどう変わるのか」</strong>を数字と対比で見てみましょう。
+  </p>
+
+  <!-- 数字カード -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 text-center">
+      <div class="text-3xl md:text-4xl font-black text-ads-accent leading-tight mb-2">50%+</div>
+      <div class="text-sm text-ads-muted">Fortune 500企業の<br>半数以上が導入</div>
+      <p class="text-[10px] text-ads-dim mt-2">出典: <a href="https://www.cursor.com/" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">Cursor公式</a></p>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 text-center">
+      <div class="text-3xl md:text-4xl font-black text-violet-600 leading-tight mb-2">$29.3B</div>
+      <div class="text-sm text-ads-muted">企業評価額<br>（約4.4兆円）</div>
+      <p class="text-[10px] text-ads-dim mt-2">出典: <a href="https://www.cnbc.com/2026/02/24/cursor-announces-major-update-as-ai-coding-agent-battle-heats-up.html" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">CNBC (2026/2)</a></p>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 text-center">
+      <div class="text-3xl md:text-4xl font-black text-emerald-600 leading-tight mb-2">30秒</div>
+      <div class="text-sm text-ads-muted">独自モデルComposerの<br>平均タスク完了時間</div>
+      <p class="text-[10px] text-ads-dim mt-2">出典: <a href="https://cursor.com/blog/2-0" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">Cursor公式ブログ</a></p>
+    </div>
+  </div>
+
+  <!-- Before / After 比較 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <!-- Before -->
+    <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
+      <div class="inline-flex items-center gap-1.5 bg-red-500/10 text-red-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-5">
+        <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
+        BEFORE — AIエディタがない世界
+      </div>
+      <ul class="space-y-3">
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"></i>
+          <span>エラーメッセージをコピーして<strong class="text-red-700">Google検索→Stack Overflow</strong>で解決策を探す</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"></i>
+          <span>新しいライブラリの使い方を<strong class="text-red-700">公式ドキュメントで何十ページも読む</strong></span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"></i>
+          <span>変数名を変更するとき<strong class="text-red-700">関連ファイルを1つずつ手作業で修正</strong></span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"></i>
+          <span>コードレビューは<strong class="text-red-700">人間同士のスケジュール調整</strong>が必要</span>
+        </li>
+      </ul>
+      <div class="mt-5 pt-4 border-t border-red-500/10 text-sm text-red-700/70 flex items-center gap-2">
+        <i data-lucide="alert-circle" class="w-4 h-4"></i>
+        「調べる時間」がコーディングの大半を占める
+      </div>
+    </div>
+
+    <!-- After -->
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-6">
+      <div class="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-5">
+        <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+        AFTER — Cursorがある世界
+      </div>
+      <ul class="space-y-3">
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+          <span>エラー箇所でAIに聞くと<strong class="text-emerald-700">原因と修正コードが数秒で</strong>返る</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+          <span>「使い方を教えて」とチャットすれば<strong class="text-emerald-700">自分のプロジェクトに合った実例</strong>を生成</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+          <span>「全ファイルでリネームして」で<strong class="text-emerald-700">AIが依存関係を把握して一括修正</strong></span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+          <span>AIが<strong class="text-emerald-700">24時間いつでもコードレビューの相手</strong>になる</span>
+        </li>
+      </ul>
+      <div class="mt-5 pt-4 border-t border-emerald-500/10 text-sm text-emerald-700/70 flex items-center gap-2">
+        <i data-lucide="zap" class="w-4 h-4"></i>
+        「考える時間」にコーディングの大半を使える
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 5: 他のAIコーディングツールとの違い                      -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-amber-500/10 flex-shrink-0">
+      <i data-lucide="git-branch" class="w-5 h-5 text-amber-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">他のAIコーディングツールとの違い</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    AIを使ったコーディングツールはCursorだけではありません。代表的な<strong class="text-slate-900">GitHub Copilot</strong>（ギットハブ・コパイロット）や<strong class="text-slate-900">Windsurf</strong>（ウインドサーフ）との違いを整理します。
+  </p>
+
+  <!-- 比較図 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-6">AIコーディングツール 3つのアプローチ</h3>
+
+    <div class="flex flex-col md:flex-row items-stretch justify-center gap-4">
+      <!-- Cursor -->
+      <div class="flex-1 border-2 border-ads-accent/30 bg-ads-accent/5 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-8 h-8 rounded-lg bg-ads-accent/15 flex items-center justify-center">
+            <i data-lucide="monitor" class="w-4 h-4 text-ads-accent-light"></i>
+          </div>
+          <div class="font-bold text-ads-accent-light text-sm">Cursor</div>
+        </div>
+        <div class="text-xs text-ads-dim font-medium mb-2">アプローチ</div>
+        <p class="text-sm text-slate-800 font-medium mb-3">エディタ自体をAIで再設計</p>
+        <div class="text-xs text-ads-dim font-medium mb-2">強み</div>
+        <ul class="space-y-1.5 text-xs text-ads-muted">
+          <li class="flex items-start gap-1.5">
+            <i data-lucide="check" class="w-3 h-3 text-ads-accent mt-0.5 flex-shrink-0"></i>
+            複数ファイル横断の大規模修正
+          </li>
+          <li class="flex items-start gap-1.5">
+            <i data-lucide="check" class="w-3 h-3 text-ads-accent mt-0.5 flex-shrink-0"></i>
+            エージェントの自律的タスク実行
+          </li>
+          <li class="flex items-start gap-1.5">
+            <i data-lucide="check" class="w-3 h-3 text-ads-accent mt-0.5 flex-shrink-0"></i>
+            深いコードベース理解
+          </li>
+        </ul>
+      </div>
+
+      <!-- GitHub Copilot -->
+      <div class="flex-1 border border-ads-border bg-white rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
+            <i data-lucide="code-2" class="w-4 h-4 text-slate-600"></i>
+          </div>
+          <div class="font-bold text-slate-700 text-sm">GitHub Copilot</div>
+        </div>
+        <div class="text-xs text-ads-dim font-medium mb-2">アプローチ</div>
+        <p class="text-sm text-slate-800 font-medium mb-3">既存エディタにAIを追加</p>
+        <div class="text-xs text-ads-dim font-medium mb-2">強み</div>
+        <ul class="space-y-1.5 text-xs text-ads-muted">
+          <li class="flex items-start gap-1.5">
+            <i data-lucide="check" class="w-3 h-3 text-slate-400 mt-0.5 flex-shrink-0"></i>
+            あらゆるエディタ・言語に対応
+          </li>
+          <li class="flex items-start gap-1.5">
+            <i data-lucide="check" class="w-3 h-3 text-slate-400 mt-0.5 flex-shrink-0"></i>
+            GitHubとの深い連携
+          </li>
+          <li class="flex items-start gap-1.5">
+            <i data-lucide="check" class="w-3 h-3 text-slate-400 mt-0.5 flex-shrink-0"></i>
+            無料プランあり（月2,000回補完）
+          </li>
+        </ul>
+      </div>
+
+      <!-- Windsurf -->
+      <div class="flex-1 border border-ads-border bg-white rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
+            <i data-lucide="wind" class="w-4 h-4 text-slate-600"></i>
+          </div>
+          <div class="font-bold text-slate-700 text-sm">Windsurf</div>
+        </div>
+        <div class="text-xs text-ads-dim font-medium mb-2">アプローチ</div>
+        <p class="text-sm text-slate-800 font-medium mb-3">推論エンジンで文脈を深く追跡</p>
+        <div class="text-xs text-ads-dim font-medium mb-2">強み</div>
+        <ul class="space-y-1.5 text-xs text-ads-muted">
+          <li class="flex items-start gap-1.5">
+            <i data-lucide="check" class="w-3 h-3 text-slate-400 mt-0.5 flex-shrink-0"></i>
+            企業向けセキュリティ認証
+          </li>
+          <li class="flex items-start gap-1.5">
+            <i data-lucide="check" class="w-3 h-3 text-slate-400 mt-0.5 flex-shrink-0"></i>
+            低コスト（月$10〜）
+          </li>
+          <li class="flex items-start gap-1.5">
+            <i data-lucide="check" class="w-3 h-3 text-slate-400 mt-0.5 flex-shrink-0"></i>
+            文脈を持続する推論エンジン
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    GitHub Copilotは「既存のエディタにAIを追加する」アプローチ。VS CodeでもJetBrainsでもVimでも使えるのが利点ですが、エディタとの統合度はCursorに劣ります。Windsurfは独自の推論エンジンを持ち、企業向けの厳しいセキュリティ要件に対応しているのが特徴です。
+  </p>
+
+  <p class="leading-relaxed">
+    Cursorが選ばれる最大の理由は、<strong class="text-slate-900">「エディタとAIの一体感」</strong>です。プラグインを追加するのではなく、エディタそのものがAIを前提に設計されているから、操作の流れが自然で、AIとの共同作業がスムーズに進みます。
+  </p>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 6: よくある誤解                                       -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-red-500/10 flex-shrink-0">
+      <i data-lucide="alert-circle" class="w-5 h-5 text-red-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">よくある誤解</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    AIコーディングツールには、まだ多くの誤解があります。ここでは特に多い3つの誤解を取り上げて、正しい理解に修正します。
+  </p>
+
+  <div class="space-y-4">
+    <!-- 誤解 1 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-red-500/5 border-b border-ads-border/50">
+        <div class="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="x" class="w-3.5 h-3.5 text-red-600"></i>
+        </div>
+        <h3 class="font-bold text-red-700 text-sm">誤解: 「AIがコードを書くなら、プログラマーは不要になる」</h3>
+      </div>
+      <div class="px-6 py-5">
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-emerald-700 mb-2">実際は:</p>
+            <p class="text-sm text-ads-muted leading-relaxed">
+              AIは<strong class="text-slate-800">「優秀なアシスタント」</strong>であって、意思決定者ではありません。建築家がCAD（設計ソフト）を使っても建築家が不要にならないのと同じです。<strong class="text-slate-800">何を作るか、なぜ作るかを決めるのは人間</strong>。AIはその実現速度を劇的に上げる道具です。むしろ、AIが定型的な実装を引き受けてくれるおかげで、人間はより創造的で価値の高い判断に集中できるようになります。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 誤解 2 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-red-500/5 border-b border-ads-border/50">
+        <div class="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="x" class="w-3.5 h-3.5 text-red-600"></i>
+        </div>
+        <h3 class="font-bold text-red-700 text-sm">誤解: 「AIが書いたコードはバグだらけで信用できない」</h3>
+      </div>
+      <div class="px-6 py-5">
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-emerald-700 mb-2">実際は:</p>
+            <p class="text-sm text-ads-muted leading-relaxed">
+              AIの提案は<strong class="text-slate-800">必ず人間がレビューする前提</strong>の設計になっています。Cursorにはdiff表示（変更前後を並べて比較する機能）があり、AIの変更を1行ずつ確認してから承認できます。また、AIは人間が見落としがちなタイポ（打ち間違い）やパターンの不一致を検出してくれる面もあります。道具の出力を鵜呑みにせず、<strong class="text-slate-800">人間が最終判断する</strong>という姿勢が大切です。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 誤解 3 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-red-500/5 border-b border-ads-border/50">
+        <div class="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="x" class="w-3.5 h-3.5 text-red-600"></i>
+        </div>
+        <h3 class="font-bold text-red-700 text-sm">誤解: 「Cursorを使うにはAIの専門知識が必要」</h3>
+      </div>
+      <div class="px-6 py-5">
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-emerald-700 mb-2">実際は:</p>
+            <p class="text-sm text-ads-muted leading-relaxed">
+              VS Codeが使える人なら、ほぼそのままCursorに移行できます。インターフェースはVS Codeと同じですし、<strong class="text-slate-800">日本語で指示を書くだけ</strong>でAIが動きます。「プロンプトエンジニアリング」（AIへの指示を最適化する技術）の専門知識は不要です。「このエラーを直して」「テストを書いて」——日常の言葉で話しかけるだけで十分機能します。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 7: まとめ                                            -->
+<!-- ============================================================ -->
+<section>
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-ads-accent/10 flex-shrink-0">
+      <i data-lucide="check-circle" class="w-5 h-5 text-ads-accent-light"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">まとめ — 覚えておきたい3つのこと</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    最後に、この図解で伝えたかったことを3つに絞ってまとめます。
+  </p>
+
+  <div class="space-y-4 mb-10">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-blue-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-blue-500 leading-none flex-shrink-0 mt-1">01</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">CursorはVS Codeに「AIの頭脳」を融合させたエディタ</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            見た目はVS Codeと同じ。しかし中身は、AIがエディタの操作系統に深く統合された「AI-first」の設計。プラグインの後付けでは実現できない、AIとの自然な共同作業が可能になっています。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-violet-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-violet-500 leading-none flex-shrink-0 mt-1">02</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">「プロジェクト全体を理解している」のが真の強み</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            ファイルを1つずつ見るのではなく、プロジェクト全体の文脈を把握した上で提案する。だからTab補完もチャットもエージェントも、あなたのコードベースに合った回答が返ってきます。一般的なAIチャットとの決定的な違いがここにあります。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-emerald-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-emerald-500 leading-none flex-shrink-0 mt-1">03</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">AIは道具。使いこなすのは、あなた自身</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            Cursorは「何を作るか」を考える仕事を奪いません。「どう実装するか」の速度と精度を劇的に上げる道具です。AIにできることを正しく理解し、人間の判断と組み合わせる。そのスキルが、これからの開発者の新しい武器になります。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-center bg-gradient-to-b from-violet-500/5 to-transparent border border-violet-500/10 rounded-xl p-8 md:p-10">
+    <i data-lucide="monitor" class="w-8 h-8 text-ads-accent mx-auto mb-4"></i>
+    <p class="text-lg font-bold text-slate-900 mb-3">Cursorは「AIとどう働くか」の最前線にある道具です。</p>
+    <p class="text-ads-muted max-w-lg mx-auto leading-relaxed">
+      次にコードを書くとき、エラーに詰まったとき、大量のファイルを修正しなければならないとき。AIが隣にいる環境を一度体験すると、もう元には戻れなくなります。コーディングの体験そのものが変わる。それがCursorの本質です。
+    </p>
+  </div>
+</section>
+
+<!-- CONTENT_END -->
+  </main>
+  <footer class="max-w-3xl mx-auto px-5 pb-10 pt-6 border-t border-ads-border/30">
+    <p class="text-xs text-ads-dim text-center">AI-Driven School の図解ツールで作成</p>
+  </footer>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

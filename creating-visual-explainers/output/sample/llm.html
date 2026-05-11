@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta property="og:title" content="LLM（大規模言語モデル）の仕組み">
+  <meta property="og:description" content="LLMの仕組みを、身近な例とビジュアルでわかりやすく図解します。">
+  <meta property="og:type" content="article">
+  <title>LLM（大規模言語モデル）の仕組み</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFFFFF'/><rect x='8' y='8' width='84' height='84' rx='14' fill='none' stroke='%233B82F6' stroke-width='4'/><circle cx='32' cy='40' r='10' fill='%233B82F6' opacity='0.8'/><circle cx='68' cy='40' r='10' fill='%2360A5FA' opacity='0.8'/><rect x='25' y='62' width='50' height='6' rx='3' fill='%2394A3B8' opacity='0.6'/><rect x='30' y='74' width='40' height='6' rx='3' fill='%2394A3B8' opacity='0.3'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ads: {
+              bg: '#FFFFFF',
+              surface: '#F8FAFC',
+              hover: '#F1F5F9',
+              border: '#E2E8F0',
+              accent: '#3B82F6',
+              'accent-light': '#2563EB',
+              text: '#1E293B',
+              muted: '#64748B',
+              dim: '#94A3B8',
+              positive: '#10B981',
+              negative: '#EF4444',
+              warning: '#F59E0B',
+            }
+          },
+          fontFamily: {
+            sans: ['"Noto Sans JP"', '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Yu Gothic UI"', '"Meiryo"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { border-top: none !important; }
+      .rounded-xl { break-inside: avoid; }
+      .md\:flex-row { flex-direction: row !important; }
+      .md\:hidden { display: none !important; }
+      .hidden.md\:block { display: block !important; }
+      .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+      .md\:mb-20 { margin-bottom: 5rem !important; }
+      .md\:py-16 { padding-top: 4rem !important; padding-bottom: 4rem !important; }
+      .bg-clip-text.text-transparent {
+        -webkit-background-clip: initial !important;
+        background-clip: initial !important;
+        color: #2563EB !important;
+        -webkit-text-fill-color: #2563EB !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-ads-bg text-slate-600 antialiased leading-relaxed border-t-4 border-ads-accent">
+  <div class="no-print max-w-3xl mx-auto px-5 pt-2 flex justify-end">
+    <button onclick="window.print()" class="flex items-center gap-1.5 text-xs text-ads-dim hover:text-ads-accent transition-colors cursor-pointer">
+      <i data-lucide="download" class="w-3.5 h-3.5"></i>
+      PDF
+    </button>
+  </div>
+  <main class="max-w-3xl mx-auto px-5 py-10 md:py-16">
+<!-- CONTENT_START -->
+
+<!-- ============================================================ -->
+<!--  HERO                                                        -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-ads-accent/10 text-ads-accent-light px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <i data-lucide="brain" class="w-4 h-4"></i>
+    AI・機械学習
+  </div>
+  <h1 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight mb-6">
+    <span class="bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">LLM</span>の仕組み
+  </h1>
+  <p class="text-lg text-ads-muted max-w-xl mx-auto leading-relaxed">
+    「ChatGPTってどういう仕組みなの？」と聞かれて、うまく答えられない。<br>
+    ひとことで言うと ──
+  </p>
+</div>
+
+
+<!-- ============================================================ -->
+<!--  ONE-PAGE SUMMARY                                            -->
+<!-- ============================================================ -->
+<div class="bg-ads-surface border border-ads-border rounded-2xl p-6 md:p-10 mb-6">
+  <div class="text-center mb-8 md:mb-10">
+    <p class="text-xl md:text-2xl font-black text-slate-900 mb-2">
+      LLM = 膨大な文章を読んで<span class="text-ads-accent-light">「次の言葉」を予測する</span>AI
+    </p>
+    <p class="text-sm text-ads-muted">
+      大量のテキストから言葉の使い方を学び、人間のような文章を生み出す
+    </p>
+  </div>
+
+  <!-- Core flow: Input → LLM → Output -->
+  <div class="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-0 mb-8">
+    <!-- Input -->
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="message-square" class="w-7 h-7 text-blue-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">あなたの質問</div>
+      <div class="text-[11px] text-blue-600/70 mt-0.5">「明日の会議の議事録を書いて」</div>
+    </div>
+
+    <!-- Arrow 1 -->
+    <div class="flex items-center justify-center md:w-16 py-1 md:py-0">
+      <div class="flex flex-col items-center gap-0.5">
+        <span class="text-[9px] font-medium text-ads-accent tracking-wider">入力</span>
+        <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+      </div>
+    </div>
+
+    <!-- LLM (centerpiece) -->
+    <div class="flex flex-col items-center w-44 p-4 bg-violet-500/5 border-2 border-violet-500/20 rounded-2xl">
+      <div class="w-16 h-16 rounded-2xl bg-violet-500/15 border-2 border-violet-500/30 flex items-center justify-center mb-2.5">
+        <i data-lucide="brain" class="w-8 h-8 text-violet-600"></i>
+      </div>
+      <div class="font-bold text-violet-700 text-base">LLM</div>
+      <div class="text-[11px] text-ads-muted mt-0.5 mb-2">文脈を理解し、次の言葉を予測</div>
+      <div class="text-[10px] text-ads-muted bg-white rounded-lg px-2.5 py-1 border border-ads-border/50">超高速の「穴埋めの天才」</div>
+    </div>
+
+    <!-- Arrow 2 -->
+    <div class="flex items-center justify-center md:w-16 py-1 md:py-0">
+      <div class="flex flex-col items-center gap-0.5">
+        <span class="text-[9px] font-medium text-ads-accent tracking-wider">出力</span>
+        <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+      </div>
+    </div>
+
+    <!-- Output -->
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="file-text" class="w-7 h-7 text-emerald-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">生成された文章</div>
+      <div class="text-[11px] text-emerald-600/70 mt-0.5">自然で的確な回答が届く</div>
+    </div>
+  </div>
+
+  <!-- Divider with label -->
+  <div class="flex items-center gap-4 mb-6">
+    <div class="flex-1 border-t border-ads-border/50"></div>
+    <div class="text-[11px] text-ads-dim font-medium">あなたも毎日触れている</div>
+    <div class="flex-1 border-t border-ads-border/50"></div>
+  </div>
+
+  <!-- Everyday examples as pills -->
+  <div class="flex flex-wrap justify-center gap-2 mb-8">
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="sparkles" class="w-3.5 h-3.5 text-violet-500"></i>
+      ChatGPT
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="languages" class="w-3.5 h-3.5 text-blue-500"></i>
+      翻訳アプリ
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="code" class="w-3.5 h-3.5 text-emerald-500"></i>
+      コード補完
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="search" class="w-3.5 h-3.5 text-amber-500"></i>
+      AI検索
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="pen-tool" class="w-3.5 h-3.5 text-red-500"></i>
+      文章要約・校正
+    </div>
+  </div>
+
+</div>
+
+<p class="text-center text-ads-muted mb-16 md:mb-20">
+  ここから先で、この仕組みをひとつずつ丁寧に解説していきます。
+</p>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 1: そもそもLLMって何？                                -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-500/10 flex-shrink-0">
+      <i data-lucide="help-circle" class="w-5 h-5 text-blue-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">そもそもLLMって何？</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    LLMは <strong class="text-slate-900">Large Language Model</strong>（ラージ・ランゲージ・モデル）の略で、日本語では「大規模言語モデル」と訳します。名前に含まれる3つの単語がそのまま特徴を表しています。
+  </p>
+
+  <!-- 名前の分解 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-8">名前に秘密がある ── 3つの単語を分解</h3>
+    <div class="flex flex-col md:flex-row items-stretch justify-center gap-4">
+      <div class="flex-1 bg-violet-500/10 border border-violet-500/20 rounded-xl p-5 text-center">
+        <div class="w-10 h-10 rounded-full bg-violet-500/20 flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="database" class="w-5 h-5 text-violet-600"></i>
+        </div>
+        <div class="font-bold text-violet-700 mb-1">Large（大規模）</div>
+        <div class="text-xs text-ads-muted leading-relaxed">数千億〜数兆個の「パラメータ」（調整つまみ）を持つ。人間の脳の神経接続のように、膨大な情報の繋がりを記憶している</div>
+      </div>
+      <div class="flex-1 bg-blue-500/10 border border-blue-500/20 rounded-xl p-5 text-center">
+        <div class="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="book-open" class="w-5 h-5 text-blue-600"></i>
+        </div>
+        <div class="font-bold text-blue-700 mb-1">Language（言語）</div>
+        <div class="text-xs text-ads-muted leading-relaxed">扱うのは「言葉」。人間が書いた文章を大量に読み込んで、言葉の使い方・つながり・ニュアンスを学習している</div>
+      </div>
+      <div class="flex-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-5 text-center">
+        <div class="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="box" class="w-5 h-5 text-emerald-600"></i>
+        </div>
+        <div class="font-bold text-emerald-700 mb-1">Model（モデル）</div>
+        <div class="text-xs text-ads-muted leading-relaxed">数学的な計算の仕組み。入力されたテキストを受け取り、規則に従って処理し、結果を出力する「装置」のようなもの</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    つまりLLMとは、<strong class="text-slate-900">膨大な量の文章データを読み込んで、「言葉の使い方」を身につけたAI</strong>です。では、「言葉の使い方を身につける」とは、具体的にどういうことでしょうか？
+  </p>
+
+  <p class="mb-8 leading-relaxed">
+    実は、LLMの基本動作は驚くほどシンプルです。やっていることはたった一つ ── <strong class="text-slate-900">「次に来る言葉を予測する」</strong>。これだけです。
+  </p>
+
+  <!-- 穴埋めアナロジー図 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-3">「穴埋めテストの天才」で考えるLLM</h3>
+    <p class="text-sm text-ads-muted text-center mb-8">LLMは文の続きを予測し続ける。たった一つの動作を超高速で繰り返している。</p>
+
+    <!-- 穴埋め問題 -->
+    <div class="bg-white border border-ads-border rounded-xl p-5 mb-6">
+      <div class="text-xs text-ads-dim font-medium mb-3">問題文</div>
+      <p class="text-lg font-bold text-slate-900 text-center">
+        「今日は天気が <span class="inline-block border-b-2 border-dashed border-violet-400 px-6 py-1 text-violet-600">???</span> ので、公園に <span class="inline-block border-b-2 border-dashed border-violet-400 px-6 py-1 text-violet-600">???</span>」
+      </p>
+    </div>
+
+    <!-- LLMの頭の中 -->
+    <div class="flex flex-col md:flex-row gap-4 mb-6">
+      <div class="flex-1 bg-violet-500/5 border border-violet-500/15 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <i data-lucide="brain" class="w-4 h-4 text-violet-600"></i>
+          <div class="text-xs font-bold text-violet-700">LLMの頭の中（1つめの空欄）</div>
+        </div>
+        <div class="space-y-2">
+          <div class="flex items-center gap-2">
+            <div class="w-full bg-violet-500/10 rounded-full h-5 relative overflow-hidden">
+              <div class="bg-violet-500 h-full rounded-full w-[72%]"></div>
+              <span class="absolute inset-0 flex items-center px-3 text-[11px] font-medium text-slate-800">良い ── 72%</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-full bg-violet-500/10 rounded-full h-5 relative overflow-hidden">
+              <div class="bg-violet-400 h-full rounded-full w-[15%]"></div>
+              <span class="absolute inset-0 flex items-center px-3 text-[11px] font-medium text-slate-800">悪い ── 15%</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-full bg-violet-500/10 rounded-full h-5 relative overflow-hidden">
+              <div class="bg-violet-300 h-full rounded-full w-[8%]"></div>
+              <span class="absolute inset-0 flex items-center px-3 text-[11px] font-medium text-slate-800">穏やかな ── 8%</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-full bg-violet-500/10 rounded-full h-5 relative overflow-hidden">
+              <div class="bg-violet-200 h-full rounded-full w-[5%]"></div>
+              <span class="absolute inset-0 flex items-center px-3 text-[11px] font-medium text-slate-800">その他 ── 5%</span>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3 text-xs text-ads-muted flex items-center gap-1.5">
+          <i data-lucide="check" class="w-3.5 h-3.5 text-violet-500"></i>
+          最も確率が高い「良い」を選択
+        </div>
+      </div>
+
+      <div class="flex-1 bg-blue-500/5 border border-blue-500/15 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <i data-lucide="brain" class="w-4 h-4 text-blue-600"></i>
+          <div class="text-xs font-bold text-blue-700">LLMの頭の中（2つめの空欄）</div>
+        </div>
+        <div class="space-y-2">
+          <div class="flex items-center gap-2">
+            <div class="w-full bg-blue-500/10 rounded-full h-5 relative overflow-hidden">
+              <div class="bg-blue-500 h-full rounded-full w-[68%]"></div>
+              <span class="absolute inset-0 flex items-center px-3 text-[11px] font-medium text-slate-800">行きましょう ── 68%</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-full bg-blue-500/10 rounded-full h-5 relative overflow-hidden">
+              <div class="bg-blue-400 h-full rounded-full w-[18%]"></div>
+              <span class="absolute inset-0 flex items-center px-3 text-[11px] font-medium text-slate-800">出かけたい ── 18%</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-full bg-blue-500/10 rounded-full h-5 relative overflow-hidden">
+              <div class="bg-blue-300 h-full rounded-full w-[10%]"></div>
+              <span class="absolute inset-0 flex items-center px-3 text-[11px] font-medium text-slate-800">散歩しよう ── 10%</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-full bg-blue-500/10 rounded-full h-5 relative overflow-hidden">
+              <div class="bg-blue-200 h-full rounded-full w-[4%]"></div>
+              <span class="absolute inset-0 flex items-center px-3 text-[11px] font-medium text-slate-800">その他 ── 4%</span>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3 text-xs text-ads-muted flex items-center gap-1.5">
+          <i data-lucide="check" class="w-3.5 h-3.5 text-blue-500"></i>
+          「天気が良い＋公園」の文脈で「行きましょう」を選択
+        </div>
+      </div>
+    </div>
+
+    <!-- 完成文 -->
+    <div class="bg-white border-2 border-emerald-500/30 rounded-xl p-5 text-center">
+      <div class="text-xs text-emerald-600 font-medium mb-2">完成</div>
+      <p class="text-lg font-bold text-slate-900">
+        「今日は天気が <span class="text-violet-600">良い</span> ので、公園に <span class="text-blue-600">行きましょう</span>」
+      </p>
+      <p class="text-xs text-ads-muted mt-2">この「予測 → 選択」を1秒間に数百回繰り返すことで、長い文章が生まれる</p>
+    </div>
+  </div>
+
+  <p class="mb-4 leading-relaxed">
+    では、LLMが実際に使われている画面を見てみましょう。あなたもすでに見たことがあるはずです。
+  </p>
+
+  <div class="rounded-xl overflow-hidden border border-slate-700/50 mb-8">
+    <div class="flex items-center gap-3 bg-slate-800 px-4 py-2.5">
+      <div class="flex gap-1.5">
+        <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+        <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+        <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+      </div>
+      <div class="flex items-center gap-1.5 text-xs text-slate-400">
+        <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+        AIチャット
+      </div>
+    </div>
+    <div class="bg-slate-900 p-5 space-y-4">
+      <!-- ユーザーの発言（右寄せ） -->
+      <div class="flex justify-end">
+        <div class="bg-blue-600 rounded-2xl rounded-tr-md px-4 py-2.5 max-w-xs">
+          <p class="text-sm text-white">東京の明日の天気を教えて</p>
+        </div>
+      </div>
+      <!-- AIの発言（左寄せ） -->
+      <div class="flex items-start gap-2.5">
+        <div class="w-7 h-7 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <i data-lucide="bot" class="w-4 h-4 text-emerald-400"></i>
+        </div>
+        <div class="bg-slate-800 rounded-2xl rounded-tl-md px-4 py-2.5 max-w-sm">
+          <p class="text-sm text-slate-200">東京の明日の天気は<strong class="text-white">晴れ時々くもり</strong>、最高気温は<strong class="text-white">24°C</strong>の予報です。午後から雲が増える見込みですが、傘は必要なさそうです。</p>
+        </div>
+      </div>
+      <!-- 入力欄のモック -->
+      <div class="flex items-center gap-2 bg-slate-800/50 rounded-xl px-4 py-2.5 border border-slate-700/50 mt-2">
+        <span class="text-sm text-slate-500 flex-1">メッセージを入力...</span>
+        <i data-lucide="send" class="w-4 h-4 text-slate-500"></i>
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    このチャット画面の裏側で、LLMが「次に来る単語」を猛烈な速度で予測し続けています。
+  </p>
+
+  <p class="mb-6 leading-relaxed">
+    「なんだ、穴埋めをしているだけなのか」と拍子抜けするかもしれません。しかし、ここがポイントです。<strong class="text-slate-900">この単純な予測を、数兆語分の知識を使って、文脈を深く理解しながら行う</strong>からこそ、まるで人間が書いたかのような自然な文章が生まれるのです。
+  </p>
+
+  <p class="mb-8 leading-relaxed">
+    ここで言う「パラメータ」とは、LLMが学習を通じて調整する数値のことです。たとえるなら、巨大なミキサー卓（音楽のミキシングコンソール）についた無数のつまみ。1つ1つのつまみが「この単語の後にはこの単語が来やすい」といった知識を少しずつ記憶しています。つまみの数が多いほど、より繊細で正確な言語理解ができるようになります。
+  </p>
+
+  <!-- 数字カード -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 text-center">
+      <div class="text-3xl md:text-4xl font-black text-violet-600 leading-tight mb-2">1,750億</div>
+      <div class="text-sm text-ads-muted">GPT-3のパラメータ数</div>
+      <p class="text-[10px] text-ads-dim mt-2">出典: <a href="https://arxiv.org/abs/2005.14165" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">Brown et al., 2020</a></p>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 text-center">
+      <div class="text-3xl md:text-4xl font-black text-blue-600 leading-tight mb-2">数兆語</div>
+      <div class="text-sm text-ads-muted">学習に使われた<br>テキストデータの量</div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 text-center">
+      <div class="text-3xl md:text-4xl font-black text-emerald-600 leading-tight mb-2">100万+</div>
+      <div class="text-sm text-ads-muted">最新LLMが一度に<br>処理できる文字数</div>
+      <p class="text-[10px] text-ads-dim mt-2">GPT-5, Claude, Geminiの最大コンテキスト長（2026年時点）</p>
+    </div>
+  </div>
+
+  <!-- ポイントボックス -->
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-ads-accent/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="lightbulb" class="w-4 h-4 text-ads-accent-light"></i>
+      </div>
+      <div>
+        <p class="font-bold text-ads-accent-light mb-1">ここがポイント</p>
+        <p class="text-ads-muted leading-relaxed">
+          LLMの本質は<strong class="text-slate-800">「次の単語の予測」</strong>です。この単純な原理を、桁違いの規模（パラメータ数・データ量・計算量）で実行することで、要約・翻訳・プログラミング・質問応答まで、驚くほど幅広い言語タスクをこなせるようになりました。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 2: LLMの中で何が起きているのか                        -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-cyan-500/10 flex-shrink-0">
+      <i data-lucide="settings" class="w-5 h-5 text-cyan-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">LLMの中で何が起きているのか</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    「次の言葉を予測している」ということはわかりました。では、LLMの内部では、具体的にどんな処理が行われているのでしょうか。テキストが入力されてから出力されるまでを、4つのステップに分解して見てみましょう。
+  </p>
+
+  <!-- 4ステップフロー図 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-8">入力から出力までの4ステップ</h3>
+
+    <div class="flex flex-col md:flex-row items-stretch justify-center gap-3 md:gap-0">
+      <div class="flex-1 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-blue-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">1</div>
+        <i data-lucide="scissors" class="w-6 h-6 text-blue-600 mx-auto mb-2"></i>
+        <div class="font-bold text-blue-700 text-sm mb-1">トークン化</div>
+        <div class="text-xs text-ads-muted leading-relaxed">文章を「トークン」<br>という小さな単位に<br>分割する</div>
+      </div>
+
+      <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+        <i data-lucide="chevron-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="chevron-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+
+      <div class="flex-1 bg-purple-500/10 border border-purple-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-purple-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">2</div>
+        <i data-lucide="grid-3x3" class="w-6 h-6 text-purple-600 mx-auto mb-2"></i>
+        <div class="font-bold text-purple-700 text-sm mb-1">ベクトル化</div>
+        <div class="text-xs text-ads-muted leading-relaxed">各トークンを<br>数値の列（ベクトル）<br>に変換する</div>
+      </div>
+
+      <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+        <i data-lucide="chevron-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="chevron-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+
+      <div class="flex-1 bg-violet-500/10 border border-violet-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-violet-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">3</div>
+        <i data-lucide="brain" class="w-6 h-6 text-violet-600 mx-auto mb-2"></i>
+        <div class="font-bold text-violet-700 text-sm mb-1">Transformer処理</div>
+        <div class="text-xs text-ads-muted leading-relaxed">Attention機構で<br>単語同士の関係を<br>深く理解する</div>
+      </div>
+
+      <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+        <i data-lucide="chevron-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="chevron-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+
+      <div class="flex-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center">
+        <div class="w-8 h-8 rounded-full bg-emerald-500 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">4</div>
+        <i data-lucide="sparkles" class="w-6 h-6 text-emerald-600 mx-auto mb-2"></i>
+        <div class="font-bold text-emerald-700 text-sm mb-1">次の言葉を出力</div>
+        <div class="text-xs text-ads-muted leading-relaxed">最も自然な「次の<br>トークン」を選んで<br>文章を組み立てる</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    それぞれのステップをもう少し詳しく見てみましょう。
+  </p>
+
+  <!-- Step 1: トークン化 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 mb-4">
+    <h4 class="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+      <span class="w-6 h-6 rounded-full bg-blue-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
+      トークン化 ── 文章をパーツに分解する
+    </h4>
+    <p class="text-sm text-ads-muted leading-relaxed mb-4">
+      コンピュータは「文章」をそのまま理解できません。まず、文章を<strong class="text-slate-800">「トークン」</strong>と呼ばれる小さな単位に分割します。トークンは単語そのものではなく、単語より少し小さいパーツです。英語の場合、だいたい1トークン = 4文字程度。日本語では1文字が1トークンになることもあります。
+    </p>
+    <div class="bg-white border border-ads-border rounded-lg p-4">
+      <div class="text-xs text-ads-dim font-medium mb-2">例: 「私はAIについて学んでいます」</div>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="bg-blue-500/10 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-md border border-blue-500/20">私</span>
+        <span class="bg-blue-500/10 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-md border border-blue-500/20">は</span>
+        <span class="bg-blue-500/10 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-md border border-blue-500/20">AI</span>
+        <span class="bg-blue-500/10 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-md border border-blue-500/20">について</span>
+        <span class="bg-blue-500/10 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-md border border-blue-500/20">学</span>
+        <span class="bg-blue-500/10 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-md border border-blue-500/20">んで</span>
+        <span class="bg-blue-500/10 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-md border border-blue-500/20">います</span>
+      </div>
+      <p class="text-[10px] text-ads-dim mt-3">実際のトークン分割はモデルによって異なります。上記は概念的な例です。</p>
+    </div>
+  </div>
+
+  <!-- Step 2: ベクトル化 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 mb-4">
+    <h4 class="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+      <span class="w-6 h-6 rounded-full bg-purple-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
+      ベクトル化 ── 言葉を数値に変換する
+    </h4>
+    <p class="text-sm text-ads-muted leading-relaxed mb-4">
+      コンピュータが処理できるのは数値だけです。そこで、各トークンを<strong class="text-slate-800">「ベクトル」</strong>（数値の列）に変換します。この操作を「埋め込み（Embedding）」と呼びます。たとえるなら、言葉を「座標」に変換するようなものです。意味が近い言葉は座標上でも近い位置に配置されます。
+    </p>
+    <div class="bg-white border border-ads-border rounded-lg p-4">
+      <div class="text-xs text-ads-dim font-medium mb-3">言葉の座標イメージ</div>
+      <div class="flex flex-col md:flex-row gap-3">
+        <div class="flex-1 flex items-center gap-3 bg-purple-500/5 rounded-lg p-3">
+          <span class="text-xs font-bold text-purple-700 w-12 flex-shrink-0">「犬」</span>
+          <div class="flex gap-1 flex-wrap">
+            <span class="text-[10px] bg-purple-500/10 text-purple-600 px-1.5 py-0.5 rounded font-mono">0.82</span>
+            <span class="text-[10px] bg-purple-500/10 text-purple-600 px-1.5 py-0.5 rounded font-mono">-0.15</span>
+            <span class="text-[10px] bg-purple-500/10 text-purple-600 px-1.5 py-0.5 rounded font-mono">0.63</span>
+            <span class="text-[10px] text-ads-dim">...</span>
+          </div>
+        </div>
+        <div class="flex-1 flex items-center gap-3 bg-purple-500/5 rounded-lg p-3">
+          <span class="text-xs font-bold text-purple-700 w-12 flex-shrink-0">「猫」</span>
+          <div class="flex gap-1 flex-wrap">
+            <span class="text-[10px] bg-purple-500/10 text-purple-600 px-1.5 py-0.5 rounded font-mono">0.79</span>
+            <span class="text-[10px] bg-purple-500/10 text-purple-600 px-1.5 py-0.5 rounded font-mono">-0.12</span>
+            <span class="text-[10px] bg-purple-500/10 text-purple-600 px-1.5 py-0.5 rounded font-mono">0.58</span>
+            <span class="text-[10px] text-ads-dim">...</span>
+          </div>
+        </div>
+      </div>
+      <p class="text-[10px] text-ads-dim mt-3">「犬」と「猫」は意味が近いので、数値（座標）も似た値になる。実際のベクトルは数千〜数万次元。</p>
+    </div>
+  </div>
+
+  <!-- Step 3: Transformer -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 mb-4">
+    <h4 class="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+      <span class="w-6 h-6 rounded-full bg-violet-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">3</span>
+      Transformer処理 ── 文脈を理解する頭脳
+    </h4>
+    <p class="text-sm text-ads-muted leading-relaxed mb-4">
+      ここがLLMの心臓部です。<strong class="text-slate-800">Transformer（トランスフォーマー）</strong>は2017年にGoogleの研究者が発表したAIの設計図（アーキテクチャ）で、現在のほぼすべてのLLMがこの設計を採用しています。その中核にあるのが<strong class="text-slate-800">「Attention（アテンション = 注意機構）」</strong>と呼ばれる仕組みです。
+    </p>
+    <p class="text-sm text-ads-muted leading-relaxed mb-4">
+      Attentionが何をするかを、日常のたとえで説明します。あなたが「お金を<strong class="text-slate-800">銀行</strong>に預けた」という文を読むとき、「銀行」が「金融機関」のことだと瞬時にわかりますよね。しかし「川の<strong class="text-slate-800">土手</strong>に座った」と書いてあれば、「川岸」を想像するはずです。あなたは無意識に<strong class="text-slate-800">周囲の単語を見て、言葉の意味を判断</strong>しています。Attentionはまさにこれをやっています。
+    </p>
+    <p class="text-[10px] text-ads-dim mb-4">出典: <a href="https://arxiv.org/abs/1706.03762" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">Vaswani et al., "Attention Is All You Need", 2017</a></p>
+
+    <!-- Attention図 -->
+    <div class="bg-white border border-ads-border rounded-lg p-5">
+      <div class="text-xs text-ads-dim font-medium mb-4 text-center">Attention の動き ── 各単語が他の単語をどれだけ「注目」するか</div>
+      <div class="flex flex-col items-center gap-4">
+        <div class="flex flex-wrap justify-center gap-2">
+          <span class="bg-slate-100 text-slate-600 text-sm font-medium px-3 py-1.5 rounded-lg border border-slate-200">お金</span>
+          <span class="bg-slate-100 text-slate-600 text-sm font-medium px-3 py-1.5 rounded-lg border border-slate-200">を</span>
+          <span class="bg-violet-500/15 text-violet-700 text-sm font-bold px-3 py-1.5 rounded-lg border-2 border-violet-500/30">銀行</span>
+          <span class="bg-slate-100 text-slate-600 text-sm font-medium px-3 py-1.5 rounded-lg border border-slate-200">に</span>
+          <span class="bg-slate-100 text-slate-600 text-sm font-medium px-3 py-1.5 rounded-lg border border-slate-200">預けた</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-ads-muted">
+          <i data-lucide="arrow-down" class="w-4 h-4 text-violet-500"></i>
+          「銀行」は「お金」と「預けた」に強く注目
+        </div>
+        <div class="flex flex-wrap justify-center gap-2">
+          <span class="bg-violet-500/20 text-violet-700 text-xs font-bold px-3 py-1 rounded-full">お金 ── 注目度: 高</span>
+          <span class="bg-violet-500/5 text-violet-600 text-xs px-3 py-1 rounded-full">を ── 注目度: 低</span>
+          <span class="bg-violet-500/20 text-violet-700 text-xs font-bold px-3 py-1 rounded-full">預けた ── 注目度: 高</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-4 py-2">
+          <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+          結論: この「銀行」は「金融機関」だと判断できる
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: 出力 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 mb-8">
+    <h4 class="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+      <span class="w-6 h-6 rounded-full bg-emerald-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">4</span>
+      次の言葉を出力 ── 最も自然な続きを選ぶ
+    </h4>
+    <p class="text-sm text-ads-muted leading-relaxed">
+      Transformer層を何十回も通過して文脈を深く理解したら、最後に「次に来る最も自然なトークン（言葉のパーツ）は何か？」を計算します。語彙全体（数万〜数十万語）の中から確率を計算し、最も適切なトークンを1つ選びます。そして、その選んだトークンを文末に追加して、再びステップ1から繰り返す。<strong class="text-slate-800">この超高速なループ（毎秒数百トークン）によって、長い文章が生まれます。</strong>
+    </p>
+  </div>
+
+  <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="info" class="w-4 h-4 text-amber-600"></i>
+      </div>
+      <div>
+        <p class="font-bold text-amber-700 mb-1">ちょっと補足: マルチヘッドAttention</p>
+        <p class="text-ads-muted leading-relaxed text-sm">
+          実際のLLMでは、1回の処理で複数のAttention（注意の視点）を同時に走らせます。これを<strong class="text-slate-800">「マルチヘッドAttention」</strong>と呼びます。たとえるなら、1人で本を読むのではなく、96人のチームが同じ文章を同時に読んで「文法の観点」「意味の観点」「トピックの観点」など、それぞれ異なる角度から分析している状態です。GPT-3では96個のAttentionヘッドが並列で動いています。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 3: どうやって賢くなるのか                              -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-purple-500/10 flex-shrink-0">
+      <i data-lucide="graduation-cap" class="w-5 h-5 text-purple-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">LLMはどうやって賢くなるのか</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    LLMは生まれたときから賢いわけではありません。最初はランダムな数値の塊にすぎず、「あいうえお」すらまともに出力できません。そこから<strong class="text-slate-900">3つの段階を経て</strong>、私たちが使えるレベルまで成長します。
+  </p>
+
+  <p class="mb-8 leading-relaxed">
+    この3段階を、人間の成長にたとえると理解しやすくなります。
+  </p>
+
+  <!-- 3段階タイムライン -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-8">LLMの成長 ── 3つのフェーズ</h3>
+
+    <div class="space-y-6">
+      <!-- Phase 1 -->
+      <div class="flex gap-4">
+        <div class="flex flex-col items-center">
+          <div class="w-10 h-10 rounded-full bg-blue-500 text-white text-sm font-bold flex items-center justify-center flex-shrink-0">1</div>
+          <div class="w-0.5 flex-1 bg-blue-500/20 mt-2"></div>
+        </div>
+        <div class="flex-1 pb-2">
+          <div class="inline-flex items-center gap-1.5 bg-blue-500/10 text-blue-700 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-3">
+            事前学習（Pre-training）
+          </div>
+          <h4 class="font-bold text-slate-900 mb-2">たとえ: 図書館の本をすべて読む子ども</h4>
+          <p class="text-sm text-ads-muted leading-relaxed mb-3">
+            インターネット上の膨大なテキスト（Wikipedia、書籍、ニュース記事、Webサイト、コードなど）を読み込み、「言語のルール」を学びます。このとき学んでいるのは特定の質問への答えではなく、<strong class="text-slate-800">「日本語とはこういう風に使う」「プログラミング言語はこういう構文」</strong>という言語の根本的なパターンです。
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <span class="text-[10px] bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full">Wikipedia</span>
+            <span class="text-[10px] bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full">書籍・論文</span>
+            <span class="text-[10px] bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full">Webページ</span>
+            <span class="text-[10px] bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full">ソースコード</span>
+            <span class="text-[10px] bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full">ニュース記事</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 2 -->
+      <div class="flex gap-4">
+        <div class="flex flex-col items-center">
+          <div class="w-10 h-10 rounded-full bg-purple-500 text-white text-sm font-bold flex items-center justify-center flex-shrink-0">2</div>
+          <div class="w-0.5 flex-1 bg-purple-500/20 mt-2"></div>
+        </div>
+        <div class="flex-1 pb-2">
+          <div class="inline-flex items-center gap-1.5 bg-purple-500/10 text-purple-700 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-3">
+            ファインチューニング（Fine-tuning）
+          </div>
+          <h4 class="font-bold text-slate-900 mb-2">たとえ: 家庭教師について「対話の仕方」を練習する</h4>
+          <p class="text-sm text-ads-muted leading-relaxed mb-3">
+            事前学習だけだと、LLMは「文章の続きを書く」ことはできますが、「質問に的確に答える」「指示に従って行動する」ことは苦手です。そこで、<strong class="text-slate-800">人間が作った高品質な「質問と回答のペア」</strong>を使って追加学習を行います。これにより「ユーザーが何を求めているか」を理解し、適切な形式で応答できるようになります。
+          </p>
+        </div>
+      </div>
+
+      <!-- Phase 3 -->
+      <div class="flex gap-4">
+        <div class="flex flex-col items-center">
+          <div class="w-10 h-10 rounded-full bg-emerald-500 text-white text-sm font-bold flex items-center justify-center flex-shrink-0">3</div>
+        </div>
+        <div class="flex-1">
+          <div class="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-3">
+            RLHF（人間のフィードバックによる強化学習）
+          </div>
+          <h4 class="font-bold text-slate-900 mb-2">たとえ: 先輩に「どっちの回答がいい？」と何千回も評価してもらう</h4>
+          <p class="text-sm text-ads-muted leading-relaxed mb-3">
+            RLHF = Reinforcement Learning from Human Feedback（人間のフィードバックに基づく強化学習）。同じ質問に対してLLMが複数の回答を生成し、人間の評価者が<strong class="text-slate-800">「こっちの方がわかりやすい」「こっちは正確」</strong>と評価します。その評価結果を使って「良い回答とは何か」の基準を学習します。安全性やマナーもこの段階で身につきます。
+          </p>
+          <p class="text-[10px] text-ads-dim">出典: <a href="https://arxiv.org/abs/2203.02155" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">Ouyang et al., "Training language models to follow instructions with human feedback", 2022</a></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Before / After 比較 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
+      <div class="inline-flex items-center gap-1.5 bg-red-500/10 text-red-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-5">
+        <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
+        事前学習のみのLLM
+      </div>
+      <div class="space-y-4 text-sm">
+        <div>
+          <div class="text-xs text-red-600 font-medium mb-1">質問: 「東京タワーの高さは？」</div>
+          <div class="bg-white rounded-lg p-3 border border-red-500/10">
+            <p class="text-ads-muted leading-relaxed">東京タワーの高さは333メートルで、1958年に完成した。東京タワーは日本電波塔とも呼ばれ、観光名所としても知られている。東京タワーの周辺には芝公園があり...</p>
+          </div>
+          <p class="text-[11px] text-red-600/70 mt-2 flex items-center gap-1.5">
+            <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+            答えは合っているが、聞いていないことまで延々と続く
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-6">
+      <div class="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-5">
+        <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+        RLHF後のLLM
+      </div>
+      <div class="space-y-4 text-sm">
+        <div>
+          <div class="text-xs text-emerald-600 font-medium mb-1">質問: 「東京タワーの高さは？」</div>
+          <div class="bg-white rounded-lg p-3 border border-emerald-500/10">
+            <p class="text-ads-muted leading-relaxed">東京タワーの高さは<strong class="text-slate-800">333メートル</strong>です。</p>
+          </div>
+          <p class="text-[11px] text-emerald-600/70 mt-2 flex items-center gap-1.5">
+            <i data-lucide="check" class="w-3.5 h-3.5"></i>
+            質問に対して的確に、簡潔に答えている
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-ads-accent/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="lightbulb" class="w-4 h-4 text-ads-accent-light"></i>
+      </div>
+      <div>
+        <p class="font-bold text-ads-accent-light mb-1">気づきましたか？</p>
+        <p class="text-ads-muted leading-relaxed">
+          LLMが「賢く見える」のは、事前学習で言語能力を身につけた上に、ファインチューニングとRLHFで<strong class="text-slate-800">「人間にとって役立つ回答の仕方」</strong>を学んでいるからです。知識だけでなく、「コミュニケーション能力」も後から訓練されているのです。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 4: 代表的なLLM                                       -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-amber-500/10 flex-shrink-0">
+      <i data-lucide="layers" class="w-5 h-5 text-amber-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">代表的なLLM ── 今、誰が作っているのか</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    2026年現在、LLMの開発競争は激しさを増しています。特に大きな存在感を示しているのが、以下の3社です。それぞれのモデルには異なる強みがあり、用途に応じて使い分けるのが一般的になっています。
+  </p>
+
+  <!-- モデルカード -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <!-- GPT-5 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="zap" class="w-5 h-5 text-emerald-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">GPT-5シリーズ</h3>
+          <p class="text-xs text-ads-dim">OpenAI</p>
+        </div>
+      </div>
+      <div class="space-y-3 text-sm">
+        <p class="leading-relaxed text-ads-muted">ChatGPTの頭脳。世界で最も多くのユーザーに使われているLLMシリーズ。数学や論理的推論に特に強みを持ちます。</p>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-medium">数学が得意</span>
+          <span class="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-medium">高速処理</span>
+          <span class="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-medium">幅広い用途</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Claude -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="shield" class="w-5 h-5 text-amber-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">Claude</h3>
+          <p class="text-xs text-ads-dim">Anthropic</p>
+        </div>
+      </div>
+      <div class="space-y-3 text-sm">
+        <p class="leading-relaxed text-ads-muted">安全性と正確性を重視して設計されたLLM。特にプログラミングと長文の処理に強く、開発者から高い支持を得ています。</p>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="text-[10px] bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded-full font-medium">コーディング最強</span>
+          <span class="text-[10px] bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded-full font-medium">安全性重視</span>
+          <span class="text-[10px] bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded-full font-medium">長文に強い</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gemini -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="eye" class="w-5 h-5 text-blue-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">Gemini</h3>
+          <p class="text-xs text-ads-dim">Google</p>
+        </div>
+      </div>
+      <div class="space-y-3 text-sm">
+        <p class="leading-relaxed text-ads-muted">テキストだけでなく、画像・動画・音声も同時に理解できる「マルチモーダル」が最大の強み。Google検索やYouTubeとの連携も特徴です。</p>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="text-[10px] bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full font-medium">マルチモーダル</span>
+          <span class="text-[10px] bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full font-medium">推論が得意</span>
+          <span class="text-[10px] bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full font-medium">コスト効率</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- オープンソース -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="unlock" class="w-5 h-5 text-violet-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">オープンソースLLM</h3>
+          <p class="text-xs text-ads-dim">Meta（Llama）、Mistral 他</p>
+        </div>
+      </div>
+      <div class="space-y-3 text-sm">
+        <p class="leading-relaxed text-ads-muted">ソースコードや学習済みモデルが公開されており、誰でも無料で利用・改良できます。企業が自社サーバーで動かし、データを外部に出さずに使えるのが大きなメリットです。</p>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="text-[10px] bg-violet-500/10 text-violet-600 px-2 py-0.5 rounded-full font-medium">無料で利用可能</span>
+          <span class="text-[10px] bg-violet-500/10 text-violet-600 px-2 py-0.5 rounded-full font-medium">カスタマイズ自在</span>
+          <span class="text-[10px] bg-violet-500/10 text-violet-600 px-2 py-0.5 rounded-full font-medium">データが手元に残る</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    2026年のトレンドとして注目すべきは、<strong class="text-slate-900">「1つのモデルですべてを賄う」のではなく、用途に応じて複数のモデルを使い分ける「マルチモデル戦略」</strong>が主流になりつつあることです。長い文書の分析にはGemini、コードの生成にはClaude、計算問題にはGPT-5、というように適材適所で使い分けます。
+  </p>
+
+  <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="info" class="w-4 h-4 text-amber-600"></i>
+      </div>
+      <div>
+        <p class="font-bold text-amber-700 mb-1">ちょっと補足: LLMの学習コスト</p>
+        <p class="text-ads-muted leading-relaxed text-sm">
+          GPT-4クラスのLLMを1から学習させるには、数千〜数万台のGPU（画像処理用の高性能チップ）を数ヶ月間フル稼働させる必要があり、<strong class="text-slate-800">学習コストだけで数千万〜数億ドル</strong>と推定されています。「AIは誰でも作れる」と言われますが、基盤モデル（Foundation Model）の学習には莫大な資金と設備が必要です。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 5: LLMの「できること」と「苦手なこと」                  -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-500/10 flex-shrink-0">
+      <i data-lucide="scale" class="w-5 h-5 text-emerald-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">LLMの「できること」と「苦手なこと」</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    LLMは非常に強力ですが、万能ではありません。<strong class="text-slate-900">何が得意で、何が苦手なのか</strong>を正しく理解しておくことが、LLMを上手に活用するための第一歩です。
+  </p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <!-- できること -->
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-6">
+      <div class="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-5">
+        <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+        得意なこと
+      </div>
+      <ul class="space-y-3">
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+          <span class="text-sm"><strong class="text-emerald-700">文章の生成・要約</strong> ── 長い報告書を3行にまとめる、メールの下書きを作るなど</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+          <span class="text-sm"><strong class="text-emerald-700">翻訳</strong> ── 多言語間の翻訳を、文脈を踏まえて自然に行う</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+          <span class="text-sm"><strong class="text-emerald-700">プログラミング支援</strong> ── コードの生成、バグの発見、リファクタリング</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+          <span class="text-sm"><strong class="text-emerald-700">質問応答</strong> ── 学習済みの知識の範囲内で質問に回答する</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0"></i>
+          <span class="text-sm"><strong class="text-emerald-700">アイデア出し</strong> ── ブレインストーミングの壁打ち相手になる</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- 苦手なこと -->
+    <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
+      <div class="inline-flex items-center gap-1.5 bg-red-500/10 text-red-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-5">
+        <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
+        苦手なこと
+      </div>
+      <ul class="space-y-3">
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"></i>
+          <span class="text-sm"><strong class="text-red-700">最新情報の取得</strong> ── 学習データ以降の出来事は知らない（リアルタイム検索は別機能）</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"></i>
+          <span class="text-sm"><strong class="text-red-700">正確な計算</strong> ── 複雑な数式の計算はミスする。電卓の方が確実</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"></i>
+          <span class="text-sm"><strong class="text-red-700">事実の正確性</strong> ── もっともらしいが間違った情報を生成することがある（ハルシネーション）</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"></i>
+          <span class="text-sm"><strong class="text-red-700">物理世界の体験</strong> ── 味、匂い、痛みなど、身体的な感覚は持っていない</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"></i>
+          <span class="text-sm"><strong class="text-red-700">「わからない」と認める</strong> ── 知らないことでも何か答えようとする傾向がある</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-ads-accent/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="lightbulb" class="w-4 h-4 text-ads-accent-light"></i>
+      </div>
+      <div>
+        <p class="font-bold text-ads-accent-light mb-1">ハルシネーションとは？</p>
+        <p class="text-ads-muted leading-relaxed">
+          LLMが事実と異なる内容を、あたかも正しいかのように自信を持って出力する現象を<strong class="text-slate-800">「ハルシネーション（幻覚）」</strong>と呼びます。LLMは「次に自然な言葉を予測する」仕組みなので、事実確認を行っているわけではありません。「もっともらしい文章 = 正しい文章」とは限らない、ということを常に意識しておく必要があります。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 6: よくある誤解                                      -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-red-500/10 flex-shrink-0">
+      <i data-lucide="alert-circle" class="w-5 h-5 text-red-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">よくある誤解</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    LLMについて学び始めると、多くの人が同じところで引っかかります。ここでは、よくある3つの誤解を取り上げて、正しい理解に修正します。
+  </p>
+
+  <div class="space-y-4">
+    <!-- 誤解1 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-red-500/5 border-b border-ads-border/50">
+        <div class="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="x" class="w-3.5 h-3.5 text-red-600"></i>
+        </div>
+        <h3 class="font-bold text-red-700 text-sm">誤解: 「LLMは人間のように"考えて"いる」</h3>
+      </div>
+      <div class="px-6 py-5">
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-emerald-700 mb-2">実際は:</p>
+            <p class="text-sm text-ads-muted leading-relaxed">
+              LLMは「思考」しているのではなく、<strong class="text-slate-800">膨大なテキストから学んだ統計的パターンに基づいて、最も確率の高い次の単語を選んでいるだけ</strong>です。人間のような意識や理解は持っていません。「考えているように見える」のは、学習データの規模が桁違いに大きいことと、Transformerの文脈理解能力が高いためです。出力の質が高いことと、「思考」していることは別物です。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 誤解2 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-red-500/5 border-b border-ads-border/50">
+        <div class="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="x" class="w-3.5 h-3.5 text-red-600"></i>
+        </div>
+        <h3 class="font-bold text-red-700 text-sm">誤解: 「LLMはインターネットをリアルタイムで検索している」</h3>
+      </div>
+      <div class="px-6 py-5">
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-emerald-700 mb-2">実際は:</p>
+            <p class="text-sm text-ads-muted leading-relaxed">
+              LLMの知識は<strong class="text-slate-800">学習時に読み込んだデータに基づいて</strong>います。会話のたびにインターネットを検索しているわけではありません。学習データに含まれていない最新のニュースや出来事については答えられません。ただし、ChatGPTの「ブラウジング機能」やGeminiの「Google検索連携」のように、<strong class="text-slate-800">別途検索機能を組み合わせる</strong>ことで最新情報を取得できるようになっている製品もあります。LLMそのものの機能と、製品としての追加機能は区別して理解することが大切です。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 誤解3 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-red-500/5 border-b border-ads-border/50">
+        <div class="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="x" class="w-3.5 h-3.5 text-red-600"></i>
+        </div>
+        <h3 class="font-bold text-red-700 text-sm">誤解: 「LLMは質問の文章をそのままコピーして返している」</h3>
+      </div>
+      <div class="px-6 py-5">
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-emerald-700 mb-2">実際は:</p>
+            <p class="text-sm text-ads-muted leading-relaxed">
+              LLMは学習データをそのまま丸暗記しているわけではなく、<strong class="text-slate-800">言語のパターンや構造を「圧縮」して記憶</strong>しています。たとえるなら、料理のレシピを何千冊も読んだシェフが、レシピ本を見ずに新しい料理を作れるようなものです。LLMの出力はその場で新しく「生成」された文章であり、データベースから検索・コピーしたものではありません。だからこそ、同じ質問でも毎回少し違う回答が返ってくるのです。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 7: まとめ                                            -->
+<!-- ============================================================ -->
+<section>
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-ads-accent/10 flex-shrink-0">
+      <i data-lucide="check-circle" class="w-5 h-5 text-ads-accent-light"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">まとめ ── 覚えておきたい3つのこと</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    長い図解を読んでいただきありがとうございます。最後に、この記事で伝えたかったことを3つに絞ってまとめます。
+  </p>
+
+  <div class="space-y-4 mb-10">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-violet-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-violet-500 leading-none flex-shrink-0 mt-1">01</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">LLMの正体は「次の単語予測マシン」</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            膨大なテキストから「言葉の使い方」を学び、「次に来る最も自然な言葉」を予測し続ける。この単純な原理を、桁違いの規模で実行することで、翻訳・要約・プログラミング・対話まで、驚くほど多様な言語タスクをこなしています。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-blue-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-blue-500 leading-none flex-shrink-0 mt-1">02</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">Transformerとattentionが鍵</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            LLMが「文脈を理解できる」のは、Transformer内部のAttention機構のおかげです。文中のすべての単語の関係性を同時に見渡し、「この言葉は前後のどの言葉と関係が深いか」を瞬時に判断します。これにより、同じ単語でも文脈に応じて異なる意味を正しく解釈できます。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-emerald-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-emerald-500 leading-none flex-shrink-0 mt-1">03</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">強力だが万能ではない</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            LLMは「考えている」のではなく「予測している」。そのため、もっともらしいが間違った回答（ハルシネーション）を出すこともあります。LLMを上手に使うとは、その得意・不得意を理解した上で、得意な部分をフルに活用し、苦手な部分は人間が補うことです。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-center bg-gradient-to-b from-violet-500/5 to-transparent border border-violet-500/10 rounded-xl p-8 md:p-10">
+    <i data-lucide="sparkles" class="w-8 h-8 text-violet-600 mx-auto mb-4"></i>
+    <p class="text-lg font-bold text-slate-900 mb-3">LLMは「道具」です。使いこなすのは、あなたです。</p>
+    <p class="text-ads-muted max-w-lg mx-auto leading-relaxed">
+      次にChatGPTやClaudeを使うとき、「この裏側で、数千億のパラメータが文脈を読み取って、次の単語を選んでいるんだな」と想像してみてください。LLMの仕組みを知っているだけで、より的確な質問ができるようになり、より良い回答を引き出せるようになります。
+    </p>
+  </div>
+</section>
+
+<!-- CONTENT_END -->
+  </main>
+  <footer class="max-w-3xl mx-auto px-5 pb-10 pt-6 border-t border-ads-border/30">
+    <p class="text-xs text-ads-dim text-center">AI-Driven School の図解ツールで作成</p>
+  </footer>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

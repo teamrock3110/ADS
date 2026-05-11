@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MacBook Neo vs MacBook Air M5 — 社内導入どちらを選ぶか</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+  <style>
+    * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif;
+      background: #ffffff;
+      color: #1d1d1f;
+      overflow-x: hidden;
+    }
+    .hero { background: #000000; text-align: center; padding: 120px 24px 96px; }
+    .hero-eyebrow { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #6e6e73; margin-bottom: 20px; }
+    .hero-title { font-size: clamp(2.5rem, 7vw, 5.5rem); font-weight: 700; letter-spacing: -0.04em; line-height: 1.0; color: #f5f5f7; margin-bottom: 24px; }
+    .hero-subtitle { font-size: clamp(1rem, 2.5vw, 1.375rem); font-weight: 400; line-height: 1.6; color: #a1a1a6; max-width: 600px; margin: 0 auto; }
+    .summary-strip { background: #1d1d1f; padding: 32px 24px; text-align: center; border-top: 1px solid #2d2d2f; }
+    .summary-strip p { font-size: 1.125rem; font-weight: 500; color: #f5f5f7; max-width: 720px; margin: 0 auto; }
+    .summary-strip strong { color: #ffffff; font-weight: 600; }
+    .section-light  { background: #ffffff; padding: 96px 24px; }
+    .section-gray   { background: #f5f5f7; padding: 96px 24px; }
+    .section-dark   { background: #1d1d1f; padding: 96px 24px; }
+    .section-black  { background: #000000; padding: 96px 24px; }
+    .container { max-width: 980px; margin: 0 auto; }
+    .section-eyebrow { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #6e6e73; margin-bottom: 12px; }
+    .section-eyebrow-light { color: #86868b; }
+    .section-title { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; color: #1d1d1f; margin-bottom: 20px; }
+    .section-title-light { color: #f5f5f7; }
+    .section-body { font-size: 1.0625rem; line-height: 1.7; color: #6e6e73; }
+    .section-body-light { color: #a1a1a6; }
+    .section-body strong { color: #1d1d1f; font-weight: 600; }
+    .section-body-light strong { color: #f5f5f7; }
+    .source-link { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8125rem; font-weight: 500; color: #0071e3; text-decoration: none; }
+    .source-link:hover { text-decoration: underline; }
+    .source-link-light { color: #2997ff; }
+    .speculation-tag { font-size: 0.75rem; font-weight: 500; color: #86868b; }
+    .ascii-wrap { background: #000000; border-radius: 18px; padding: 40px 48px; overflow-x: auto; margin: 40px 0; }
+    .ascii-wrap pre { font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace; font-size: 0.9375rem; line-height: 1.8; color: #30d158; margin: 0; white-space: pre; }
+    .split-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #d2d2d7; border-radius: 18px; overflow: hidden; margin: 48px 0; }
+    @media (max-width: 720px) { .split-grid { grid-template-columns: 1fr; } }
+    .split-cell { padding: 40px 36px; background: #ffffff; }
+    .split-cell-gray { background: #f5f5f7; }
+    .card-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: #d2d2d7; border-radius: 18px; overflow: hidden; margin: 48px 0; }
+    @media (max-width: 900px) { .card-grid-3 { grid-template-columns: 1fr; } }
+    .card-cell { padding: 36px 32px; background: #f5f5f7; }
+    .card-cell-white { background: #ffffff; }
+    .card-cell-dark { background: #2d2d2f; }
+    .card-num { font-size: 2.5rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: #1d1d1f; margin-bottom: 12px; }
+    .card-num-light { color: #f5f5f7; }
+    .card-label { font-size: 1rem; font-weight: 600; color: #1d1d1f; margin-bottom: 8px; }
+    .card-label-light { color: #f5f5f7; }
+    .card-desc { font-size: 0.9375rem; line-height: 1.6; color: #6e6e73; }
+    .card-desc-light { color: #86868b; }
+    .compare-header, .compare-row { display: grid; grid-template-columns: 2fr 1fr 1fr; }
+    @media (max-width: 640px) { .compare-header, .compare-row { grid-template-columns: 1fr; } }
+    .compare-row { padding: 16px 0; border-top: 1px solid #2d2d2f; align-items: start; }
+    .compare-cell { padding: 0 12px; font-size: 0.875rem; line-height: 1.5; }
+    .compare-cell:first-child { padding-left: 0; font-weight: 600; color: #f5f5f7; font-size: 0.9375rem; }
+    .compare-cell.neo   { color: #ffd60a; }
+    .compare-cell.air   { color: #30d158; }
+    .compare-cell.both  { color: #a1a1a6; }
+    .badge-neo { display: inline-block; background: #fff9e6; color: #a67c00; font-size: 0.75rem; font-weight: 600; padding: 2px 10px; border-radius: 20px; }
+    .badge-air { display: inline-block; background: #f0fdf4; color: #166534; font-size: 0.75rem; font-weight: 600; padding: 2px 10px; border-radius: 20px; }
+    .sticky-nav { position: sticky; top: 0; z-index: 100; background: rgba(29,29,31,0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid #2d2d2f; }
+    .sticky-nav-inner { max-width: 980px; margin: 0 auto; padding: 0 24px; height: 52px; display: flex; align-items: center; gap: 32px; overflow-x: auto; }
+    .sticky-nav-inner::-webkit-scrollbar { display: none; }
+    .nav-link { font-size: 0.8125rem; font-weight: 500; color: #86868b; text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+    .nav-link:hover { color: #f5f5f7; }
+    .nav-sep { color: #2d2d2f; font-size: 0.75rem; }
+    .decision-card { border-radius: 18px; padding: 40px; margin-bottom: 16px; }
+    footer { background: #f5f5f7; padding: 48px 24px; border-top: 1px solid #d2d2d7; }
+    footer p { font-size: 0.8125rem; color: #6e6e73; max-width: 980px; margin: 0 auto; line-height: 1.8; }
+    .icon-circle { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; margin-bottom: 16px; }
+    .icon-circle-dark { background: #2d2d2f; }
+    .icon-circle-light { background: #f2f2f7; }
+    .icon-circle i { font-size: 1rem; }
+    .section-icon-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .section-icon-row i { font-size: 1rem; color: #6e6e73; }
+    .section-icon-row-light i { color: #86868b; }
+    .li-icon { display: flex; align-items: flex-start; gap: 10px; }
+    .li-icon i { font-size: 0.8125rem; flex-shrink: 0; margin-top: 3px; }
+  </style>
+</head>
+<body>
+
+  <!-- HERO -->
+  <section class="hero">
+    <p class="hero-eyebrow">Mac 社内導入 / 機種選定</p>
+    <h1 class="hero-title">MacBook Neo<br>vs Air M5</h1>
+    <p class="hero-subtitle">どちらを社内導入すべきか。スペック・チップ・ポートの違いから判断根拠を作る</p>
+  </section>
+
+  <!-- ざっくり一言 -->
+  <div style="background:#1d1d1f; padding:48px 24px;">
+    <div style="max-width:720px; margin:0 auto; text-align:center;">
+      <p style="font-size:0.75rem; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:#6e6e73; margin-bottom:16px;">ざっくり一言 — まずこれを頭に入れて読んでください</p>
+      <p style="font-size:clamp(1.25rem,3vw,1.75rem); font-weight:600; color:#f5f5f7; line-height:1.4; margin-bottom:20px;">
+        <span style="color:#ffd60a">Neo</span> は軽作業向け廉価Mac、<span style="color:#30d158">Air M5</span> は全用途対応の標準Mac
+      </p>
+      <p style="font-size:0.9375rem; color:#86868b; line-height:1.6; max-width:560px; margin:0 auto;">
+        この一言が「$500の価格差の正体」です。どのユーザーに何を渡すべきかは、この先の<strong style="color:#a1a1a6">判断基準</strong>を先に見れば判断できます。詳細スペックはその裏付けです。
+      </p>
+    </div>
+  </div>
+
+  <!-- スティッキーナビ -->
+  <nav class="sticky-nav">
+    <div class="sticky-nav-inner">
+      <a href="#overview" class="nav-link">全体像</a>
+      <span class="nav-sep">|</span>
+      <a href="#decision" class="nav-link">▶ 判断基準</a>
+      <span class="nav-sep">|</span>
+      <a href="#structures" class="nav-link">3つの構造</a>
+      <span class="nav-sep">|</span>
+      <a href="#chip" class="nav-link">チップの違い</a>
+      <span class="nav-sep">|</span>
+      <a href="#ports" class="nav-link">ポート・接続</a>
+      <span class="nav-sep">|</span>
+      <a href="#compare" class="nav-link">スペック比較</a>
+      <span class="nav-sep">|</span>
+      <a href="#summary" class="nav-link">まとめ</a>
+    </div>
+  </nav>
+
+
+
+  <!-- 全体像（ASCIIアート） -->
+  <section class="section-black" id="overview">
+    <div class="container">
+      <p class="section-eyebrow section-eyebrow-light">全体像</p>
+      <h2 class="section-title section-title-light">スペック・ポジショニング</h2>
+      <p class="section-body section-body-light" style="max-width:680px">2026年3月に同時発売された2機種。ターゲットと搭載チップが根本的に異なる。</p>
+
+      <div class="ascii-wrap">
+        <pre>
+価格帯:  ¥   ─────────────────────────────────────────── ¥¥¥
+              ↑                                         ↑
+         MacBook Neo                            MacBook Air M5
+          $599〜                                   $1,099〜
+             │                                         │
+             │ チップ: A18 Pro                          │ チップ: M5
+             │  ← iPhone/iPad 系チップ →               │  ← Mac 専用チップ →
+             │  60 GB/s 帯域                            │  153 GB/s 帯域 ← 2.5倍
+             │                                         │
+             │ メモリ: 8 GB (固定・変更不可)             │ メモリ: 16 GB〜32 GB（選択可）
+             │                                         │
+             │ ポート:                                  │ ポート:
+             │  USB 3 (10Gb/s) ─ 1本                   │  Thunderbolt 4 (40Gb/s) ─ 2本 ← 4倍速
+             │  Thunderbolt 非対応                      │  MagSafe 3（充電専用）
+             │  外部ディスプレイ: 1枚まで               │  外部ディスプレイ: 2枚同時
+             │                                         │
+             ▼                                         ▼
+      [ライトユーザー向け]                      [標準〜ヘビーユーザー向け]
+  メール・ブラウザ・Zoom 中心              開発・クリエイティブ・マルチモニタ
+        </pre>
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:24px; margin-top:8px;">
+        <span style="font-size:0.8125rem; color:#86868b;"><span style="color:#ffd60a">■</span> MacBook Neo — iPhone 系チップ / 廉価 / 軽作業向け</span>
+        <span style="font-size:0.8125rem; color:#86868b;"><span style="color:#30d158">■</span> MacBook Air M5 — Mac 専用チップ / 全用途 / 標準機</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 社内導入 判断基準 -->
+  <section class="section-light" id="decision">
+    <div class="container">
+      <div class="section-icon-row">
+        <i class="fa-solid fa-users"></i>
+        <p class="section-eyebrow" style="margin-bottom:0">答えを先に見る — 社内導入の判断基準</p>
+      </div>
+      <h2 class="section-title">どちらをどのユーザーに配布するか</h2>
+      <p class="section-body" style="max-width:680px">機種は「ユーザーのタスク」と「オフィス環境」によって決まる。一律配布より用途別の選択が合理的。</p>
+
+      <div style="display:flex; flex-direction:column; gap:16px; margin-top:48px;">
+        <!-- MacBook Neo -->
+        <div class="decision-card" style="background:#fffef0; border:1px solid #e8d44d;">
+          <div class="badge-neo" style="margin-bottom:16px">MacBook Neo を選ぶ場面</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+            <div>
+              <p style="font-size:0.875rem; font-weight:600; color:#1d1d1f; margin-bottom:8px">このユーザーに向いている</p>
+              <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-regular fa-envelope" style="color:#a67c00;"></i> メール・ブラウザ・Zoom・Slack が主業務</li>
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-regular fa-file-lines" style="color:#a67c00;"></i> Office 系ドキュメント作業中心</li>
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-person-walking" style="color:#a67c00;"></i> 外部ディスプレイを使わないモバイルワーカー</li>
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-headset" style="color:#a67c00;"></i> 教育系・サポート系・現場巡回系の社員</li>
+              </ul>
+            </div>
+            <div>
+              <p style="font-size:0.875rem; font-weight:600; color:#1d1d1f; margin-bottom:8px">選ぶメリット</p>
+              <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-tag" style="color:#a67c00;"></i> Air M5 比 $500 安く、大量調達コストを削減</li>
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-check" style="color:#a67c00;"></i> 軽作業ユーザーには性能的に十分</li>
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-brands fa-apple" style="color:#a67c00;"></i> Apple Intelligence・macOS Tahoe は同等に使える</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- MacBook Air M5 -->
+        <div class="decision-card" style="background:#f0fdf4; border:1px solid #86efac;">
+          <div class="badge-air" style="margin-bottom:16px">MacBook Air M5 を選ぶ場面</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+            <div>
+              <p style="font-size:0.875rem; font-weight:600; color:#1d1d1f; margin-bottom:8px">このユーザーに向いている</p>
+              <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-code" style="color:#166534;"></i> 開発者・デザイナー・マーケター</li>
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-display" style="color:#166534;"></i> 外部ディスプレイ 1〜2 枚をデスクで使う社員</li>
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-pen-nib" style="color:#166534;"></i> Figma・動画編集・大量ブラウザタブを常用する社員</li>
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-building" style="color:#166534;"></i> Thunderbolt ドックを使うデスクワーカー</li>
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-regular fa-calendar" style="color:#166534;"></i> 3〜4年以上の長期運用が前提</li>
+              </ul>
+            </div>
+            <div>
+              <p style="font-size:0.875rem; font-weight:600; color:#1d1d1f; margin-bottom:8px">選ぶメリット</p>
+              <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-memory" style="color:#166534;"></i> メモリ 16GB 以上でヘビーワークに対応</li>
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-expand" style="color:#166534;"></i> 外部ディスプレイ 2 枚で作業効率が大幅向上</li>
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-plug" style="color:#166534;"></i> Thunderbolt 4 ドック 1 本でデスク環境が完結</li>
+                <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-fingerprint" style="color:#166534;"></i> Touch ID 全モデル標準で認証管理が統一できる</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- 注意点 -->
+        <div style="padding:28px 32px; background:#f9f9f9; border-radius:16px; border-left:4px solid #ff9500;">
+          <p style="font-size:0.9375rem; font-weight:600; color:#1d1d1f; margin-bottom:8px"><i class="fa-solid fa-triangle-exclamation" style="color:#ff9500; margin-right:8px;"></i>判断前に確認すべき社内要件（別途調査が必要）</p>
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px">
+            <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-mobile-screen" style="color:#ff9500;"></i> MDM（Mobile Device Management）は MacBook Neo を正式サポートするか — Jamf Pro 等での管理対象確認</li>
+            <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-gears" style="color:#ff9500;"></i> 社内ソフトウェアが A18 Pro（ARM）で動作確認済みか — 特にオンプレ系ツール</li>
+            <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-fingerprint" style="color:#ff9500;"></i> Neo の Touch ID なしモデルが社内認証ポリシーに反しないか</li>
+            <li class="li-icon" style="font-size:0.875rem; color:#6e6e73; line-height:1.5"><i class="fa-solid fa-plug-circle-check" style="color:#ff9500;"></i> 既存の Thunderbolt 周辺機器との互換性</li>
+          </ul>
+          <p style="font-size:0.8125rem; color:#86868b; margin-top:12px">※ 上記はこの図解の範囲外。各社の IT 管理者・ベンダーへの確認を推奨。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- まず理解する3つの構造 -->
+  <section class="section-light" id="structures">
+    <div class="container">
+      <p class="section-eyebrow">まず理解する</p>
+      <h2 class="section-title">3つの構造</h2>
+      <p class="section-body" style="max-width:560px; margin-bottom:0">価格差の背後にある根本的な違いをこの順番で理解する。</p>
+
+      <div class="card-grid-3" style="margin-top:48px">
+        <div class="card-cell card-cell-white">
+          <div class="icon-circle icon-circle-light"><i class="fa-solid fa-microchip" style="color:#0071e3;"></i></div>
+          <div class="card-num">01</div>
+          <div style="display:inline-block; background:#f2f2f7; color:#6e6e73; font-size:0.75rem; font-weight:500; padding:2px 8px; border-radius:20px; margin-bottom:12px;">骨格</div>
+          <p class="card-label">チップ系統が根本的に違う</p>
+          <p class="card-desc">Neo は A18 Pro（iPhone/iPad 系）、Air M5 は M5（Mac 専用）。<strong>同じ Apple シリコンでも設計目標が異なる</strong>。メモリ帯域は Neo の 60 GB/s に対し M5 は 153 GB/s（M4 比 28% 向上）。AI タスクは M5 が M4 比 4 倍速と Apple が公表している。
+            <a href="https://support.apple.com/en-us/126322" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:8px">↗ MacBook Neo 公式スペック（帯域 60 GB/s）</a>
+            <a href="https://www.apple.com/newsroom/2026/03/apple-introduces-the-new-macbook-air-with-m5/" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:4px">↗ Air M5 発表（153 GB/s・AI 4 倍・SSD 2 倍の出典）</a>
+          </p>
+        </div>
+        <div class="card-cell">
+          <div class="icon-circle icon-circle-light"><i class="fa-solid fa-plug" style="color:#6e6e73;"></i></div>
+          <div class="card-num">02</div>
+          <div style="display:inline-block; background:#f2f2f7; color:#6e6e73; font-size:0.75rem; font-weight:500; padding:2px 8px; border-radius:20px; margin-bottom:12px;">補足</div>
+          <p class="card-label">ポートの種類が業務ワークフローを決める</p>
+          <p class="card-desc">Neo の USB 3 は最大 10Gb/s、Air M5 の Thunderbolt 4 は最大 40Gb/s（4倍差）。さらに Thunderbolt 4 は外部ディスプレイを 2 枚同時出力可能だが、<strong>Neo は 1 枚まで</strong>（USB 3 ポートのみ / DisplayPort 経由 / 4K@60Hz まで）。デスクで複数モニタ運用をするなら Air M5 一択になる。
+            <a href="https://support.apple.com/en-us/126322" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:8px">↗ Neo の外部ディスプレイ制限（公式スペック）</a>
+            <a href="https://www.apple.com/macbook-air/specs/" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:4px">↗ Air M5 の 2 枚対応仕様（公式スペック）</a>
+          </p>
+        </div>
+        <div class="card-cell card-cell-white">
+          <div class="icon-circle icon-circle-light"><i class="fa-solid fa-memory" style="color:#30d158;"></i></div>
+          <div class="card-num">03</div>
+          <div style="display:inline-block; background:#f2f2f7; color:#6e6e73; font-size:0.75rem; font-weight:500; padding:2px 8px; border-radius:20px; margin-bottom:12px;">応用</div>
+          <p class="card-label">メモリ上限がユーザー種別の線引きになる</p>
+          <p class="card-desc">Neo はメモリ 8GB 固定・変更不可。Air M5 は 16〜32GB まで選択可。macOS はメモリ不足時にストレージをスワップ領域として使用するため、常駐アプリが多いユーザーほどパフォーマンスが低下しやすい。<span class="speculation-tag">※ 体感差は利用アプリ・バージョン・ファイルサイズで変わる。社内の実環境でのテストを推奨。</span>
+            <a href="https://support.apple.com/en-us/126322" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:8px">↗ Neo メモリ 8GB 固定（公式スペック）</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- チップの違い詳細 -->
+  <section class="section-gray" id="chip">
+    <div class="container">
+      <div class="section-icon-row">
+        <i class="fa-solid fa-microchip"></i>
+        <p class="section-eyebrow" style="margin-bottom:0">チップの違い</p>
+      </div>
+      <h2 class="section-title">A18 Pro vs M5 — 何が変わるか</h2>
+      <p class="section-body" style="max-width:680px">「チップが違う」だけでは判断できない。実際の業務に何が影響するかを整理する。</p>
+      <a href="https://www.apple.com/newsroom/2026/03/apple-introduces-the-new-macbook-air-with-m5/" target="_blank" class="source-link" style="display:block; margin-top:8px">↗ M5 公式スペック・パフォーマンス情報（Apple Newsroom）</a>
+
+      <div class="split-grid" style="margin-top:48px">
+        <div class="split-cell">
+          <div class="badge-neo" style="margin-bottom:20px">MacBook Neo / A18 Pro</div>
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:20px;">
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">メモリ帯域: 60 GB/s</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">iPhone/iPad と同じチップ系統。メール・ブラウザ・Zoom・Office 系といった軽量タスクでは十分。AI 処理（Apple Intelligence）も快適に動作。帯域が低いほど、大量データを扱う処理（大きな画像・動画プレビュー・多数タブのレンダリング）がボトルネックになりやすい。
+                <a href="https://support.apple.com/en-us/126322" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:4px">↗ Neo 公式スペック（60 GB/s）</a>
+              </p>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">メモリ: 8 GB 固定（購入後変更不可）</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">注文時に変更できない。購入後のアップグレード不可。macOS は統合メモリで GPU と CPU が共有するため、常駐アプリが増えるほどスワップが起きやすくなる。<span class="speculation-tag">※ 実際の負荷は利用環境によるため社内テストを推奨</span></p>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">CPU コア: 2性能 + 4効率（計6コア）</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">動画編集・画像処理・仮想マシン等のヘビータスクは Air M5 に劣る。日常業務には問題ない水準。</p>
+            </li>
+          </ul>
+        </div>
+        <div class="split-cell split-cell-gray">
+          <div class="badge-air" style="margin-bottom:20px">MacBook Air M5</div>
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:20px;">
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">メモリ帯域: 153 GB/s（M4 比 28% 向上）</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">大容量データを扱うワークフローでスループットが変わる。Apple 公表値: AI タスクが M4 比 4 倍速（例: Topaz Video での AI 動画補正が M1 比 6.9 倍・M4 比 1.9 倍）。
+                <a href="https://www.apple.com/newsroom/2026/03/apple-introduces-the-new-macbook-air-with-m5/" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:4px">↗ Air M5 発表（Apple Newsroom・パフォーマンス数値の出典）</a>
+              </p>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">メモリ: 16 GB〜32 GB（選択可）</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">16GB が標準。将来的な用途変化（AI ツール・重いブラウザセッション増加）にも対応しやすい。<span class="speculation-tag">※ 8GB との実体感差は利用アプリ次第。社内環境でのテストを推奨</span></p>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">SSD 速度: M4 比 2 倍の読み書き</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">ストレージの読み書き速度が前世代比 2 倍に向上。大量ファイルのインポート・コンパイル・バックアップの待ち時間が短縮される。
+                <a href="https://www.apple.com/newsroom/2026/03/apple-introduces-the-new-macbook-air-with-m5/" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:4px">↗ Air M5 発表（SSD 2 倍速の出典）</a>
+              </p>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ポート・接続性 -->
+  <section class="section-dark" id="ports">
+    <div class="container">
+      <div class="section-icon-row section-icon-row-light">
+        <i class="fa-solid fa-plug"></i>
+        <p class="section-eyebrow section-eyebrow-light" style="margin-bottom:0">ポート / 接続性</p>
+      </div>
+      <h2 class="section-title section-title-light">デスク運用環境への影響</h2>
+      <p class="section-body section-body-light" style="max-width:680px">社内展開でもっとも見落とされやすい差異。オフィスのデスク環境と現場ユーザーの使い方によって、このポートの違いが日常の生産性に直結する。</p>
+
+      <div style="margin-top:48px; display:flex; flex-direction:column; gap:1px; background:#2d2d2f; border-radius:18px; overflow:hidden;">
+        <!-- row -->
+        <div style="display:grid; grid-template-columns:2fr 1fr 1fr; background:#000; padding:16px 0;">
+          <div style="padding:0 12px; font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#6e6e73; padding-left:0">項目</div>
+          <div style="padding:0 12px; font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#ffd60a">MacBook Neo</div>
+          <div style="padding:0 12px; font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#30d158">MacBook Air M5</div>
+        </div>
+        <div style="display:grid; grid-template-columns:2fr 1fr 1fr; background:#000; padding:16px 0; border-top:1px solid #2d2d2f; align-items:start;">
+          <div style="padding:0 12px; font-weight:600; color:#f5f5f7; padding-left:0">USB-C ポート数</div>
+          <div style="padding:0 12px; color:#ffd60a; font-size:0.875rem">2本<br><span style="color:#6e6e73; font-size:0.75rem">1本が充電専用になると残り1本</span></div>
+          <div style="padding:0 12px; color:#30d158; font-size:0.875rem">2本 Thunderbolt 4<br>+ MagSafe 3（充電専用）<br><span style="color:#a1a1a6; font-size:0.75rem">充電 MagSafe 別なので TB4 を2本フル活用可</span></div>
+        </div>
+        <div style="display:grid; grid-template-columns:2fr 1fr 1fr; background:#000; padding:16px 0; border-top:1px solid #2d2d2f; align-items:start;">
+          <div style="padding:0 12px; font-weight:600; color:#f5f5f7; padding-left:0">最大データ転送速度</div>
+          <div style="padding:0 12px; color:#ffd60a; font-size:0.875rem">10 Gb/s（USB 3）<br><span style="color:#6e6e73; font-size:0.75rem">もう 1 本は 480 Mb/s（USB 2）</span></div>
+          <div style="padding:0 12px; color:#30d158; font-size:0.875rem">40 Gb/s（Thunderbolt 4）× 2本</div>
+        </div>
+        <div style="display:grid; grid-template-columns:2fr 1fr 1fr; background:#000; padding:16px 0; border-top:1px solid #2d2d2f; align-items:start;">
+          <div style="padding:0 12px; font-weight:600; color:#f5f5f7; padding-left:0">外部ディスプレイ同時接続数</div>
+          <div style="padding:0 12px; color:#ffd60a; font-size:0.875rem">最大 1 枚<br><span style="color:#6e6e73; font-size:0.75rem">4K@60Hz まで</span>
+            <a href="https://support.apple.com/en-us/126322" target="_blank" class="source-link source-link-light" style="font-size:0.75rem; display:block; margin-top:4px">↗ 公式スペック</a>
+          </div>
+          <div style="padding:0 12px; color:#30d158; font-size:0.875rem">最大 2 枚<br><span style="color:#a1a1a6; font-size:0.75rem">6K@60Hz / 8K@60Hz まで</span>
+            <a href="https://www.apple.com/macbook-air/specs/" target="_blank" class="source-link source-link-light" style="font-size:0.75rem; display:block; margin-top:4px">↗ 公式スペック</a>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:2fr 1fr 1fr; background:#000; padding:16px 0; border-top:1px solid #2d2d2f; align-items:start;">
+          <div style="padding:0 12px; font-weight:600; color:#f5f5f7; padding-left:0">Thunderbolt ドック対応</div>
+          <div style="padding:0 12px; color:#ffd60a; font-size:0.875rem">非対応<br><span style="color:#6e6e73; font-size:0.75rem">USB 3 ハブのみ利用可</span></div>
+          <div style="padding:0 12px; color:#30d158; font-size:0.875rem">対応<br><span style="color:#a1a1a6; font-size:0.75rem">1本で映像・電源・周辺機器を集約可</span></div>
+        </div>
+        <div style="display:grid; grid-template-columns:2fr 1fr 1fr; background:#000; padding:16px 0; border-top:1px solid #2d2d2f; align-items:start;">
+          <div style="padding:0 12px; font-weight:600; color:#f5f5f7; padding-left:0">充電ポート</div>
+          <div style="padding:0 12px; color:#ffd60a; font-size:0.875rem">USB-C 2本のうち 1 本で充電<br><span style="color:#6e6e73; font-size:0.75rem">充電中は残り 1 本のみ使用可</span></div>
+          <div style="padding:0 12px; color:#30d158; font-size:0.875rem">MagSafe 3 専用（独立）<br><span style="color:#a1a1a6; font-size:0.75rem">充電しながら TB4 2 本フル活用可</span></div>
+        </div>
+        <div style="display:grid; grid-template-columns:2fr 1fr 1fr; background:#000; padding:16px 0; border-top:1px solid #2d2d2f; align-items:start;">
+          <div style="padding:0 12px; font-weight:600; color:#f5f5f7; padding-left:0">Wi-Fi 規格</div>
+          <div style="padding:0 12px; color:#ffd60a; font-size:0.875rem">Wi-Fi 6E</div>
+          <div style="padding:0 12px; color:#30d158; font-size:0.875rem">Wi-Fi 7<br><span style="color:#a1a1a6; font-size:0.75rem">オフィス内高密度環境でより安定</span></div>
+        </div>
+        <div style="display:grid; grid-template-columns:2fr 1fr 1fr; background:#000; padding:16px 0; border-top:1px solid #2d2d2f; align-items:start;">
+          <div style="padding:0 12px; font-weight:600; color:#f5f5f7; padding-left:0">Touch ID</div>
+          <div style="padding:0 12px; color:#ffd60a; font-size:0.875rem">モデルにより有無が異なる<br><span style="color:#6e6e73; font-size:0.75rem">「Lock Key モデル」には Touch ID なし</span></div>
+          <div style="padding:0 12px; color:#30d158; font-size:0.875rem">全モデル標準搭載</div>
+        </div>
+      </div>
+
+      <div style="margin-top:32px; padding:28px 36px; background:#2d2d2f; border-radius:16px;">
+        <p style="font-size:0.9375rem; font-weight:600; color:#f5f5f7; margin-bottom:12px">Thunderbolt ドック環境を構築するなら Air M5 一択</p>
+        <p style="font-size:0.875rem; color:#86868b; line-height:1.6">Thunderbolt 4 ドックを使うと「1本のケーブルを挿すだけで、電源 + 2枚の外部ディスプレイ + USB ハブ + 有線 LAN」がすべて接続できる。Neo では Thunderbolt ドックは使えない。オフィスのデスクワーカーに配布する場合、Air M5 + TB4 ドック構成が標準になり、Neo では個別の周辺機器管理が増える。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- スペック比較表 -->
+  <section class="section-black" id="compare">
+    <div class="container">
+      <div class="section-icon-row section-icon-row-light">
+        <i class="fa-solid fa-table-columns"></i>
+        <p class="section-eyebrow section-eyebrow-light" style="margin-bottom:0">スペック比較</p>
+      </div>
+      <h2 class="section-title section-title-light">全項目対比</h2>
+
+      <div class="compare-header" style="padding-bottom:12px; border-bottom:1px solid #3d3d3f; margin-top:48px">
+        <div style="font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#6e6e73; padding-left:0">項目</div>
+        <div style="font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#ffd60a; padding:0 12px">MacBook Neo</div>
+        <div style="font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#30d158; padding:0 12px">MacBook Air M5</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">価格（13インチ・米国）</div>
+        <div class="compare-cell neo">$599〜<br><span style="color:#6e6e73; font-size:0.75rem">教育 $499〜</span><br>
+          <a href="https://www.apple.com/newsroom/2026/03/say-hello-to-macbook-neo" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ 公式発表</a>
+        </div>
+        <div class="compare-cell air">$1,099〜<br><span style="color:#a1a1a6; font-size:0.75rem">教育 $999〜</span><br>
+          <a href="https://www.apple.com/newsroom/2026/03/apple-introduces-the-new-macbook-air-with-m5/" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ 公式発表</a>
+        </div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">チップ</div>
+        <div class="compare-cell neo">A18 Pro<br><span style="color:#6e6e73; font-size:0.75rem">6-core CPU / 5-core GPU / 60 GB/s</span></div>
+        <div class="compare-cell air">M5<br><span style="color:#a1a1a6; font-size:0.75rem">10-core CPU / 8-10-core GPU / 153 GB/s</span></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">メモリ</div>
+        <div class="compare-cell neo">8 GB（固定）</div>
+        <div class="compare-cell air">16 GB〜32 GB（選択可）</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">ストレージ</div>
+        <div class="compare-cell neo">256 GB / 512 GB</div>
+        <div class="compare-cell air">512 GB〜4 TB（SSD 2倍速）</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">ディスプレイ</div>
+        <div class="compare-cell neo">13.0 インチ 219 ppi<br><span style="color:#6e6e73; font-size:0.75rem">sRGB / 500 nits</span></div>
+        <div class="compare-cell air">13.6 インチ 224 ppi<br><span style="color:#a1a1a6; font-size:0.75rem">Wide Color P3 / 500 nits / True Tone</span></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">カメラ</div>
+        <div class="compare-cell neo">1080p FaceTime HD</div>
+        <div class="compare-cell air">12MP Center Stage + Desk View</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">マイク</div>
+        <div class="compare-cell neo">デュアルマイク</div>
+        <div class="compare-cell air">3マイクアレイ（指向性ビームフォーミング）</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">スピーカー</div>
+        <div class="compare-cell neo">デュアルスピーカー</div>
+        <div class="compare-cell air">4スピーカー（Spatial Audio）</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">バッテリー</div>
+        <div class="compare-cell neo">16時間（動画再生）</div>
+        <div class="compare-cell air">18時間（動画再生）</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">本体サイズ</div>
+        <div class="compare-cell neo">11.71" × 8.12" × 0.50"<br><span style="color:#6e6e73; font-size:0.75rem">厚み 1.27 cm（少し厚い）</span></div>
+        <div class="compare-cell air">11.97" × 8.46" × 0.44"<br><span style="color:#a1a1a6; font-size:0.75rem">厚み 1.13 cm（より薄い）</span></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">重量</div>
+        <div class="compare-cell both">2.7 ポンド（1.23 kg）</div>
+        <div class="compare-cell both">2.7 ポンド（1.23 kg）</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">Wi-Fi</div>
+        <div class="compare-cell neo">Wi-Fi 6E</div>
+        <div class="compare-cell air">Wi-Fi 7</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">Touch ID</div>
+        <div class="compare-cell neo">モデルにより有無あり</div>
+        <div class="compare-cell air">全モデル標準搭載</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">カラー</div>
+        <div class="compare-cell neo">Silver / Blush / Citrus / Indigo</div>
+        <div class="compare-cell air">Sky Blue / Silver / Starlight / Midnight</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">発売日</div>
+        <div class="compare-cell both">2026年3月11日</div>
+        <div class="compare-cell both">2026年3月11日</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- まとめ -->
+  <section class="section-black" id="summary">
+    <div class="container">
+      <p class="section-eyebrow section-eyebrow-light">まとめ</p>
+      <h2 class="section-title section-title-light">この図解でわかること</h2>
+
+      <div class="card-grid-3" style="margin-top:48px">
+        <div class="card-cell card-cell-dark">
+          <div class="icon-circle icon-circle-dark"><i class="fa-solid fa-microchip" style="color:#0071e3;"></i></div>
+          <div class="card-num card-num-light">01</div>
+          <p class="card-label card-label-light">チップの違いが性能差の根本</p>
+          <p class="card-desc card-desc-light">A18 Pro は iPhone 系チップ（60 GB/s）、M5 は Mac 専用チップ（153 GB/s）。メモリ帯域 2.5 倍の差が重いワークフローで体感差になる。ライトユーザーには Neo で十分。</p>
+        </div>
+        <div class="card-cell" style="background:#1a1a1c">
+          <div class="icon-circle icon-circle-dark"><i class="fa-solid fa-plug" style="color:#86868b;"></i></div>
+          <div class="card-num card-num-light">02</div>
+          <p class="card-label card-label-light">ポート構成がデスク運用環境を決める</p>
+          <p class="card-desc card-desc-light">Neo は外部ディスプレイ 1 枚・Thunderbolt 非対応。Air M5 は 2 枚対応・TB4 ドックが使える。デスクワーカーへの配布は Air M5 が管理コストを下げる。</p>
+        </div>
+        <div class="card-cell card-cell-dark">
+          <div class="icon-circle icon-circle-dark"><i class="fa-solid fa-scale-balanced" style="color:#30d158;"></i></div>
+          <div class="card-num card-num-light">03</div>
+          <p class="card-label card-num-light" style="font-size:1rem; font-weight:600; margin-bottom:8px">用途別選択が合理的</p>
+          <p class="card-desc card-desc-light">$500 の価格差は「モバイル軽作業のみ = Neo」「外部ディスプレイ / 重いアプリ / ヘビーワーク = Air M5」で使い分けると合理的に回収できる。一律配布よりロール別選択がコスト最適。</p>
+        </div>
+      </div>
+
+      <div style="margin-top:56px; padding-top:40px; border-top:1px solid #2d2d2f">
+        <p style="font-size:0.8rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#30d158; margin-bottom:20px">この図解を根拠に上長に説明できること</p>
+        <div style="display:flex; flex-direction:column; gap:12px">
+          <div style="display:flex; gap:12px; align-items:flex-start">
+            <i class="fa-solid fa-circle-check" style="color:#30d158; flex-shrink:0; font-size:1rem; margin-top:3px;"></i>
+            <p style="font-size:1rem; color:#f5f5f7; line-height:1.6">「Neo と Air M5 の価格差 $500 は、チップ・メモリ・ポート・外部ディスプレイ数の違いによるもの」を根拠付きで説明できる</p>
+          </div>
+          <div style="display:flex; gap:12px; align-items:flex-start">
+            <i class="fa-solid fa-circle-check" style="color:#30d158; flex-shrink:0; font-size:1rem; margin-top:3px;"></i>
+            <p style="font-size:1rem; color:#f5f5f7; line-height:1.6">「外部ディスプレイを使うデスクワーカーには Air M5 が必要な理由」をポート仕様から説明できる</p>
+          </div>
+          <div style="display:flex; gap:12px; align-items:flex-start">
+            <i class="fa-solid fa-circle-check" style="color:#30d158; flex-shrink:0; font-size:1rem; margin-top:3px;"></i>
+            <p style="font-size:1rem; color:#f5f5f7; line-height:1.6">「ロール別に Neo / Air M5 を使い分ける調達計画」の技術根拠を提示できる</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- フッター -->
+  <footer>
+    <p>
+      <strong>根拠とした一次情報</strong> —
+      <a href="https://support.apple.com/en-us/126322" target="_blank" class="source-link">MacBook Neo 公式スペック（Apple Support）</a> ·
+      <a href="https://www.apple.com/macbook-neo" target="_blank" class="source-link">MacBook Neo 製品ページ（Apple）</a> ·
+      <a href="https://www.apple.com/newsroom/2026/03/say-hello-to-macbook-neo" target="_blank" class="source-link">MacBook Neo 発表（Apple Newsroom）</a> ·
+      <a href="https://www.apple.com/macbook-air/specs/" target="_blank" class="source-link">MacBook Air M5 公式スペック（Apple）</a> ·
+      <a href="https://www.apple.com/newsroom/2026/03/apple-introduces-the-new-macbook-air-with-m5/" target="_blank" class="source-link">MacBook Air M5 発表（Apple Newsroom）</a>
+    </p>
+    <p style="margin-top:12px; font-size:0.75rem; color:#86868b;">最終確認日: 2026年4月2日 / 価格・スペックは変更される場合があります。購入前に Apple 公式サイトで最新情報をご確認ください。</p>
+  </footer>
+
+</body>
+</html>

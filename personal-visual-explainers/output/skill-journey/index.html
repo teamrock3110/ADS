@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スキル育て日記 — パーソナル図解スキル作成の工夫 | 本気AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --majiai-primary: hsl(343, 85%, 45%);
+      --majiai-secondary: hsl(213, 63%, 38%);
+      --majiai-gradient: linear-gradient(90deg, #24609E, #D60C52);
+    }
+    body { font-family: 'Noto Sans JP', 'Inter', sans-serif; }
+
+    .header-gradient { background: var(--majiai-gradient); }
+
+    .section-card {
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,.1);
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .char-bubble {
+      position: relative;
+      padding: 1.25rem 1.5rem;
+      border-radius: 1rem;
+      margin-left: 1rem;
+    }
+    .char-bubble::before {
+      content: '';
+      position: absolute;
+      left: -10px;
+      top: 20px;
+      border-width: 10px;
+      border-style: solid;
+    }
+    .maji-bubble {
+      background: linear-gradient(135deg, #fef3c7, #fde68a);
+      border: 2px solid #f59e0b;
+    }
+    .maji-bubble::before { border-color: transparent #f59e0b transparent transparent; }
+    .master-bubble {
+      background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+      border: 2px solid #3b82f6;
+    }
+    .master-bubble::before { border-color: transparent #3b82f6 transparent transparent; }
+
+    .term-explain {
+      background: linear-gradient(135deg, #f3e8ff, #e9d5ff);
+      border-left: 4px solid #9333ea;
+      padding: 1.25rem 1.5rem;
+      border-radius: 0.75rem;
+      margin: 1rem 0;
+    }
+
+    .point-card {
+      background: white;
+      border-radius: 0.875rem;
+      border: 1px solid #e5e7eb;
+      padding: 1.25rem 1.5rem;
+      transition: box-shadow .2s;
+    }
+    .point-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+
+    .step-flow {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .step-box {
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      font-size: 0.875rem;
+      white-space: nowrap;
+    }
+    .arrow { color: #6b7280; font-size: 1.25rem; font-weight: 700; }
+
+    .sticky-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255,255,255,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid #e5e7eb;
+      padding: 0.75rem 1rem;
+    }
+    .nav-inner {
+      max-width: 56rem;
+      margin: 0 auto;
+      display: flex;
+      gap: 1.5rem;
+      overflow-x: auto;
+    }
+    .nav-inner::-webkit-scrollbar { display: none; }
+    .nav-link {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #6b7280;
+      text-decoration: none;
+      white-space: nowrap;
+      padding: 0.25rem 0;
+      border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
+    }
+    .nav-link:hover { color: #D60C52; border-color: #D60C52; }
+
+    .summary-banner {
+      background: linear-gradient(135deg, #1e3a5f, #2d1f47);
+      color: white;
+      border-radius: 1rem;
+      padding: 1.5rem 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+    }
+    .badge-red { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
+    .badge-blue { background: #eff6ff; color: #2563eb; border: 1px solid #93c5fd; }
+    .badge-green { background: #f0fdf4; color: #16a34a; border: 1px solid #86efac; }
+    .badge-purple { background: #faf5ff; color: #9333ea; border: 1px solid #d8b4fe; }
+
+    .ascii-box {
+      background: #0f172a;
+      border-radius: 0.875rem;
+      padding: 1.5rem 2rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    .ascii-box pre {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.8125rem;
+      line-height: 1.75;
+      color: #34d399;
+      margin: 0;
+      white-space: pre;
+    }
+
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: #e5e7eb;
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+    @media (max-width: 600px) { .before-after { grid-template-columns: 1fr; } }
+    .ba-cell { padding: 1.5rem; background: white; }
+  </style>
+</head>
+<body class="bg-gray-50">
+
+  <!-- ヘッダー -->
+  <header class="header-gradient text-white py-10">
+    <div class="max-w-4xl mx-auto px-4">
+      <div class="flex items-center gap-2 mb-3 opacity-80 text-sm font-semibold tracking-widest uppercase">
+        <i data-lucide="wrench" class="w-4 h-4"></i>
+        Driven School 課題発表
+      </div>
+      <h1 class="text-3xl md:text-4xl font-bold leading-tight">スキル育て日記</h1>
+      <p class="mt-2 text-lg opacity-90">パーソナル図解スキル作成で工夫したポイント</p>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <span class="badge badge-red"><i data-lucide="user" class="w-3 h-3"></i> 社内IT担当エンジニア向け</span>
+        <span class="badge badge-blue"><i data-lucide="refresh-cw" class="w-3 h-3"></i> FB（フィードバック）× 改善で育てたスキル</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- スティッキーナビ -->
+  <nav class="sticky-nav">
+    <div class="nav-inner">
+      <a href="#background" class="nav-link">背景</a>
+      <a href="#育て方" class="nav-link">育て方</a>
+      <a href="#構成" class="nav-link">構成の工夫</a>
+      <a href="#デザイン" class="nav-link">デザインの工夫</a>
+      <a href="#まとめ" class="nav-link">まとめ</a>
+    </div>
+  </nav>
+
+  <main class="max-w-4xl mx-auto px-4 py-8">
+
+  <!-- ざっくり一言 -->
+  <div class="summary-banner">
+    <div class="flex items-start gap-3">
+      <i data-lucide="zap" class="w-6 h-6 text-yellow-300 flex-shrink-0 mt-0.5"></i>
+      <div>
+        <p class="text-xs font-bold tracking-widest uppercase text-blue-200 mb-1">ざっくり一言</p>
+        <p class="text-lg md:text-xl font-bold leading-snug">「ダメなスキルをFBで育てたら、使える図解ツールになった」</p>
+      </div>
+    </div>
+  </div>
+
+    <!-- 導入キャラ -->
+    <div class="section-card" id="background">
+      <div class="flex items-center gap-2 mb-6">
+        <i data-lucide="help-circle" class="w-6 h-6 text-amber-500"></i>
+        <h2 class="text-xl font-bold text-gray-800">そもそも、どんな場面で使うスキル？</h2>
+      </div>
+
+      <div class="flex items-start gap-4 mb-6">
+        <img src="./images/マジくん-疑っている-512×512-透過.png"
+             alt="マジくん" class="w-20 h-20 object-contain flex-shrink-0">
+        <div class="char-bubble maji-bubble flex-1">
+          <p class="text-base"><span class="font-bold text-amber-700">マジくん:</span><br>
+            「社内IT担当エンジニア向け」って書いてありますけど、具体的にどんな技術を図解するんですか？
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-start gap-4 mb-6">
+        <img src="./images/マスター-諭す-512×512-透過.png"
+             alt="マスター" class="w-20 h-20 object-contain flex-shrink-0">
+        <div class="char-bubble master-bubble flex-1">
+          <p class="text-base"><span class="font-bold text-blue-700">マスター:</span><br>
+            「初めて使う未知の技術を自分で設定・利用するとき」のためのスキルです。<br>
+            原理原則を理解して、自分の言葉で上長や関係者に説明できるようになること — それがゴールです。
+          </p>
+        </div>
+      </div>
+
+      <!-- 背景カード -->
+      <div class="grid md:grid-cols-3 gap-4 mt-4">
+        <div class="point-card border-l-4 border-amber-400">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="user" class="w-5 h-5 text-amber-500"></i>
+            <p class="font-bold text-gray-800 text-sm">使う人</p>
+          </div>
+          <p class="text-sm text-gray-600">社内IT担当エンジニアが、自分の業務に特化して作ったスキル</p>
+        </div>
+        <div class="point-card border-l-4 border-blue-400">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="target" class="w-5 h-5 text-blue-500"></i>
+            <p class="font-bold text-gray-800 text-sm">使う場面</p>
+          </div>
+          <p class="text-sm text-gray-600">SaaS（クラウドサービス）設定変更・新技術の導入・障害対応の理解</p>
+        </div>
+        <div class="point-card border-l-4 border-green-400">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>
+            <p class="font-bold text-gray-800 text-sm">ゴール</p>
+          </div>
+          <p class="text-sm text-gray-600">「なぜその設定にしたか」を根拠を持って上長に説明できる</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- スキルの育て方 -->
+    <div class="section-card" id="育て方">
+      <div class="flex items-center gap-2 mb-6">
+        <i data-lucide="trending-up" class="w-6 h-6 text-blue-500"></i>
+        <h2 class="text-xl font-bold text-gray-800">スキルの育て方：最初はダメだった</h2>
+      </div>
+
+      <div class="flex items-start gap-4 mb-8">
+        <img src="./images/マスター-標準-512×512-透過.png"
+             alt="マスター" class="w-20 h-20 object-contain flex-shrink-0">
+        <div class="char-bubble master-bubble flex-1">
+          <p class="text-base"><span class="font-bold text-blue-700">マスター:</span><br>
+            最初のスキル<span class="text-xs opacity-70">（AIへの指示書）</span>は荒削りで、生成された図解も「なんか違う」の連続でした。<br>
+            だから<strong>育てました</strong>。図解へのFB（フィードバック）をスキル自体に反映させながら、少しずつよくしていったんです。
+          </p>
+        </div>
+      </div>
+
+      <!-- フロー図 -->
+      <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-5 mb-6">
+        <p class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+          <i data-lucide="repeat" class="w-4 h-4 text-blue-500"></i>
+          スキル改善ループ
+        </p>
+        <div class="step-flow justify-center">
+          <div class="step-box bg-amber-100 text-amber-800">
+            <div class="flex items-center gap-1.5">
+              <i data-lucide="file-text" class="w-4 h-4"></i>図解を生成
+            </div>
+          </div>
+          <span class="arrow">→</span>
+          <div class="step-box bg-red-100 text-red-800">
+            <div class="flex items-center gap-1.5">
+              <i data-lucide="message-square" class="w-4 h-4"></i>FBを出す
+            </div>
+          </div>
+          <span class="arrow">→</span>
+          <div class="step-box bg-blue-100 text-blue-800">
+            <div class="flex items-center gap-1.5">
+              <i data-lucide="lightbulb" class="w-4 h-4"></i>改善案を出す
+            </div>
+          </div>
+          <span class="arrow">→</span>
+          <div class="step-box bg-green-100 text-green-800">
+            <div class="flex items-center gap-1.5">
+              <i data-lucide="check" class="w-4 h-4"></i>スキルに反映
+            </div>
+          </div>
+          <span class="arrow">→</span>
+          <div class="step-box bg-gray-100 text-gray-700 font-bold">
+            くり返す…
+          </div>
+        </div>
+      </div>
+
+      <!-- 改善指示の型 -->
+      <div class="term-explain">
+        <div class="flex items-start gap-3">
+          <i data-lucide="lightbulb" class="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5"></i>
+          <div>
+            <p class="font-bold text-purple-800 mb-2">改善指示の黄金パターン</p>
+            <p class="text-sm text-gray-700 leading-relaxed">
+              <strong>「自分の改善案」 ＋ 「あなたの改善提案も聞かせて」</strong><br>
+              → 自分の案にプラスαした提案が返ってくることが多かった。あとは採用するだけ！
+            </p>
+          </div>
+      </div>
+    </div>
+
+      <!-- ▼ 実際の送信例 -->
+      <div class="mt-4 mb-6 rounded-xl overflow-hidden border border-purple-200 text-sm">
+        <div class="px-4 py-2 bg-purple-50 border-b border-purple-100 flex items-center gap-2">
+          <i data-lucide="message-square-text" class="w-4 h-4 text-purple-500"></i>
+          <span class="text-xs font-bold text-purple-700 uppercase tracking-wide">実際の送信例</span>
+        </div>
+        <!-- 自分の入力 -->
+        <div class="px-4 py-3 bg-white">
+          <div class="flex items-start gap-2">
+            <span class="text-xs bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5">自分</span>
+            <p class="text-gray-700 leading-relaxed">「この表現は読み手がイメージしにくいと感じた。<strong>具体例がないからだと思う</strong>のですが、あなたの改善案も聞かせてください」</p>
+          </div>
+        </div>
+        <!-- AI の返答 -->
+        <div class="px-4 py-3 bg-blue-50 border-t border-purple-100">
+          <div class="flex items-start gap-2">
+            <span class="text-xs bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5">AI</span>
+            <p class="text-gray-700 leading-relaxed">「具体例不足はその通りです。加えて ①フローが動詞のみで場面が浮かばない　②黄金パターンが型だけで送信文がない　③マジくんが理解確認のみ——の 3点も原因と考えます」</p>
+          </div>
+        </div>
+        <!-- 結果 -->
+        <div class="px-4 py-2 bg-purple-50 border-t border-purple-100 flex items-center gap-2">
+          <i data-lucide="arrow-right" class="w-4 h-4 text-purple-400 flex-shrink-0"></i>
+          <p class="text-xs text-purple-700">自分の仮説にプラスαの視点が返ってきた。あとは「どれを採用するか」の判断のみ。</p>
+        </div>
+      </div>
+
+      <div class="flex items-start gap-4 mt-6">
+        <img src="./images/マジくん-調子に乗ってる-512×512-透過.png"
+             alt="マジくん" class="w-20 h-20 object-contain flex-shrink-0">
+        <div class="char-bubble maji-bubble flex-1">
+          <p class="text-base"><span class="font-bold text-amber-700">マジくん:</span><br>
+            なるほど、<strong>「自分の仮説 ＋ あなたの案も教えて」</strong>で返すと、AIが自分の意図を起点にプラスαしてくれるんですね。「AIに全部丸投げ」とは全然違う！
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 構成の工夫 -->
+    <div class="section-card" id="構成">
+      <div class="flex items-center gap-2 mb-2">
+        <i data-lucide="layout" class="w-6 h-6 text-purple-500"></i>
+        <h2 class="text-xl font-bold text-gray-800">構成の工夫</h2>
+      </div>
+      <p class="text-sm text-gray-500 mb-6">図解の「読みやすさ・理解しやすさ」を上げるために追加・改善した4点</p>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <!-- 1 -->
+        <div class="point-card">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+              <span class="text-red-600 font-bold text-sm">1</span>
+            </div>
+            <span class="badge badge-red"><i data-lucide="zap" class="w-3 h-3"></i> 必須</span>
+          </div>
+          <p class="font-bold text-gray-800 mb-2">冒頭に「ざっくり一言」</p>
+          <p class="text-sm text-gray-600 leading-relaxed">
+            問いに対する本質的な答えを <strong>30字以内</strong> で冒頭に置く。読んだ瞬間に「何の話か」がわかる粒度に。
+          </p>
+          <div class="mt-3 bg-gray-50 rounded-lg p-3">
+            <p class="text-xs text-gray-400 mb-1">例:</p>
+            <p class="text-sm text-gray-700 font-medium">「ChatGPTとClaudeの違いは、<br>得意な作業の種類と文書量の上限にある」</p>
+          </div>
+        </div>
+
+        <!-- 2 -->
+        <div class="point-card">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <span class="text-blue-600 font-bold text-sm">2</span>
+            </div>
+            <span class="badge badge-blue"><i data-lucide="terminal" class="w-3 h-3"></i> 全体像</span>
+          </div>
+          <p class="font-bold text-gray-800 mb-2">ASCIIアートで全体像を俯瞰</p>
+          <p class="text-sm text-gray-600 leading-relaxed mb-3">
+            詳細に入る前に「登場人物と流れ」を一枚絵で把握させる。文字だけで描く図（テキスト構造図）は、どんな環境でも崩れない。
+          </p>
+          <p class="text-xs text-gray-400 mb-1">例: Slack でメッセージが届くまでの流れ</p>
+          <div class="ascii-box" style="padding: 0.75rem 1rem;">
+            <pre style="font-size:0.7rem; line-height:1.6;">
+[自分のPC] ── ① 送信 ──▶ [Slackサーバ]
+                                │
+                      ② 届いてる？ ─▶ [相手のスマホ]
+                                │
+                      ③ 通知 ◀─ プッシュ通知</pre>
+          </div>
+        </div>
+
+        <!-- 3 -->
+        <div class="point-card">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+              <span class="text-purple-600 font-bold text-sm">3</span>
+            </div>
+            <span class="badge badge-purple"><i data-lucide="book-open" class="w-3 h-3"></i> 略語補足</span>
+          </div>
+          <p class="font-bold text-gray-800 mb-2">30代エンジニアが調べないとわからない略語に補足</p>
+          <p class="text-sm text-gray-600 leading-relaxed mb-3">
+            判断の目安: 「調べないとわからない用語のみ」に絞る。補足が多すぎると視覚ノイズになる。
+          </p>
+          <div class="flex flex-col gap-1.5">
+            <div class="flex items-center gap-2">
+              <span class="badge badge-green text-xs">補足する</span>
+              <code class="text-xs bg-gray-100 px-2 py-0.5 rounded">SSO（一度のログインで複数サービスに入れる仕組み）</code>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="badge badge-red text-xs">補足しない</span>
+              <code class="text-xs bg-gray-100 px-2 py-0.5 rounded">URL, PDF, Wi-Fi</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 -->
+        <div class="point-card">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+              <span class="text-green-600 font-bold text-sm">4</span>
+            </div>
+            <span class="badge badge-green"><i data-lucide="external-link" class="w-3 h-3"></i> 一次情報</span>
+          </div>
+          <p class="font-bold text-gray-800 mb-2">「この説明の根拠はこれ」がその場でわかる</p>
+          <p class="text-sm text-gray-600 leading-relaxed mb-3">
+            末尾にURLをまとめると「どれがどの説明の根拠か」が追えなくなる。説明の直後に置くことで、読みながら即確認できる。
+          </p>
+          <!-- ミニ Before / After -->
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:1px; background:#e5e7eb; border-radius:0.5rem; overflow:hidden; font-size:0.7rem;">
+            <div style="background:#fff8f8; padding:0.6rem 0.75rem;">
+              <p style="color:#dc2626; font-weight:700; margin-bottom:0.4rem;">✕ Before</p>
+              <p style="color:#374151; line-height:1.5;">有料プランは200Kトークンまで使えます。<br><br>…（他の説明が続く）…<br><br><span style="color:#9ca3af;">参考URL一覧<br>・Claude公式<br>・Anthropicブログ</span></p>
+            </div>
+            <div style="background:#f0fdf4; padding:0.6rem 0.75rem;">
+              <p style="color:#16a34a; font-weight:700; margin-bottom:0.4rem;">✓ After</p>
+              <p style="color:#374151; line-height:1.5;">有料プランは200Kトークンまで使えます。<span style="color:#0071e3; font-size:0.65rem;"> ↗ Claude公式</span><br><br>…（他の説明が続く）…</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- デザインの工夫 -->
+    <div class="section-card" id="デザイン">
+      <div class="flex items-center gap-2 mb-2">
+        <i data-lucide="palette" class="w-6 h-6 text-pink-500"></i>
+        <h2 class="text-xl font-bold text-gray-800">デザインの工夫</h2>
+      </div>
+      <p class="text-sm text-gray-500 mb-6">見た目のクオリティを上げるために試したこと・選んだこと</p>
+
+      <div class="flex items-start gap-4 mb-6">
+        <img src="./images/マジくん-驚き-512×512-透過.png"
+             alt="マジくん" class="w-20 h-20 object-contain flex-shrink-0">
+        <div class="char-bubble maji-bubble flex-1">
+          <p class="text-base"><span class="font-bold text-amber-700">マジくん:</span><br>
+            Appleのサイトを参考にしたと聞きましたが、具体的にどういう方法を使ったんですか？
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-start gap-4 mb-8">
+        <img src="./images/マスター-思考、分析-512×512-透過.png"
+             alt="マスター" class="w-20 h-20 object-contain flex-shrink-0">
+        <div class="char-bubble master-bubble flex-1">
+          <p class="text-base"><span class="font-bold text-blue-700">マスター:</span><br>
+            apple.com を「このスタイルで作って」と渡すだけでデザインが一変しました。言語化しにくいデザインの方向性は、参照URLを渡すのが最も確実な方法です。
+          </p>
+        </div>
+      </div>
+
+      <!-- Before / After ビジュアル -->
+      <p class="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
+        <i data-lucide="git-compare" class="w-4 h-4"></i> Before / After — デザインの変化イメージ
+      </p>
+      <div class="before-after mb-6">
+        <!-- Before -->
+        <div class="ba-cell">
+          <p class="text-xs font-bold text-red-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+            <i data-lucide="x-circle" class="w-4 h-4"></i> Before
+          </p>
+          <!-- 模擬 Before デザイン -->
+          <div style="background:#1e3058; border-radius:0.5rem; padding:0.75rem; color:white; font-size:0.75rem; margin-bottom:0.75rem;">
+            <div style="background:#b8922a; display:inline-block; padding:2px 8px; border-radius:4px; font-size:0.7rem; margin-bottom:6px;">WPA3 とは</div>
+            <p style="opacity:0.9;">SAE <span style="background:rgba(255,255,255,.2); padding:1px 6px; border-radius:9999px; font-size:0.65rem;">同時認証交換</span> を用いた認証方式。PMF <span style="background:rgba(255,255,255,.2); padding:1px 6px; border-radius:9999px; font-size:0.65rem;">管理フレーム保護</span> により…</p>
+            <p style="margin-top:0.5rem; font-size:0.65rem; opacity:0.6;">📎 参照した一次情報 ↓<br>• Wi-Fi Alliance WPA3 Specification<br>• RFC 7664 Dragonfly Key Exchange</p>
+          </div>
+          <ul class="space-y-1 text-xs text-gray-600">
+            <li class="flex items-start gap-1.5"><i data-lucide="minus" class="w-3 h-3 text-red-400 flex-shrink-0 mt-0.5"></i>略語バッジが多く視覚ノイズ</li>
+            <li class="flex items-start gap-1.5"><i data-lucide="minus" class="w-3 h-3 text-red-400 flex-shrink-0 mt-0.5"></i>参照リストが末尾で孤立</li>
+            <li class="flex items-start gap-1.5"><i data-lucide="minus" class="w-3 h-3 text-red-400 flex-shrink-0 mt-0.5"></i>冒頭に「ざっくり一言」なし</li>
+          </ul>
+        </div>
+        <!-- After -->
+        <div class="ba-cell" style="background:#f9fafb;">
+          <p class="text-xs font-bold text-green-600 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+            <i data-lucide="check-circle" class="w-4 h-4"></i> After（Apple スタイル）
+          </p>
+          <!-- 模擬 After デザイン -->
+          <div style="border-radius:0.5rem; overflow:hidden; margin-bottom:0.75rem; font-size:0.75rem; border:1px solid #e5e7eb;">
+            <div style="background:#1d1d1f; color:white; padding:0.75rem 1rem;">
+              <p style="font-size:0.7rem; color:#888; margin-bottom:4px; letter-spacing:.05em;">ざっくり一言</p>
+              <p style="font-weight:700; font-size:0.8rem;">「WPA3は盗み見攻撃に強い認証に刷新した規格」</p>
+            </div>
+            <div style="background:white; padding:0.75rem 1rem;">
+              <p style="color:#1d1d1f;">SAE（同時認証交換）を採用。<br>
+              <a href="#" style="font-size:0.65rem; color:#0077cc; text-decoration:none;">↗ Wi-Fi Alliance WPA3 仕様書</a></p>
+            </div>
+          </div>
+          <ul class="space-y-1 text-xs text-gray-600">
+            <li class="flex items-start gap-1.5"><i data-lucide="plus" class="w-3 h-3 text-green-500 flex-shrink-0 mt-0.5"></i>黒×白セクション交互でシンプル</li>
+            <li class="flex items-start gap-1.5"><i data-lucide="plus" class="w-3 h-3 text-green-500 flex-shrink-0 mt-0.5"></i>出典は主張の直後にインライン</li>
+            <li class="flex items-start gap-1.5"><i data-lucide="plus" class="w-3 h-3 text-green-500 flex-shrink-0 mt-0.5"></i>冒頭「ざっくり一言」を優先表示</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 4点カード -->
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="point-card border-l-4 border-pink-400">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="monitor" class="w-5 h-5 text-pink-500"></i>
+            <p class="font-bold text-gray-800">Apple スタイルの採用</p>
+          </div>
+          <p class="text-sm text-gray-600">apple.com を参照渡しして「このスタイルで」と指示。言語化不要でデザイン方向性を伝えられた。</p>
+          <div class="mt-3 flex items-start gap-2 bg-orange-50 rounded-lg px-3 py-2 border border-orange-100">
+            <i data-lucide="triangle-alert" class="w-3.5 h-3.5 text-orange-400 flex-shrink-0 mt-0.5"></i>
+            <p class="text-xs text-orange-700">シンプルにしすぎると要点が埋もれやすい。強調のメリハリが課題。</p>
+          </div>
+        </div>
+        <div class="point-card border-l-4 border-blue-400">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="grid" class="w-5 h-5 text-blue-500"></i>
+            <p class="font-bold text-gray-800">見出しにイメージアイコンを付与</p>
+          </div>
+          <p class="text-sm text-gray-600">シンプルさと情報量はトレードオフ。見出しに解説の『イメージアイコン』を付与。スッと頭に入る構成を採用。</p>
+        </div>
+        <div class="point-card border-l-4 border-green-400">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="navigation" class="w-5 h-5 text-green-500"></i>
+            <p class="font-bold text-gray-800">スクロールしてもついてくるナビ（お気に入り）</p>
+          </div>
+          <p class="text-sm text-gray-600">スクロールしても上部に章リンクが残り続ける。長い図解でもどこにいるか迷わない。発表時のジャンプにも便利。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section-card" id="まとめ">
+      <div class="flex items-center gap-2 mb-6">
+        <i data-lucide="award" class="w-6 h-6 text-yellow-500"></i>
+        <h2 class="text-xl font-bold text-gray-800">まとめ — このスキルから学んだこと</h2>
+      </div>
+
+      <div class="flex items-start gap-4 mb-8">
+        <img src="./images/マスター-諭す-512×512-透過.png"
+             alt="マスター" class="w-20 h-20 object-contain flex-shrink-0">
+        <div class="char-bubble master-bubble flex-1">
+          <p class="text-base"><span class="font-bold text-blue-700">マスター:</span><br>
+            スキルは「作って終わり」ではなく「育てるもの」です。<br>
+            <strong>FB → 改善 → 再実行のループを速く回す</strong>ほうが、最初から完璧を目指すより精度が上がります。
+          </p>
+        </div>
+      </div>
+
+      <!-- まとめ3点 -->
+      <div class="bg-gradient-to-r from-blue-50 to-pink-50 rounded-xl p-6">
+        <p class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+          <i data-lucide="check-circle" class="w-4 h-4 text-green-500"></i>
+          このスキル作成から持ち帰ってほしい3点
+        </p>
+        <div class="flex flex-col gap-3">
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center font-bold flex-shrink-0 mt-0.5">1</div>
+            <p class="text-sm text-gray-700 leading-relaxed"><strong>スキルは育てるもの。</strong> 最初の出力に一喜一憂せず、FB × 改善ループを速く回す</p>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 rounded-full bg-pink-500 text-white text-xs flex items-center justify-center font-bold flex-shrink-0 mt-0.5">2</div>
+            <p class="text-sm text-gray-700 leading-relaxed"><strong>改善指示は「自分の案 ＋ AI の提案も聞く」セットで。</strong> AI が上乗せした改善を GO 出しするだけでどんどんよくなる</p>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 rounded-full bg-purple-500 text-white text-xs flex items-center justify-center font-bold flex-shrink-0 mt-0.5">3</div>
+            <p class="text-sm text-gray-700 leading-relaxed"><strong>デザインは「参照渡し」が楽。</strong> 言語化しにくいデザインはサイトURLを直接渡して「このスタイルで」と伝えるだけでいい</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- フッター -->
+  <footer class="header-gradient text-white py-6 mt-4">
+    <div class="max-w-4xl mx-auto px-4 text-center">
+      <p class="text-sm opacity-80">Driven School 課題発表 / 本気AI — 2026年4月</p>
+    </div>
+  </footer>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>

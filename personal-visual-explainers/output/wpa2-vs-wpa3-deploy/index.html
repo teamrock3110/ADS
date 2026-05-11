@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WPA2 vs WPA3 — 認証方式の違いを原理から理解する</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif;
+      background: #ffffff;
+      color: #1d1d1f;
+      overflow-x: hidden;
+    }
+
+    .hero {
+      background: #000000;
+      text-align: center;
+      padding: 120px 24px 96px;
+    }
+    .hero-eyebrow {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #6e6e73;
+      margin-bottom: 20px;
+    }
+    .hero-title {
+      font-size: clamp(3rem, 8vw, 6rem);
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 1.0;
+      color: #f5f5f7;
+      margin-bottom: 24px;
+    }
+    .hero-subtitle {
+      font-size: clamp(1rem, 2.5vw, 1.375rem);
+      font-weight: 400;
+      line-height: 1.6;
+      color: #a1a1a6;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .summary-strip {
+      background: #1d1d1f;
+      padding: 32px 24px;
+      text-align: center;
+      border-top: 1px solid #2d2d2f;
+    }
+    .summary-strip p {
+      font-size: 1.125rem;
+      font-weight: 500;
+      color: #f5f5f7;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+    .summary-strip strong { color: #ffffff; font-weight: 600; }
+
+    .section-light  { background: #ffffff;  padding: 96px 24px; }
+    .section-gray   { background: #f5f5f7; padding: 96px 24px; }
+    .section-dark   { background: #1d1d1f; padding: 96px 24px; }
+    .section-black  { background: #000000; padding: 96px 24px; }
+
+    .container { max-width: 980px; margin: 0 auto; }
+
+    .section-eyebrow {
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #6e6e73;
+      margin-bottom: 12px;
+    }
+    .section-eyebrow-light { color: #86868b; }
+    .section-title {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      color: #1d1d1f;
+      margin-bottom: 20px;
+    }
+    .section-title-light { color: #f5f5f7; }
+    .section-body { font-size: 1.0625rem; line-height: 1.7; color: #6e6e73; }
+    .section-body-light { color: #a1a1a6; }
+    .section-body strong { color: #1d1d1f; font-weight: 600; }
+    .section-body-light strong { color: #f5f5f7; }
+
+    .source-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: #0071e3;
+      text-decoration: none;
+    }
+    .source-link:hover { text-decoration: underline; }
+    .source-link-light { color: #2997ff; }
+    .speculation-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: #86868b;
+    }
+
+    .ascii-wrap {
+      background: #000000;
+      border-radius: 18px;
+      padding: 40px 48px;
+      overflow-x: auto;
+      margin: 40px 0;
+    }
+    .ascii-wrap pre {
+      font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+      font-size: 0.875rem;
+      line-height: 1.75;
+      color: #30d158;
+      margin: 0;
+      white-space: pre;
+    }
+
+    .split-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: #d2d2d7;
+      border-radius: 18px;
+      overflow: hidden;
+      margin: 48px 0;
+    }
+    @media (max-width: 720px) { .split-grid { grid-template-columns: 1fr; } }
+    .split-cell { padding: 40px 36px; background: #ffffff; }
+    .split-cell-gray { background: #f5f5f7; }
+    .split-cell-dark { background: #2d2d2f; }
+
+    .card-grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: #d2d2d7;
+      border-radius: 18px;
+      overflow: hidden;
+      margin: 48px 0;
+    }
+    @media (max-width: 900px) { .card-grid-3 { grid-template-columns: 1fr; } }
+    .card-cell { padding: 36px 32px; background: #f5f5f7; }
+    .card-cell-white { background: #ffffff; }
+    .card-cell-dark { background: #2d2d2f; }
+    .card-num { font-size: 2.5rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: #1d1d1f; margin-bottom: 12px; }
+    .card-num-light { color: #f5f5f7; }
+    .card-label { font-size: 1rem; font-weight: 600; color: #1d1d1f; margin-bottom: 8px; }
+    .card-label-light { color: #f5f5f7; }
+    .card-desc { font-size: 0.9375rem; line-height: 1.6; color: #6e6e73; }
+    .card-desc-light { color: #86868b; }
+
+    .step-list { list-style: none; padding: 0; margin: 32px 0; }
+    .step-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+      padding: 24px 0;
+      border-top: 1px solid #e8e8ed;
+    }
+    .step-item-dark { border-top: 1px solid #2d2d2f; }
+    .step-num {
+      flex-shrink: 0;
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: #1d1d1f; color: #ffffff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8125rem; font-weight: 700;
+    }
+    .step-num-green { background: #30d158; color: #000; }
+    .step-num-red   { background: #ff3b30; color: #fff; }
+    .step-title { font-size: 1rem; font-weight: 600; color: #1d1d1f; margin-bottom: 4px; }
+    .step-title-light { color: #f5f5f7; }
+    .step-body { font-size: 0.9375rem; line-height: 1.6; color: #6e6e73; }
+    .step-body-light { color: #86868b; }
+
+    .compare-header, .compare-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+    }
+    @media (max-width: 640px) {
+      .compare-header, .compare-row { grid-template-columns: 1fr 1fr 1fr; }
+    }
+    .compare-row {
+      padding: 16px 0;
+      border-top: 1px solid #2d2d2f;
+      align-items: start;
+    }
+    .compare-cell { padding: 0 12px; font-size: 0.9375rem; }
+    .compare-cell:first-child { padding-left: 0; font-weight: 600; color: #f5f5f7; }
+    .compare-cell.good    { color: #30d158; }
+    .compare-cell.bad     { color: #ff453a; }
+    .compare-cell.neutral { color: #86868b; }
+
+    .callout { background: #000000; border-radius: 18px; padding: 40px 48px; margin: 48px 0; }
+    @media (max-width: 640px) { .callout { padding: 32px 24px; } }
+
+    .badge-tag {
+      display: inline-block;
+      background: #f2f2f7;
+      color: #6e6e73;
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+
+    .sticky-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(29,29,31,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid #2d2d2f;
+    }
+    .sticky-nav-inner {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      overflow-x: auto;
+    }
+    .sticky-nav-inner::-webkit-scrollbar { display: none; }
+    .nav-link { font-size: 0.8125rem; font-weight: 500; color: #86868b; text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+    .nav-link:hover { color: #f5f5f7; }
+    .nav-sep { color: #2d2d2f; font-size: 0.75rem; }
+
+    footer {
+      background: #f5f5f7;
+      padding: 48px 24px;
+      border-top: 1px solid #d2d2d7;
+    }
+    footer p { font-size: 0.8125rem; color: #6e6e73; max-width: 980px; margin: 0 auto; line-height: 1.8; }
+  </style>
+</head>
+<body>
+
+  <!-- ① HERO -->
+  <section class="hero">
+    <p class="hero-eyebrow">ネットワーク / Wi-Fiセキュリティ</p>
+    <h1 class="hero-title">WPA2 vs WPA3</h1>
+    <p class="hero-subtitle">認証方式の違いを原理から理解し、社内Wi-Fi移行判断の根拠を持つ</p>
+  </section>
+
+  <!-- ② ざっくり一言 -->
+  <div class="summary-strip">
+    <p>ざっくり一言: <strong>WPA3は「パスワード盗み見攻撃」に強い認証方式に刷新した規格</strong></p>
+  </div>
+
+  <!-- ③ スティッキーナビ -->
+  <nav class="sticky-nav">
+    <div class="sticky-nav-inner">
+      <a href="#overview" class="nav-link">全体像</a>
+      <span class="nav-sep">|</span>
+      <a href="#structures" class="nav-link">3つの構造</a>
+      <span class="nav-sep">|</span>
+      <a href="#wpa2" class="nav-link">WPA2の原理</a>
+      <span class="nav-sep">|</span>
+      <a href="#wpa3" class="nav-link">WPA3の原理</a>
+      <span class="nav-sep">|</span>
+      <a href="#compare" class="nav-link">比較</a>
+      <span class="nav-sep">|</span>
+      <a href="#enterprise" class="nav-link">移行ポイント</a>
+      <span class="nav-sep">|</span>
+      <a href="#summary" class="nav-link">まとめ</a>
+    </div>
+  </nav>
+
+  <!-- ④ 問いカード -->
+  <section class="section-gray">
+    <div class="container" style="text-align:center; max-width:720px;">
+      <p class="section-eyebrow">この図解が答える問い</p>
+      <h2 class="section-title">WPA3はWPA2の<br>何を、なぜ、どのように改善したのか。</h2>
+      <p class="section-body">認証ハンドシェイクの仕組みから理解し、「なぜWPA3が必要か」を自分の言葉で説明できる状態になる。</p>
+    </div>
+  </section>
+
+  <!-- ⑤ 全体像（ASCIIアート） -->
+  <section class="section-black" id="overview">
+    <div class="container">
+      <p class="section-eyebrow section-eyebrow-light">全体像</p>
+      <h2 class="section-title section-title-light">認証ハンドシェイクの比較</h2>
+      <p class="section-body section-body-light" style="max-width:680px">WPA2（左）はhandshake中のパケットをキャプチャするだけでオフライン辞書攻撃が可能。WPA3（右）は鍵交換の設計を変え、それを原理的に不可能にした。</p>
+
+      <div class="ascii-wrap">
+        <pre>
+【WPA2-Personal: PSK + 4-way handshake】
+
+[クライアント]                   [AP]
+      |                           |
+      |  Msg1: ANonce             |
+      |<--------------------------|
+      |  Msg2: SNonce + MIC(PSK)  |
+      |-------------------------->|   ← ここをキャプチャして辞書攻撃可能
+      |  Msg3: GTK + MIC          |
+      |<--------------------------|
+      |  Msg4: ACK                |
+      |-------------------------->|
+      |  === データ通信 (CCMP) ===|
+
+  ⚠  PSKを知っていればhandshakeキャプチャで
+     オフライン辞書攻撃が可能（IEEE 802.11i-2004 による設計上の特性）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【WPA3-Personal: SAE (Dragonfly Key Exchange)】
+
+[クライアント]                   [AP]
+      |                           |
+      |  SAE Commit               |
+      |<=========================>|  ← 双方向・同時に計算
+      |  SAE Confirm              |   パスワード自体は送受信しない
+      |<=========================>|
+      |  4-way handshake (PTK生成)|
+      |<=========================>|
+      |  === データ通信 (CCMP) ===|
+
+  ✓  毎回異なるPMKを生成 → 前方秘匿性あり
+  ✓  オフライン辞書攻撃に耐性（RFC 7664 §1.2.2）
+  ✓  PMF（管理フレーム保護）が必須（IEEE 802.11w）
+  ※  能動的な繰り返し推測は可能（RFC 7664 §4）
+        </pre>
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:24px;">
+        <span style="font-size:0.8125rem; color:#86868b;"><code style="color:#30d158">PSK</code> = Wi-Fiパスワード（事前共有鍵）</span>
+        <span style="font-size:0.8125rem; color:#86868b;"><code style="color:#30d158">PMK</code> = セッション鍵の元となる鍵</span>
+        <span style="font-size:0.8125rem; color:#86868b;"><code style="color:#30d158">PTK</code> = 通信を暗号化するセッション鍵</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑥ まず理解する3つの構造 -->
+  <section class="section-light" id="structures">
+    <div class="container">
+      <p class="section-eyebrow">まず理解する</p>
+      <h2 class="section-title">3つの構造</h2>
+      <p class="section-body" style="max-width:560px; margin-bottom:0">この順に理解すると全体像がつながる。</p>
+
+      <div class="card-grid-3" style="margin-top:48px">
+        <div class="card-cell card-cell-white">
+          <div class="card-num">01</div>
+          <div class="badge-tag" style="margin-bottom:12px">骨格</div>
+          <p class="card-label">PSK vs SAE<br>認証方式の根本的な違い</p>
+          <p class="card-desc">WPA2のPSK方式はhandshakeをキャプチャするだけでオフライン辞書攻撃が可能。WPA3のSAE（Simultaneous Authentication of Equals＝対等な同時認証）は攻撃者が毎回オンラインで試す必要があり、高速総当たりが不可能になる。パスワードが弱くても攻撃コストが上がる。</p>
+          <a href="https://www.wi-fi.org/discover-wi-fi/security" target="_blank" class="source-link" style="display:block; margin-top:16px">↗ Wi-Fi Alliance Security</a>
+          <a href="https://www.rfc-editor.org/rfc/rfc7664" target="_blank" class="source-link" style="display:block; margin-top:4px">↗ RFC 7664 Dragonfly §1.2.2</a>
+        </div>
+        <div class="card-cell">
+          <div class="card-num">02</div>
+          <div class="badge-tag" style="margin-bottom:12px">補足</div>
+          <p class="card-label">PMF必須化<br>管理フレームの保護</p>
+          <p class="card-desc">Wi-Fiの「切断命令」などの管理フレームはWPA2では任意保護（802.11w）。WPA3ではPMF（Protected Management Frames＝管理フレーム保護）が必須となり、偽の切断命令による強制切断攻撃への耐性が向上する。</p>
+          <a href="https://standards.ieee.org/ieee/802.11w/3736" target="_blank" class="source-link" style="display:block; margin-top:16px">↗ IEEE 802.11w-2009</a>
+          <a href="https://www.wi-fi.org/discover-wi-fi/security" target="_blank" class="source-link" style="display:block; margin-top:4px">↗ Wi-Fi Alliance（PMF必須の記載）</a>
+        </div>
+        <div class="card-cell card-cell-white">
+          <div class="card-num">03</div>
+          <div class="badge-tag" style="margin-bottom:12px">応用</div>
+          <p class="card-label">OWE<br>オープンネットワークの暗号化</p>
+          <p class="card-desc">フリーWi-Fiのような認証なしネットワークでも、WPA3のOWE（Opportunistic Wireless Encryption＝機会的無線暗号化）を使うと通信が暗号化される。<strong>ただしOWEはAPの認証を提供しない</strong>ため、偽AP（MITM攻撃）への対策は別途必要。</p>
+          <a href="https://www.rfc-editor.org/rfc/rfc8110" target="_blank" class="source-link" style="display:block; margin-top:16px">↗ RFC 8110 §7（OWEのセキュリティ上の制限）</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑦ WPA2詳細 -->
+  <section class="section-gray" id="wpa2">
+    <div class="container">
+      <p class="section-eyebrow">WPA2の認証</p>
+      <h2 class="section-title">PSK + 4-way handshake</h2>
+      <p class="section-body" style="max-width:680px">
+        WPA2-PersonalはPSK（Wi-Fiパスワード）という事前に共有した鍵を双方が持ち、4-way handshakeで「同じPSKを知っているか」をMIC（Message Integrity Code＝改ざん検知コード）で検証しながらセッション鍵を生成する。
+        この方式の根本問題は、<strong>EAPOL（EAPをLAN上で運ぶフレーム形式）をキャプチャするだけで、接続なしにオフラインでPSK候補を検証できる</strong>点にある。GPUを使えば高速に総当たりできる。
+      </p>
+      <a href="https://standards.ieee.org/ieee/802.11i/3127" target="_blank" class="source-link" style="display:block; margin-top:12px">↗ IEEE 802.11i-2004（4-way handshake・CCMP・802.1X認証の定義）</a>
+
+      <ul class="step-list" style="margin-top:48px">
+        <li class="step-item">
+          <div class="step-num">1</div>
+          <div>
+            <p class="step-title">AP → クライアント: ANonce</p>
+            <p class="step-body">APが生成した使い捨て乱数（ANonce）を送信</p>
+          </div>
+        </li>
+        <li class="step-item" style="background:rgba(255,59,48,0.04); border-radius:8px; padding:16px; border-top:none; margin-bottom:4px">
+          <div class="step-num step-num-red">2</div>
+          <div>
+            <p class="step-title" style="color:#ff3b30">クライアント → AP: SNonce + MIC ← 攻撃者はここをキャプチャする</p>
+            <p class="step-body">クライアントが生成した乱数（SNonce）とMICを送信。<strong style="color:#ff3b30">このフレームをオフラインで解析することで辞書攻撃が可能。</strong> PSK候補ごとに「このMICになるか」をオフラインで計算できる。</p>
+          </div>
+        </li>
+        <li class="step-item">
+          <div class="step-num">3</div>
+          <div>
+            <p class="step-title">AP → クライアント: GTK + MIC</p>
+            <p class="step-body">GTK（Group Temporal Key＝ブロードキャスト用グループ鍵）とMICを送信。PTKが確定する。</p>
+          </div>
+        </li>
+        <li class="step-item">
+          <div class="step-num">4</div>
+          <div>
+            <p class="step-title">クライアント → AP: ACK</p>
+            <p class="step-body">以降 AES-CCMPで暗号化通信開始</p>
+          </div>
+        </li>
+      </ul>
+
+      <div class="split-grid" style="margin-top:48px">
+        <div class="split-cell">
+          <p style="font-size:0.8rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#ff3b30; margin-bottom:16px">脆弱ポイント</p>
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:16px;">
+            <li>
+              <p style="font-size:0.9375rem; font-weight:600; color:#1d1d1f; margin-bottom:2px">オフライン辞書攻撃</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">EAPOLフレームをキャプチャするだけで、あとはオフラインGPUで高速に総当たり可能</p>
+            </li>
+            <li>
+              <p style="font-size:0.9375rem; font-weight:600; color:#1d1d1f; margin-bottom:2px">KRACK（鍵の再インストール攻撃）</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">4-way handshake中にPTKを再インストールさせnonce再利用で通信を復号。ファームウェア更新で対処可能（Wi-Fi Alliance公式認定）。 <a href="https://nvd.nist.gov/vuln/detail/CVE-2017-13077" target="_blank" class="source-link" style="font-size:0.75rem">↗ CVE-2017-13077</a> <a href="https://www.wi-fi.org/security-update-october-2017" target="_blank" class="source-link" style="font-size:0.75rem">↗ Wi-Fi Alliance対応声明</a></p>
+            </li>
+            <li>
+              <p style="font-size:0.9375rem; font-weight:600; color:#1d1d1f; margin-bottom:2px">前方秘匿性なし</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">PSKが一度漏洩すると、過去にキャプチャしていたすべての通信を復号できる</p>
+            </li>
+            <li>
+              <p style="font-size:0.9375rem; font-weight:600; color:#1d1d1f; margin-bottom:2px">PMFが任意（IEEE 802.11w）</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">管理フレームが保護されないため、偽のDeauthフレームによる強制切断攻撃が可能</p>
+            </li>
+          </ul>
+        </div>
+        <div class="split-cell split-cell-gray">
+          <p style="font-size:0.8rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#6e6e73; margin-bottom:16px">WPA2が現在も使われる理由</p>
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:16px;">
+            <li>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">2018年以前の多くのデバイスはWPA3非対応</p>
+            </li>
+            <li>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">WPA3のTransition Mode（WPA2/3共存）で段階的な移行が可能 <a href="https://www.wi-fi.org/news-events/newsroom/wi-fi-alliance-introduces-wi-fi-certified-wpa3-security" target="_blank" class="source-link" style="font-size:0.75rem">↗ Wi-Fi Alliance</a></p>
+            </li>
+            <li>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">企業（802.1X）環境では攻撃耐性の多くを認証サーバ・証明書で別途担保できる</p>
+            </li>
+            <li>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">Wi-Fi Alliance は<strong>WPA3のみの新規機器購入を推奨</strong> <a href="https://www.wi-fi.org/faq/what-are-legacy-protocols" target="_blank" class="source-link" style="font-size:0.75rem">↗ Wi-Fi Alliance FAQ</a></p>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑧ WPA3詳細 -->
+  <section class="section-dark" id="wpa3">
+    <div class="container">
+      <p class="section-eyebrow section-eyebrow-light">WPA3の認証</p>
+      <h2 class="section-title section-title-light">SAE — Dragonfly Key Exchange</h2>
+      <p class="section-body section-body-light" style="max-width:680px">
+        SAE（対等な同時認証）はDragonfly（楕円曲線ベースのパスワード認証鍵交換プロトコル）とも呼ばれる。「パスワードから鍵を計算する」プロセスを双方が同時に行い、その一致を確認する設計。
+      </p>
+      <p class="section-body section-body-light" style="max-width:680px; margin-top:16px">
+        <strong>オフライン攻撃に強い理由（RFC 7664 §1.2.2）:</strong> SAEのCommit/Confirmフレームにはパスワードを直接検証するための情報が含まれない。攻撃者が1つの候補パスワードを試すには毎回実際にAPとのプロトコル交換を完了させる必要があり、高速総当たりが原理的に不可能になる。<br>
+        <strong>ただし（RFC 7664 §4）:</strong> 能動的な繰り返し推測は可能。パスワードが十分に強くない場合、時間をかけて攻撃される可能性は残る。実装側での失敗回数制限・ブロック等の対策も重要。
+      </p>
+      <a href="https://www.rfc-editor.org/rfc/rfc7664" target="_blank" class="source-link source-link-light" style="display:block; margin-top:12px">↗ RFC 7664 Dragonfly Key Exchange（§1.2.2 辞書攻撃耐性, §4 セキュリティ上の注意）</a>
+
+      <ul class="step-list" style="margin-top:48px">
+        <li class="step-item step-item-dark">
+          <div class="step-num step-num-green">1</div>
+          <div>
+            <p class="step-title step-title-light">Commit Exchange（双方向・同時）</p>
+            <p class="step-body step-body-light">双方がパスワードから数学的に変換したスカラー値・楕円曲線要素を交換。<strong>パスワード自体は送受信されない。</strong></p>
+          </div>
+        </li>
+        <li class="step-item step-item-dark">
+          <div class="step-num step-num-green">2</div>
+          <div>
+            <p class="step-title step-title-light">Confirm Exchange（双方向）</p>
+            <p class="step-body step-body-light">双方が確認値を交換し「同じパスワードを持っているか」を検証。PMKが確定。<strong>セッションごとに異なるPMKを生成 → 前方秘匿性を実現。</strong></p>
+          </div>
+        </li>
+        <li class="step-item step-item-dark">
+          <div class="step-num step-num-green">3</div>
+          <div>
+            <p class="step-title step-title-light">4-way handshake（PTK生成）</p>
+            <p class="step-body step-body-light">SAE完了後、WPA2と同じ4-way handshakeでPTKを生成し暗号通信開始。KRACKへの対策としてファームウェア更新は引き続き重要。</p>
+          </div>
+        </li>
+      </ul>
+
+      <div class="callout">
+        <p style="font-size:0.8rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#30d158; margin-bottom:20px">WPA3で解決された点</p>
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div style="display:flex; gap:16px; align-items:flex-start">
+            <span style="color:#30d158; font-size:1.25rem; flex-shrink:0; line-height:1.4">✓</span>
+            <div>
+              <p style="font-size:0.9375rem; font-weight:600; color:#f5f5f7; margin-bottom:4px">オフライン辞書攻撃への耐性</p>
+              <p style="font-size:0.875rem; color:#86868b; line-height:1.5">パケットキャプチャだけでは攻撃不可。毎回オンラインで試す必要があり、高速総当たりが不可能になる。 <a href="https://www.rfc-editor.org/rfc/rfc7664" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ RFC 7664 §1.2.2</a></p>
+            </div>
+          </div>
+          <div style="display:flex; gap:16px; align-items:flex-start">
+            <span style="color:#30d158; font-size:1.25rem; flex-shrink:0; line-height:1.4">✓</span>
+            <div>
+              <p style="font-size:0.9375rem; font-weight:600; color:#f5f5f7; margin-bottom:4px">前方秘匿性</p>
+              <p style="font-size:0.875rem; color:#86868b; line-height:1.5">セッションごとに異なるPMKを生成。PSKが将来漏洩しても過去通信は復号不可。</p>
+            </div>
+          </div>
+          <div style="display:flex; gap:16px; align-items:flex-start">
+            <span style="color:#30d158; font-size:1.25rem; flex-shrink:0; line-height:1.4">✓</span>
+            <div>
+              <p style="font-size:0.9375rem; font-weight:600; color:#f5f5f7; margin-bottom:4px">PMF必須化</p>
+              <p style="font-size:0.875rem; color:#86868b; line-height:1.5">すべてのWPA3ネットワークでPMFが必須。<strong style="color:#f5f5f7">PMFが保護するのは管理フレーム（Deauthentication・Disassociation等）</strong>であり、偽の切断命令による強制切断攻撃への耐性が向上する。なおユーザーデータの機密性・完全性はCCMPが担保する（PMFとは別の役割）。 <a href="https://www.wi-fi.org/discover-wi-fi/security" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ Wi-Fi Alliance</a> <a href="https://standards.ieee.org/ieee/802.11w/3736" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ IEEE 802.11w</a></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑨ 比較 -->
+  <section class="section-black" id="compare">
+    <div class="container">
+      <p class="section-eyebrow section-eyebrow-light">機能比較</p>
+      <h2 class="section-title section-title-light">WPA2 vs WPA3</h2>
+
+      <div class="compare-header" style="padding-bottom:12px; border-bottom:1px solid #3d3d3f; margin-top:48px">
+        <div style="font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#6e6e73; padding-left:0">項目</div>
+        <div style="font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#6e6e73; padding:0 12px">WPA2</div>
+        <div style="font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#6e6e73; padding:0 12px">WPA3</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">Personal認証方式</div>
+        <div class="compare-cell neutral">PSK（Wi-Fiパスワード）</div>
+        <div class="compare-cell good">SAE（Dragonfly）<br><a href="https://www.wi-fi.org/discover-wi-fi/security" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ Wi-Fi Alliance</a></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">オフライン辞書攻撃</div>
+        <div class="compare-cell bad">脆弱（EAPOLキャプチャで攻撃可）</div>
+        <div class="compare-cell good">耐性あり（オンラインで試す必要）<br><a href="https://www.rfc-editor.org/rfc/rfc7664" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ RFC 7664 §1.2.2</a></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">能動的な繰り返し推測</div>
+        <div class="compare-cell bad">可能（オンライン・オフラインどちらも可）</div>
+        <div class="compare-cell neutral">オンラインのみ・低速（1回の候補検証ごとにAP接続完了が必要）<br><a href="https://www.rfc-editor.org/rfc/rfc7664" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ RFC 7664 §4</a></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">前方秘匿性</div>
+        <div class="compare-cell bad">なし（PSK漏洩で過去通信も復号可）</div>
+        <div class="compare-cell good">あり（セッションごとにPMK生成）<br><a href="https://www.rfc-editor.org/rfc/rfc7664" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ RFC 7664</a></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">PMF（管理フレーム保護）</div>
+        <div class="compare-cell bad">任意（IEEE 802.11w）</div>
+        <div class="compare-cell good">必須<br><a href="https://www.wi-fi.org/discover-wi-fi/security" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ Wi-Fi Alliance</a></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">オープン網の暗号化</div>
+        <div class="compare-cell bad">なし</div>
+        <div class="compare-cell good">OWE（AP認証はなし）<br><a href="https://www.rfc-editor.org/rfc/rfc8110" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ RFC 8110 §7</a></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">Enterprise暗号強度</div>
+        <div class="compare-cell neutral">128-bit AES</div>
+        <div class="compare-cell good">128-bit + 192-bitスイート（任意）<br><a href="https://www.wi-fi.org/news-events/newsroom/wi-fi-alliance-introduces-wi-fi-certified-wpa3-security" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ Wi-Fi Alliance</a></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">802.1X / RADIUS認証</div>
+        <div class="compare-cell neutral">変更なし</div>
+        <div class="compare-cell neutral">通常モードは変更なし <span class="speculation-tag">※ 環境依存</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑩ エンタープライズ移行 -->
+  <section class="section-light" id="enterprise">
+    <div class="container">
+      <p class="section-eyebrow">コーポレートエンジニア視点</p>
+      <h2 class="section-title">移行ポイント</h2>
+      <p class="section-body" style="max-width:680px">
+        社内Wi-FiはWPA2/3-Enterprise（802.1X + EAP + RADIUS）で運用するのが標準。WPA3-Enterprise（通常モード）への移行では、EAPの認証フロー自体は変わらないためRADIUSサーバ側の設定変更は一般的に不要。変更が必要なのはAPとクライアントデバイス側のみ。
+      </p>
+      <a href="https://www.wi-fi.org/news-events/newsroom/wi-fi-alliance-introduces-wi-fi-certified-wpa3-security" target="_blank" class="source-link" style="display:block; margin-top:12px">↗ Wi-Fi Alliance WPA3プレスリリース</a>
+      <span class="speculation-tag" style="display:inline-flex; margin-top:8px">※ 通常モード限定の推奨（環境依存あり・IEEE 802.11本文との突合が必要）</span>
+
+      <div class="split-grid" style="margin-top:56px">
+        <div class="split-cell">
+          <p style="font-size:0.8rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#6e6e73; margin-bottom:20px">移行時の注意点</p>
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:20px;">
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">デバイス対応確認が必須</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">2018年以前の多くのデバイスはWPA3非対応。移行期はTransition Mode（WPA2/3共存移行モード）を使う。<strong>ただしTransition Mode中はWPA2クライアントとの接続も許可されるため、WPA2の攻撃面が残る</strong>ことを把握した上で期間設計をする必要がある。 <a href="https://www.wi-fi.org/news-events/newsroom/wi-fi-alliance-introduces-wi-fi-certified-wpa3-security" target="_blank" class="source-link">↗ Wi-Fi Alliance</a></p>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">192-bitモードは別途確認が必要</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">WPA3-Enterprise 192-bitモード（CNSA＝米国政府推奨の高強度暗号スイート）に移行する場合、EAPメソッドや証明書の暗号アルゴリズム変更が必要な場合がある。 <a href="https://www.wi-fi.org/news-events/newsroom/wi-fi-alliance-introduces-wi-fi-certified-wpa3-security" target="_blank" class="source-link">↗ Wi-Fi Alliance</a></p>
+            </li>
+          </ul>
+        </div>
+        <div class="split-cell split-cell-gray">
+          <p style="font-size:0.8rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#6e6e73; margin-bottom:20px">用途別アドバイス</p>
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:20px;">
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">ゲストSSIDにOWEを活用できる</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">オープンSSIDをOWEに移行することで無線区間の通信を暗号化できる。ただし<strong>OWEはAPの認証を提供しない</strong>ため、偽APへの対策は別途必要。また旧OSSIDとの並走期間を設けることが推奨される。 <a href="https://www.rfc-editor.org/rfc/rfc8110" target="_blank" class="source-link">↗ RFC 8110 §6, §7</a></p>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">社内Wi-FiはEnterpriseが適切</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">WPA3-PersonalのSAEのメリットは主に家庭・IoT・共用PSKで運用していた環境向け。社内では802.1Xで運用する方がユーザーごとの認証管理ができる。</p>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑪ まとめ -->
+  <section class="section-black" id="summary">
+    <div class="container">
+      <p class="section-eyebrow section-eyebrow-light">まとめ</p>
+      <h2 class="section-title section-title-light">この図解でわかること</h2>
+
+      <div class="card-grid-3" style="margin-top:48px">
+        <div class="card-cell card-cell-dark">
+          <div class="card-num card-num-light">01</div>
+          <p class="card-label card-label-light">WPA2の原理的欠陥</p>
+          <p class="card-desc card-desc-light">PSKはEAPOLフレームをキャプチャするだけでオフライン辞書攻撃が可能。WPA3のSAEはその仕組みを変えて、オフライン攻撃を原理的に不可能にした。</p>
+        </div>
+        <div class="card-cell" style="background:#1a1a1c">
+          <div class="card-num card-num-light">02</div>
+          <p class="card-label card-label-light">WPA3の改善点と限界</p>
+          <p class="card-desc card-desc-light">PMF必須化と前方秘匿性を実現。ただしSAEでも能動的な繰り返し推測は可能（RFC 7664 §4）。OWEはAPの認証を提供しない（RFC 8110 §7）。</p>
+        </div>
+        <div class="card-cell card-cell-dark">
+          <div class="card-num card-num-light">03</div>
+          <p class="card-label card-label-light">エンタープライズ移行</p>
+          <p class="card-desc card-desc-light">802.1X環境ではRADIUSサーバの変更は一般的に不要。Transition Modeで新旧デバイスを共存させながら段階的に移行できる。</p>
+        </div>
+      </div>
+
+      <div style="margin-top:56px; padding-top:40px; border-top:1px solid #2d2d2f">
+        <p style="font-size:0.8rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#30d158; margin-bottom:20px">この理解で次にできること</p>
+        <div style="display:flex; flex-direction:column; gap:12px">
+          <div style="display:flex; gap:12px; align-items:flex-start">
+            <span style="color:#30d158; flex-shrink:0; line-height:1.6">→</span>
+            <p style="font-size:1rem; color:#f5f5f7; line-height:1.6">「なぜWPA3に移行すべきか」を認証方式の原理（SAEのオフライン攻撃耐性）から上長に説明できる</p>
+          </div>
+          <div style="display:flex; gap:12px; align-items:flex-start">
+            <span style="color:#30d158; flex-shrink:0; line-height:1.6">→</span>
+            <p style="font-size:1rem; color:#f5f5f7; line-height:1.6">移行計画策定時に「デバイスのWPA3対応状況」と「Transition Modeの期間設定」を調査項目として設計できる</p>
+          </div>
+          <div style="display:flex; gap:12px; align-items:flex-start">
+            <span style="color:#30d158; flex-shrink:0; line-height:1.6">→</span>
+            <p style="font-size:1rem; color:#f5f5f7; line-height:1.6">ゲストSSIDのOWE化について、「無線区間暗号化はできるがAP認証は提供しない」という効果と限界を踏まえて提案できる</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- フッター -->
+  <footer>
+    <p>
+      <strong>根拠とした一次情報</strong> —
+      <a href="https://www.rfc-editor.org/rfc/rfc7664" target="_blank" class="source-link">RFC 7664 Dragonfly Key Exchange（SAEの仕様・辞書攻撃耐性・セキュリティ注意事項）</a> ·
+      <a href="https://www.rfc-editor.org/rfc/rfc8110" target="_blank" class="source-link">RFC 8110 OWE（オープン網の暗号化・APなりすまし耐性の限界）</a> ·
+      <a href="https://standards.ieee.org/ieee/802.11i/3127" target="_blank" class="source-link">IEEE 802.11i-2004（4-way handshake・CCMP・802.1X連携の定義）</a> ·
+      <a href="https://standards.ieee.org/ieee/802.11w/3736" target="_blank" class="source-link">IEEE 802.11w-2009（PMFの定義）</a> ·
+      <a href="https://www.wi-fi.org/discover-wi-fi/security" target="_blank" class="source-link">Wi-Fi Alliance Security（WPA3概要・PMF必須・WPA3-Enterprise）</a> ·
+      <a href="https://www.wi-fi.org/news-events/newsroom/wi-fi-alliance-introduces-wi-fi-certified-wpa3-security" target="_blank" class="source-link">Wi-Fi Alliance WPA3プレスリリース 2018-06-25</a> ·
+      <a href="https://nvd.nist.gov/vuln/detail/CVE-2017-13077" target="_blank" class="source-link">NIST NVD CVE-2017-13077（KRACK）</a> ·
+      <a href="https://www.wi-fi.org/security-update-october-2017" target="_blank" class="source-link">Wi-Fi Alliance KRACKセキュリティ対応声明 2017-10</a>
+    </p>
+  </footer>
+
+</body>
+</html>

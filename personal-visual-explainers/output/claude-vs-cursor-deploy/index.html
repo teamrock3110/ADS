@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude.ai vs Cursor — 仕組みの違いを原理から理解する</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif;
+      background: #ffffff;
+      color: #1d1d1f;
+      overflow-x: hidden;
+    }
+    .hero { background: #000000; text-align: center; padding: 120px 24px 96px; }
+    .hero-eyebrow { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #6e6e73; margin-bottom: 20px; }
+    .hero-title { font-size: clamp(3rem, 8vw, 6rem); font-weight: 700; letter-spacing: -0.04em; line-height: 1.0; color: #f5f5f7; margin-bottom: 24px; }
+    .hero-subtitle { font-size: clamp(1rem, 2.5vw, 1.375rem); font-weight: 400; line-height: 1.6; color: #a1a1a6; max-width: 600px; margin: 0 auto; }
+    .summary-strip { background: #1d1d1f; padding: 32px 24px; text-align: center; border-top: 1px solid #2d2d2f; }
+    .summary-strip p { font-size: 1.125rem; font-weight: 500; color: #f5f5f7; max-width: 720px; margin: 0 auto; }
+    .summary-strip strong { color: #ffffff; font-weight: 600; }
+    .section-light  { background: #ffffff;  padding: 96px 24px; }
+    .section-gray   { background: #f5f5f7; padding: 96px 24px; }
+    .section-dark   { background: #1d1d1f; padding: 96px 24px; }
+    .section-black  { background: #000000; padding: 96px 24px; }
+    .container { max-width: 980px; margin: 0 auto; }
+    .section-eyebrow { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #6e6e73; margin-bottom: 12px; }
+    .section-eyebrow-light { color: #86868b; }
+    .section-title { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; color: #1d1d1f; margin-bottom: 20px; }
+    .section-title-light { color: #f5f5f7; }
+    .section-body { font-size: 1.0625rem; line-height: 1.7; color: #6e6e73; }
+    .section-body-light { color: #a1a1a6; }
+    .section-body strong { color: #1d1d1f; font-weight: 600; }
+    .section-body-light strong { color: #f5f5f7; }
+    .source-link { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8125rem; font-weight: 500; color: #0071e3; text-decoration: none; }
+    .source-link:hover { text-decoration: underline; }
+    .source-link-light { color: #2997ff; }
+    .speculation-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; font-weight: 500; color: #86868b; }
+    .ascii-wrap { background: #000000; border-radius: 18px; padding: 40px 48px; overflow-x: auto; margin: 40px 0; }
+    .ascii-wrap pre { font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace; font-size: 0.875rem; line-height: 1.75; color: #30d158; margin: 0; white-space: pre; }
+    .split-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #d2d2d7; border-radius: 18px; overflow: hidden; margin: 48px 0; }
+    @media (max-width: 720px) { .split-grid { grid-template-columns: 1fr; } }
+    .split-cell { padding: 40px 36px; background: #ffffff; }
+    .split-cell-gray { background: #f5f5f7; }
+    .split-cell-dark { background: #2d2d2f; }
+    .card-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: #d2d2d7; border-radius: 18px; overflow: hidden; margin: 48px 0; }
+    @media (max-width: 900px) { .card-grid-3 { grid-template-columns: 1fr; } }
+    .card-cell { padding: 36px 32px; background: #f5f5f7; }
+    .card-cell-white { background: #ffffff; }
+    .card-cell-dark { background: #2d2d2f; }
+    .card-num { font-size: 2.5rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: #1d1d1f; margin-bottom: 12px; }
+    .card-num-light { color: #f5f5f7; }
+    .card-label { font-size: 1rem; font-weight: 600; color: #1d1d1f; margin-bottom: 8px; }
+    .card-label-light { color: #f5f5f7; }
+    .card-desc { font-size: 0.9375rem; line-height: 1.6; color: #6e6e73; }
+    .card-desc-light { color: #86868b; }
+    .step-list { list-style: none; padding: 0; margin: 32px 0; }
+    .step-item { display: flex; align-items: flex-start; gap: 20px; padding: 24px 0; border-top: 1px solid #e8e8ed; }
+    .step-item-dark { border-top: 1px solid #2d2d2f; }
+    .step-num { flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: #1d1d1f; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 0.8125rem; font-weight: 700; }
+    .step-num-blue  { background: #0071e3; color: #fff; }
+    .step-num-green { background: #30d158; color: #000; }
+    .step-title { font-size: 1rem; font-weight: 600; color: #1d1d1f; margin-bottom: 4px; }
+    .step-title-light { color: #f5f5f7; }
+    .step-body { font-size: 0.9375rem; line-height: 1.6; color: #6e6e73; }
+    .step-body-light { color: #86868b; }
+    .compare-header, .compare-row { display: grid; grid-template-columns: 2fr 1fr 1fr; }
+    @media (max-width: 640px) { .compare-header, .compare-row { grid-template-columns: 1fr 1fr 1fr; } }
+    .compare-row { padding: 16px 0; border-top: 1px solid #2d2d2f; align-items: start; }
+    .compare-cell { padding: 0 12px; font-size: 0.9375rem; }
+    .compare-cell:first-child { padding-left: 0; font-weight: 600; color: #f5f5f7; }
+    .compare-cell.good    { color: #30d158; }
+    .compare-cell.neutral { color: #86868b; }
+    .compare-cell.both    { color: #f5f5f7; }
+    .callout { background: #000000; border-radius: 18px; padding: 40px 48px; margin: 48px 0; }
+    @media (max-width: 640px) { .callout { padding: 32px 24px; } }
+    .badge-tag { display: inline-block; background: #f2f2f7; color: #6e6e73; font-size: 0.75rem; font-weight: 500; padding: 2px 8px; border-radius: 20px; }
+    .badge-claude { display: inline-block; background: #e8f0fe; color: #1a56db; font-size: 0.75rem; font-weight: 600; padding: 2px 10px; border-radius: 20px; }
+    .badge-cursor { display: inline-block; background: #f0fdf4; color: #166534; font-size: 0.75rem; font-weight: 600; padding: 2px 10px; border-radius: 20px; }
+    .badge-both { display: inline-block; background: #f9fafb; color: #6e6e73; font-size: 0.75rem; font-weight: 600; padding: 2px 10px; border-radius: 20px; border: 1px solid #e5e7eb; }
+    .sticky-nav { position: sticky; top: 0; z-index: 100; background: rgba(29,29,31,0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid #2d2d2f; }
+    .sticky-nav-inner { max-width: 980px; margin: 0 auto; padding: 0 24px; height: 52px; display: flex; align-items: center; gap: 32px; overflow-x: auto; }
+    .sticky-nav-inner::-webkit-scrollbar { display: none; }
+    .nav-link { font-size: 0.8125rem; font-weight: 500; color: #86868b; text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+    .nav-link:hover { color: #f5f5f7; }
+    .nav-sep { color: #2d2d2f; font-size: 0.75rem; }
+    footer { background: #f5f5f7; padding: 48px 24px; border-top: 1px solid #d2d2d7; }
+    footer p { font-size: 0.8125rem; color: #6e6e73; max-width: 980px; margin: 0 auto; line-height: 1.8; }
+  </style>
+</head>
+<body>
+
+  <!-- HERO -->
+  <section class="hero">
+    <p class="hero-eyebrow">AI ツール / 開発環境</p>
+    <h1 class="hero-title">Claude.ai vs Cursor</h1>
+    <p class="hero-subtitle">仕組みの違いを原理から理解し、どちらをいつ使うか自分で判断できる状態になる</p>
+  </section>
+
+  <!-- ざっくり一言 -->
+  <div class="summary-strip">
+    <p>ざっくり一言: <strong>Claude.aiは対話型AI、CursorはAIが動くコードエディタ</strong></p>
+  </div>
+
+  <!-- スティッキーナビ -->
+  <nav class="sticky-nav">
+    <div class="sticky-nav-inner">
+      <a href="#settings" class="nav-link">設定のイメージ</a>
+      <span class="nav-sep">|</span>
+      <a href="#overview" class="nav-link">全体像</a>
+      <span class="nav-sep">|</span>
+      <a href="#structures" class="nav-link">3つの構造</a>
+      <span class="nav-sep">|</span>
+      <a href="#claude" class="nav-link">Claude.ai</a>
+      <span class="nav-sep">|</span>
+      <a href="#cursor" class="nav-link">Cursor</a>
+      <span class="nav-sep">|</span>
+      <a href="#compare" class="nav-link">比較</a>
+      <span class="nav-sep">|</span>
+      <a href="#governance" class="nav-link">ガバナンス</a>
+      <span class="nav-sep">|</span>
+      <a href="#when" class="nav-link">使い分け</a>
+      <span class="nav-sep">|</span>
+      <a href="#summary" class="nav-link">まとめ</a>
+    </div>
+  </nav>
+
+  <!-- 問いカード -->
+  <section class="section-gray">
+    <div class="container" style="text-align:center; max-width:720px;">
+      <p class="section-eyebrow">この図解が答える問い</p>
+      <h2 class="section-title">Claude.aiとCursorは<br>何が同じで、何が違うのか。</h2>
+      <p class="section-body">どちらもAIを使うツールだが、アーキテクチャ・コンテキストの取り込み方・実行できる操作が根本的に異なる。仕組みを理解し、「このタスクはどちらで解くべきか」を自分で判断できる状態になる。</p>
+    </div>
+  </section>
+
+  <!-- 設定変更のイメージ（使い分けの具体設定） -->
+  <section class="section-gray" id="settings">
+    <div class="container">
+      <p class="section-eyebrow">設定変更のイメージ</p>
+      <h2 class="section-title">どこを設定すると何が変わるか</h2>
+      <p class="section-body" style="max-width:680px">「使い分ける」と言っても、実際にどの設定を触ると何が変わるのかが分からないと判断できない。ツール別の主要設定ポイントと変更後の状態を整理する。</p>
+
+      <div class="split-grid" style="margin-top:48px">
+        <div class="split-cell">
+          <div class="badge-claude" style="margin-bottom:20px">Claude.ai の設定ポイント</div>
+          <ul class="step-list" style="margin-top:0">
+            <li class="step-item">
+              <div class="step-num step-num-blue">1</div>
+              <div>
+                <p class="step-title">Projects にドキュメントをアップロードする</p>
+                <p class="step-body"><strong>変更前</strong>: 会話ごとにファイルを貼り付ける必要あり。<strong>変更後</strong>: プロジェクト内でドキュメントが永続化され、RAG で自動参照される。社内規程・ベンダー仕様書・過去の障害記録を入れておくと横断的な質問ができる。
+                  <a href="https://support.claude.com/en/articles/9517075-what-are-projects" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:6px">↗ Projects 公式ヘルプ</a>
+                </p>
+              </div>
+            </li>
+            <li class="step-item">
+              <div class="step-num step-num-blue">2</div>
+              <div>
+                <p class="step-title">Project instructions（指示書）を設定する</p>
+                <p class="step-body"><strong>変更前</strong>: 毎回「コーポレートエンジニア視点で」と前置きが必要。<strong>変更後</strong>: 指示書に書いた内容がデフォルトの振る舞いになる。例: 「回答は設定変更の根拠と変更後の状態を必ず含めること」。
+                  <a href="https://support.claude.com/en/articles/9517075-what-are-projects" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:6px">↗ Projects 公式ヘルプ</a>
+                </p>
+              </div>
+            </li>
+            <li class="step-item">
+              <div class="step-num step-num-blue">3</div>
+              <div>
+                <p class="step-title">モデルを切り替える（Sonnet vs Opus）</p>
+                <p class="step-body"><strong>変更前 → 後</strong>: Sonnet は速度重視・日常の質問向け。Opus は複雑な推論・設計判断向け。設定変更の根拠となる技術的な深い説明が必要な場面では Opus を選ぶ。
+                  <a href="https://docs.anthropic.com/en/docs/about-claude/models/overview" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:6px">↗ Claude モデル一覧（Anthropic 公式）</a>
+                </p>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <div class="split-cell split-cell-gray">
+          <div class="badge-cursor" style="margin-bottom:20px">Cursor の設定ポイント</div>
+          <ul class="step-list" style="margin-top:0">
+            <li class="step-item">
+              <div class="step-num step-num-green">1</div>
+              <div>
+                <p class="step-title">バックエンドモデルを選択する</p>
+                <p class="step-body"><strong>変更前 → 後</strong>: 設定画面でモデルを切り替えると、以降の Agent / Chat がそのモデルで動く。Claude Sonnet（コスパ） / Opus（深い推論） / GPT-4o など目的で切り替え可。
+                  <a href="https://www.cursor.com" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:6px">↗ Cursor 公式（モデル選択の言及あり）</a>
+                </p>
+              </div>
+            </li>
+            <li class="step-item">
+              <div class="step-num step-num-green">2</div>
+              <div>
+                <p class="step-title">Agent モード vs Chat モードを選ぶ</p>
+                <p class="step-body"><strong>Chat</strong>: 提案だけ（ファイルは変更されない）。<strong>Agent</strong>: ファイルを実際に作成・編集・削除する。ターミナル実行も可。大きな変更前は Plan モード（Shift+Tab）でエージェントに計画を立てさせてから承認する。
+                  <a href="https://www.cursor.com/docs/agent/modes" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:6px">↗ Agent モード公式 docs</a>
+                  <a href="https://www.cursor.com/blog/plan-mode" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:4px">↗ Plan Mode 公式ブログ</a>
+                </p>
+              </div>
+            </li>
+            <li class="step-item">
+              <div class="step-num step-num-green">3</div>
+              <div>
+                <p class="step-title">Privacy Mode をオン/オフにする</p>
+                <p class="step-body"><strong>Privacy Mode OFF（デフォルト）</strong>: コードが AI 改善のために使われる可能性あり。<strong>Privacy Mode ON</strong>: モデルプロバイダーへのデータ保持ゼロ。コードが学習に使われない。社内コードを扱う場合は原則 ON にする。
+                  <a href="https://www.cursor.com/data-use" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:6px">↗ Cursor データ利用・プライバシー（公式）</a>
+                </p>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 全体像（ASCIIアート） -->
+  <section class="section-black" id="overview">
+    <div class="container">
+      <p class="section-eyebrow section-eyebrow-light">全体像</p>
+      <h2 class="section-title section-title-light">アーキテクチャの比較</h2>
+      <p class="section-body section-body-light" style="max-width:680px">「モデル」と「製品 UI」の関係が2つのツールで全く異なる。Claude.ai はモデルと UI が同じ会社（Anthropic）から。Cursor はモデルを外部から選択し、IDE というツールが主役。</p>
+
+      <div class="ascii-wrap">
+        <pre>
+【Claude.ai】
+Anthropic が「モデル」も「UI」も提供する
+
+  あなた
+    │
+    │ ブラウザ / モバイルアプリ
+    ▼
+  ┌────────────────────────────┐
+  │  Claude.ai（Anthropic製）  │
+  │  ┌──────────────────────┐  │
+  │  │ Claude モデル        │  │  ← Opus / Sonnet / Haiku
+  │  │ (Anthropic 開発)     │  │
+  │  └──────────────────────┘  │
+  │  コンテキストの取り込み先:  │
+  │  ・チャット履歴            │
+  │  ・Projects ナレッジ       │  ← アップロードしたドキュメント
+  │    └ RAG で検索して取得    │  ← 全量でなく関連箇所のみ
+  │  ・Web 検索（オプション）   │
+  └────────────────────────────┘
+  ※ ローカルファイルや IDE へのアクセスなし（Cowork 除く）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【Cursor】
+Anysphere が IDE を提供、モデルは複数社から選択可能
+
+  あなた
+    │
+    │ VS Code ベースのエディタ
+    ▼
+  ┌────────────────────────────────────────────┐
+  │  Cursor IDE（Anysphere 製）                 │
+  │                                            │
+  │  コンテキストの取り込み先:                 │
+  │  ・開いているファイル                      │
+  │  ・コードベース全体（インデックス済）      │  ← セマンティック検索
+  │  ・ターミナル出力                          │
+  │  ・Web 検索                                │
+  │                                            │
+  │  ┌──────────────────────────────────────┐  │
+  │  │ AI モデル（選択式）                  │  │
+  │  │ Claude / GPT-4 / Gemini / Grok 等    │  │  ← モデルを切り替え可
+  │  └──────────────────────────────────────┘  │
+  │                                            │
+  │  エージェントが実行できる操作:             │
+  │  ・ファイルの作成・編集・削除             │
+  │  ・ターミナルでコマンド実行               │  ← ビルド・テスト・git 等
+  │  ・Git & チェックポイント                 │
+  └────────────────────────────────────────────┘
+  ※ Cursor 上で Claude を選んでも「Cursor の機能」は Claude.ai と別物
+        </pre>
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:24px;">
+        <span style="font-size:0.8125rem; color:#86868b;"><span style="color:#2997ff">■</span> Claude.ai = AIとの会話ツール</span>
+        <span style="font-size:0.8125rem; color:#86868b;"><span style="color:#30d158">■</span> Cursor = AIを内蔵したコードエディタ</span>
+        <span style="font-size:0.8125rem; color:#86868b;"><span style="color:#86868b">RAG</span> = Retrieval Augmented Generation（検索して関連情報を取得）</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- まず理解する3つの構造 -->
+  <section class="section-light" id="structures">
+    <div class="container">
+      <p class="section-eyebrow">まず理解する</p>
+      <h2 class="section-title">3つの構造</h2>
+      <p class="section-body" style="max-width:560px; margin-bottom:0">この順に理解すると「なぜ使い分けが必要か」が腹落ちする。</p>
+
+      <div class="card-grid-3" style="margin-top:48px">
+        <div class="card-cell card-cell-white">
+          <div class="card-num">01</div>
+          <div class="badge-tag" style="margin-bottom:12px">骨格</div>
+          <p class="card-label">「モデル」と「製品」は別物</p>
+          <p class="card-desc">Claude は Anthropic が開発した AI モデル。Claude.ai はそのモデルを包んだ会話 UI（製品）。Cursor は別会社（Anysphere）が作ったコードエディタで、バックエンドのモデルとして Claude を「選択できる」関係にある。Claude.ai で Claude を使うことと、Cursor で Claude を選ぶことは<strong>全く別の体験</strong>になる。</p>
+          <a href="https://www.anthropic.com/claude" target="_blank" class="source-link" style="display:block; margin-top:16px">↗ Anthropic Claude 公式</a>
+          <a href="https://www.cursor.com" target="_blank" class="source-link" style="display:block; margin-top:4px">↗ Cursor 公式</a>
+        </div>
+        <div class="card-cell">
+          <div class="card-num">02</div>
+          <div class="badge-tag" style="margin-bottom:12px">補足</div>
+          <p class="card-label">コンテキストの取り込み方が根本的に違う</p>
+          <p class="card-desc">Claude.ai はアップロードしたドキュメントや会話履歴を参照する。Cursor はローカルのコードベース全体をインデックスし、<strong>セマンティック検索で関連箇所を自動取得</strong>する。「何を知っているか」の源泉が異なるため、同じ Claude モデルでも回答品質は異なる。</p>
+          <a href="https://support.claude.com/en/articles/11473015-retrieval-augmented-generation-rag-for-projects" target="_blank" class="source-link" style="display:block; margin-top:16px">↗ Claude Projects RAG（公式ヘルプ）</a>
+          <a href="https://cursor.com/product" target="_blank" class="source-link" style="display:block; margin-top:4px">↗ Cursor Product ページ</a>
+        </div>
+        <div class="card-cell card-cell-white">
+          <div class="card-num">03</div>
+          <div class="badge-tag" style="margin-bottom:12px">応用</div>
+          <p class="card-label">エージェントが実行できる操作の範囲が違う</p>
+          <p class="card-desc">Claude.ai（Cowork）はローカルファイルやクラウドアプリと連携してタスクを進める。Cursor のエージェントはファイル編集・ターミナル実行・git 操作まで行う。<strong>Cursor のエージェントはコードの変更を実際に適用するが、Claude.ai は基本的に提案止まり</strong>（Cowork 除く）。</p>
+          <a href="https://www.anthropic.com/claude" target="_blank" class="source-link" style="display:block; margin-top:16px">↗ Claude Cowork（Anthropic 公式）</a>
+          <a href="https://cursor.com/product" target="_blank" class="source-link" style="display:block; margin-top:4px">↗ Cursor Agent（Product ページ）</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Claude.ai 詳細 -->
+  <section class="section-gray" id="claude">
+    <div class="container">
+      <p class="section-eyebrow">Claude.ai の仕組み</p>
+      <h2 class="section-title">AIとの対話ツール</h2>
+      <p class="section-body" style="max-width:680px">
+        Anthropic が提供する Web・モバイルの会話インターフェース。「問いを投げて答えを得る」対話が基本。Project 機能でナレッジを蓄積し、RAG（Retrieval Augmented Generation＝検索して関連情報を取得）で大量ドキュメントを参照可能。
+      </p>
+      <a href="https://support.claude.com/en/articles/9517075-what-are-projects" target="_blank" class="source-link" style="display:block; margin-top:12px">↗ Claude Projects 公式ヘルプ</a>
+
+      <ul class="step-list" style="margin-top:48px">
+        <li class="step-item">
+          <div class="step-num step-num-blue">1</div>
+          <div>
+            <p class="step-title">会話 → Claude モデルが応答</p>
+            <p class="step-body">ブラウザやアプリからメッセージを送信。Anthropic サーバ上の Claude モデル（Opus / Sonnet / Haiku）が応答を生成。コンテキストウィンドウは有料プランで <strong>200K トークン</strong>。
+              <a href="https://support.claude.com/en/articles/8606394-how-large-is-the-context-window-on-paid-claude-plans" target="_blank" class="source-link" style="font-size:0.75rem">↗ コンテキスト公式ヘルプ</a>
+            </p>
+          </div>
+        </li>
+        <li class="step-item">
+          <div class="step-num step-num-blue">2</div>
+          <div>
+            <p class="step-title">Projects + RAG でナレッジを拡張</p>
+            <p class="step-body">プロジェクトにドキュメントをアップロードしておくと、会話内容に応じて<strong>関連箇所をセマンティック検索して取得</strong>（RAG）。コンテキスト上限に近づいても全量を詰め込まず検索で補う。プロジェクト指示（instructions）でClaude の振る舞いを固定できる。
+              <a href="https://support.claude.com/en/articles/11473015-retrieval-augmented-generation-rag-for-projects" target="_blank" class="source-link" style="font-size:0.75rem">↗ RAG 公式ヘルプ</a>
+            </p>
+          </div>
+        </li>
+        <li class="step-item">
+          <div class="step-num step-num-blue">3</div>
+          <div>
+            <p class="step-title">Cowork: ローカルファイルへの直接アクセス（別プロダクト）</p>
+            <p class="step-body">Anthropic の <strong>Cowork</strong> デスクトップアプリは、ローカルファイルへの直接アクセス・長時間タスクの自律実行・並列ワークストリームの調整が可能。<strong>隔離された仮想マシン上で動作</strong>し、セキュリティを担保。現在はリサーチプレビュー段階（有料プランのみ）。通常の claude.ai チャットとは<strong>別プロダクト</strong>。
+              <a href="https://www.anthropic.com/product/claude-cowork" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:6px">↗ Claude Cowork 公式ページ</a>
+              <a href="https://support.claude.com/en/articles/13345190-getting-started-with-cowork" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:4px">↗ Cowork はじめ方（公式ヘルプ）</a>
+            </p>
+          </div>
+        </li>
+      </ul>
+
+      <div class="split-grid" style="margin-top:48px">
+        <div class="split-cell">
+          <p style="font-size:0.8rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#0071e3; margin-bottom:16px">得意なこと</p>
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:12px;">
+            <li style="font-size:0.875rem; color:#6e6e73; line-height:1.5">テキスト生成・説明・要約・翻訳などの言語タスク</li>
+            <li style="font-size:0.875rem; color:#6e6e73; line-height:1.5">大量ドキュメントの読み込みと Q&A（Projects + RAG）</li>
+            <li style="font-size:0.875rem; color:#6e6e73; line-height:1.5">調査・分析・戦略の検討</li>
+            <li style="font-size:0.875rem; color:#6e6e73; line-height:1.5">コードを「書いてもらう」（実行はしない）</li>
+            <li style="font-size:0.875rem; color:#6e6e73; line-height:1.5">SaaSの設定方法を理解するための対話</li>
+          </ul>
+        </div>
+        <div class="split-cell split-cell-gray">
+          <p style="font-size:0.8rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#6e6e73; margin-bottom:16px">できないこと / 注意点</p>
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:12px;">
+            <li style="font-size:0.875rem; color:#6e6e73; line-height:1.5">ローカルのファイルシステムへのアクセス（Cowork 除く）</li>
+            <li style="font-size:0.875rem; color:#6e6e73; line-height:1.5">コードの実行・テスト・デプロイ（Cowork 除く）</li>
+            <li style="font-size:0.875rem; color:#6e6e73; line-height:1.5">コードベース全体をコンテキストとして扱う自動索引化</li>
+            <li style="font-size:0.875rem; color:#6e6e73; line-height:1.5">出力は常に正確とは限らず検証が必要 <a href="https://www.anthropic.com/legal/consumer-terms" target="_blank" class="source-link" style="font-size:0.75rem">↗ 利用規約</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Cursor 詳細 -->
+  <section class="section-dark" id="cursor">
+    <div class="container">
+      <p class="section-eyebrow section-eyebrow-light">Cursor の仕組み</p>
+      <h2 class="section-title section-title-light">AIを内蔵したコードエディタ</h2>
+      <p class="section-body section-body-light" style="max-width:680px">
+        Anysphere が開発した VS Code ベースの IDE。コードベース全体をインデックスし、AI がファイル編集・ターミナル操作・デバッグまで自律的に実行できる。バックエンドの AI モデルは Claude / GPT-4 / Gemini など複数から選択可能。
+      </p>
+      <a href="https://cursor.com/product" target="_blank" class="source-link source-link-light" style="display:block; margin-top:12px">↗ Cursor Product ページ（公式）</a>
+
+      <ul class="step-list" style="margin-top:48px">
+        <li class="step-item step-item-dark">
+          <div class="step-num step-num-green">1</div>
+          <div>
+            <p class="step-title step-title-light">コードベース全体をインデックス</p>
+            <p class="step-body step-body-light">プロジェクトのコードベースをカスタム埋め込みモデルでインデックス化。<strong>セマンティック検索で関連コードを自動取得</strong>してからAIに渡す。「このファイルどこだっけ」を毎回 @指定しなくても文脈を理解できる。</p>
+          </div>
+        </li>
+        <li class="step-item step-item-dark">
+          <div class="step-num step-num-green">2</div>
+          <div>
+            <p class="step-title step-title-light">エージェントがファイルを直接編集</p>
+            <p class="step-body step-body-light">Agent モードでは提案だけでなく、<strong>ファイルの作成・変更・削除を実際に適用</strong>する。Git チェックポイントで変更前の状態に戻ることが可能。ターミナルでビルド・テストも実行できる（デフォルトはサンドボックス）。</p>
+          </div>
+        </li>
+        <li class="step-item step-item-dark">
+          <div class="step-num step-num-green">3</div>
+          <div>
+            <p class="step-title step-title-light">Plan モードで計画→承認→実行のサイクル</p>
+            <p class="step-body step-body-light">Shift+Tab で Plan モードに入るとエージェントがコードベースをリサーチし、<strong>変更計画（Markdown）を先に提示してから実行</strong>。複数ファイルにまたがる変更や要件が不明確な時に安全に使える。计画を確認・編集してから「Build」で実行する。
+              <a href="https://www.cursor.com/docs/agent/modes" target="_blank" class="source-link source-link-light" style="font-size:0.75rem; display:block; margin-top:6px">↗ Agent モード公式 docs</a>
+              <a href="https://www.cursor.com/blog/plan-mode" target="_blank" class="source-link source-link-light" style="font-size:0.75rem; display:block; margin-top:4px">↗ Plan Mode 公式ブログ</a>
+            </p>
+          </div>
+        </li>
+      </ul>
+
+      <div class="callout">
+        <p style="font-size:0.8rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#30d158; margin-bottom:20px">Cursor の特徴的な強み</p>
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div style="display:flex; gap:16px; align-items:flex-start">
+            <span style="color:#30d158; font-size:1.25rem; flex-shrink:0; line-height:1.4">✓</span>
+            <div>
+              <p style="font-size:0.9375rem; font-weight:600; color:#f5f5f7; margin-bottom:4px">コードベース全体を「知っている」状態でAIが動く</p>
+              <p style="font-size:0.875rem; color:#86868b; line-height:1.5">Claude.ai に毎回ファイルを貼り付けなくても、既存コードの文脈を踏まえた実装・修正ができる。</p>
+            </div>
+          </div>
+          <div style="display:flex; gap:16px; align-items:flex-start">
+            <span style="color:#30d158; font-size:1.25rem; flex-shrink:0; line-height:1.4">✓</span>
+            <div>
+              <p style="font-size:0.9375rem; font-weight:600; color:#f5f5f7; margin-bottom:4px">モデルを選択できる</p>
+              <p style="font-size:0.875rem; color:#86868b; line-height:1.5">Claude / GPT-4o / Gemini / Grok など複数社のモデルを切り替え可能。タスクや料金に応じて使い分けられる。 <a href="https://www.cursor.com" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ Cursor 公式</a></p>
+            </div>
+          </div>
+          <div style="display:flex; gap:16px; align-items:flex-start">
+            <span style="color:#30d158; font-size:1.25rem; flex-shrink:0; line-height:1.4">✓</span>
+            <div>
+              <p style="font-size:0.9375rem; font-weight:600; color:#f5f5f7; margin-bottom:4px">変更をGitでロールバックできる</p>
+              <p style="font-size:0.875rem; color:#86868b; line-height:1.5">エージェントの変更はチェックポイントとして記録。実行前の状態に戻せるため、AIの変更を安全に試せる。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 比較表 -->
+  <section class="section-black" id="compare">
+    <div class="container">
+      <p class="section-eyebrow section-eyebrow-light">機能比較</p>
+      <h2 class="section-title section-title-light">Claude.ai vs Cursor</h2>
+
+      <div class="compare-header" style="padding-bottom:12px; border-bottom:1px solid #3d3d3f; margin-top:48px">
+        <div style="font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#6e6e73; padding-left:0">項目</div>
+        <div style="font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#6e6e73; padding:0 12px">Claude.ai</div>
+        <div style="font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#6e6e73; padding:0 12px">Cursor</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">主な用途</div>
+        <div class="compare-cell neutral">テキスト・調査・設計の対話</div>
+        <div class="compare-cell neutral">コード実装・リファクタリング・デバッグ</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">AIモデルの提供元</div>
+        <div class="compare-cell neutral">Anthropic のみ（Claude）<br><a href="https://www.anthropic.com/claude" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ Anthropic</a></div>
+        <div class="compare-cell good">複数社から選択可<br>（Claude / GPT-4 / Gemini 等）<br><a href="https://www.cursor.com" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ Cursor 公式</a></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">コンテキストの源泉</div>
+        <div class="compare-cell neutral">チャット履歴・アップロードドキュメント（RAG）<br><a href="https://support.claude.com/en/articles/11473015-retrieval-augmented-generation-rag-for-projects" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ RAG ヘルプ</a></div>
+        <div class="compare-cell good">コードベース全体（インデックス）+ ターミナル出力<br><a href="https://cursor.com/product" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ Cursor Product</a></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">コンテキストウィンドウ</div>
+        <div class="compare-cell neutral">有料プラン 200K トークン<br><a href="https://support.claude.com/en/articles/8606394-how-large-is-the-context-window-on-paid-claude-plans" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ 公式ヘルプ</a></div>
+        <div class="compare-cell neutral">数値の公式情報なし<br>セマンティック検索で補完 <span class="speculation-tag">※ 公式情報なし</span></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">ファイルの編集</div>
+        <div class="compare-cell neutral">提案のみ（コピペが必要）</div>
+        <div class="compare-cell good">エージェントが直接編集・適用</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">ターミナル・コマンド実行</div>
+        <div class="compare-cell neutral">不可（Cowork 除く）</div>
+        <div class="compare-cell good">可（デフォルトはサンドボックス）<br><a href="https://cursor.com/product" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ Cursor Product</a></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">エージェント機能</div>
+        <div class="compare-cell neutral">Cowork（デスクトップ別アプリ）</div>
+        <div class="compare-cell good">Agent / Plan / Debug / Cloud Agent<br>IDE 統合で使える</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">ロールバック</div>
+        <div class="compare-cell neutral">なし（チャット履歴のみ）</div>
+        <div class="compare-cell good">Git チェックポイントで変更前に戻せる</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">Web 検索</div>
+        <div class="compare-cell good">対応（オプション）</div>
+        <div class="compare-cell good">対応<br><a href="https://cursor.com/product" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ Cursor Product</a></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell" style="padding-left:0">外部ツール連携</div>
+        <div class="compare-cell neutral">コネクタ機能あり（詳細は製品ページで要確認）<br><a href="https://www.anthropic.com/claude" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ Anthropic 公式</a></div>
+        <div class="compare-cell good">MCP / GitHub / Slack 等<br><a href="https://cursor.com/product" target="_blank" class="source-link source-link-light" style="font-size:0.75rem">↗ Cursor Product</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- コーポレート利用時のガバナンス観点 -->
+  <section class="section-light" id="governance">
+    <div class="container">
+      <p class="section-eyebrow">コーポレートエンジニア必須の確認事項</p>
+      <h2 class="section-title">データ・プライバシー・ガバナンス</h2>
+      <p class="section-body" style="max-width:680px">
+        社内コードや機密ドキュメントを扱う場合、「そのデータがどこに送られ、学習に使われるか」の確認は上長への説明責任として必須。両ツールの公式ポリシーから言えることを整理する。
+      </p>
+
+      <div class="split-grid" style="margin-top:48px">
+        <div class="split-cell">
+          <div class="badge-claude" style="margin-bottom:16px">Claude.ai のデータ扱い</div>
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:16px">
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">Projects のドキュメントはサーバに保存される</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">アップロードしたドキュメントは Anthropic のサーバに保存される。機密性の高い情報の取り扱いはプランと契約内容を確認すること。</p>
+              <a href="https://www.anthropic.com/legal/consumer-terms" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:6px">↗ Anthropic 利用規約</a>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">Team / Enterprise プランはデータ保護が強化される</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">エンタープライズ契約では学習への使用制限・データ保持ポリシーが変わる場合がある。<span class="speculation-tag">※ 詳細は契約時に要確認</span></p>
+              <a href="https://www.anthropic.com/claude" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:6px">↗ Anthropic 公式（エンタープライズ情報あり）</a>
+            </li>
+          </ul>
+        </div>
+        <div class="split-cell split-cell-gray">
+          <div class="badge-cursor" style="margin-bottom:16px">Cursor のデータ扱い</div>
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:16px">
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">Privacy Mode ON = モデルプロバイダーへのデータ保持ゼロ</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">Privacy Mode を有効にするとコードが学習に使われない。コードベースのインデックス時、埋め込み計算用のコードは各リクエスト後に削除される（埋め込みとメタデータは保持）。</p>
+              <a href="https://www.cursor.com/data-use" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:6px">↗ Cursor データ利用・プライバシー（公式）</a>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">コードは Cursor 経由でモデルプロバイダーに送信される</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">Cursor で Claude を使う場合、コードは Anthropic ではなく Cursor（Anysphere）サーバを経由してモデルに送られる。<strong>Anthropic の AUP ではなく Cursor の ToS が適用される</strong>ことに注意。</p>
+              <a href="https://cursor.com/en/privacy" target="_blank" class="source-link" style="font-size:0.75rem; display:block; margin-top:6px">↗ Cursor プライバシーポリシー（公式）</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div style="margin-top:32px; padding:24px 32px; background:#fff9f0; border-radius:12px; border-left:4px solid #ff9500;">
+        <p style="font-size:0.9375rem; font-weight:600; color:#1d1d1f; margin-bottom:8px">社内導入前に確認すべき事項（別途確認が必要）</p>
+        <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px">
+          <li style="font-size:0.875rem; color:#6e6e73; line-height:1.5">→ 機密区分の社内コード・顧客データを入力してよいか（情報セキュリティポリシーとの照合）</li>
+          <li style="font-size:0.875rem; color:#6e6e73; line-height:1.5">→ エンタープライズ/チームプランの契約有無と DPA（データ処理契約）の状況</li>
+          <li style="font-size:0.875rem; color:#6e6e73; line-height:1.5">→ 送信先サーバのリージョン（米国サーバか否か）と社内の海外データ移転ポリシー</li>
+        </ul>
+        <p style="font-size:0.8125rem; color:#86868b; margin-top:12px">※ この図解が扱う範囲外。各社の法務・情報セキュリティ部門への確認を推奨。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 使い分け -->
+  <section class="section-light" id="when">
+    <div class="container">
+      <p class="section-eyebrow">コーポレートエンジニア視点</p>
+      <h2 class="section-title">どちらをいつ使うか</h2>
+      <p class="section-body" style="max-width:680px">
+        「どちらが優れているか」ではなく「タスクの性質でどちらを使うか」を判断できることがゴール。
+      </p>
+
+      <div class="split-grid" style="margin-top:48px">
+        <div class="split-cell">
+          <div class="badge-claude" style="margin-bottom:16px">Claude.ai を使う場面</div>
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:16px;">
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">技術の仕組みを理解したいとき</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">RADIUSのフェイルオーバーの原理・SaaSの設定値の意味など、「なぜそうなるか」を対話で理解するのに向いている</p>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">大量ドキュメントを読み込ませて質問したいとき</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">仕様書・ベンダーマニュアル・障害記録をプロジェクトにアップロードし、横断的に質問できる</p>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">文章を作成・要約・翻訳するとき</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">提案書・障害報告・社内メール・設定変更の影響説明など</p>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">コードを相談・設計レビューするとき</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">「このスクリプトのアプローチが正しいか」という判断を対話で確認する用途</p>
+            </li>
+          </ul>
+        </div>
+        <div class="split-cell split-cell-gray">
+          <div class="badge-cursor" style="margin-bottom:16px">Cursor を使う場面</div>
+          <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:16px;">
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">既存コードベースを修正・機能追加するとき</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">コードベース全体を把握した状態でAIが変更を適用するため、「どのファイルを変えるか」を毎回指示しなくてよい</p>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">ビルド・テスト・git を繰り返しながら開発するとき</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">ターミナル実行 → エラー確認 → 修正 → 再実行のサイクルをエージェントが一括して回せる</p>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">スクリプトや自動化ツールをゼロから作るとき</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">Claude.ai で設計・仕様を固めてから Cursor で実装するという2段階が効率的</p>
+            </li>
+            <li>
+              <p style="font-size:1rem; font-weight:600; color:#1d1d1f; margin-bottom:4px">大きなリファクタリングをするとき</p>
+              <p style="font-size:0.875rem; color:#6e6e73; line-height:1.5">変更前のチェックポイントを残しながらエージェントに複数ファイルを横断した変更を任せられる</p>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 2つを組み合わせる -->
+      <div style="margin-top:48px; padding:40px 36px; background:#f5f5f7; border-radius:18px;">
+        <p style="font-size:0.8rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#6e6e73; margin-bottom:16px">2つを組み合わせる実務パターン</p>
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div style="display:flex; gap:16px; align-items:flex-start">
+            <span style="color:#0071e3; font-weight:700; flex-shrink:0; line-height:1.6; font-size:0.875rem">Step 1</span>
+            <p style="font-size:0.9375rem; color:#1d1d1f; line-height:1.6"><strong>Claude.ai で「理解」</strong> → 技術の仕組みを対話で把握し、設定値の根拠・変更後の状態を確認する</p>
+          </div>
+          <div style="display:flex; gap:16px; align-items:flex-start">
+            <span style="color:#30d158; font-weight:700; flex-shrink:0; line-height:1.6; font-size:0.875rem">Step 2</span>
+            <p style="font-size:0.9375rem; color:#1d1d1f; line-height:1.6"><strong>Cursor で「実装」</strong> → 理解した設定・スクリプトを実際のコードベースに適用・テスト</p>
+          </div>
+          <div style="display:flex; gap:16px; align-items:flex-start">
+            <span style="color:#6e6e73; font-weight:700; flex-shrink:0; line-height:1.6; font-size:0.875rem">Step 3</span>
+            <p style="font-size:0.9375rem; color:#1d1d1f; line-height:1.6"><strong>Claude.ai で「説明」</strong> → 実施した変更の根拠・影響を上長向けに整理・言語化する</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- まとめ -->
+  <section class="section-black" id="summary">
+    <div class="container">
+      <p class="section-eyebrow section-eyebrow-light">まとめ</p>
+      <h2 class="section-title section-title-light">この図解でわかること</h2>
+
+      <div class="card-grid-3" style="margin-top:48px">
+        <div class="card-cell card-cell-dark">
+          <div class="card-num card-num-light">01</div>
+          <p class="card-label card-label-light">モデルと製品は別物</p>
+          <p class="card-desc card-desc-light">Claude は Anthropic のモデル。Claude.ai はそのUIで、Cursor はモデルを選べるエディタ。「Cursor で Claude を使う」≠「Claude.ai を使う」。コンテキストと操作範囲が根本的に異なる。</p>
+        </div>
+        <div class="card-cell" style="background:#1a1a1c">
+          <div class="card-num card-num-light">02</div>
+          <p class="card-label card-label-light">コンテキストの違いが出力品質を決める</p>
+          <p class="card-desc card-desc-light">Claude.ai はアップロードしたドキュメントのみ。Cursor はコードベース全体をインデックスして関連箇所を自動取得。「何を知っているか」の違いが同一モデルでも回答品質に直結する。</p>
+        </div>
+        <div class="card-cell card-cell-dark">
+          <div class="card-num card-num-light">03</div>
+          <p class="card-label card-label-light">実行できる操作の範囲が違う</p>
+          <p class="card-desc card-desc-light">Claude.ai は基本的に提案止まり。Cursor のエージェントはファイル編集・ターミナル実行・git まで自律実行できる。「話して理解する」と「コードとして適用する」で使い分けるのが合理的。</p>
+        </div>
+      </div>
+
+      <div style="margin-top:56px; padding-top:40px; border-top:1px solid #2d2d2f">
+        <p style="font-size:0.8rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#30d158; margin-bottom:20px">この理解で次にできること</p>
+        <div style="display:flex; flex-direction:column; gap:12px">
+          <div style="display:flex; gap:12px; align-items:flex-start">
+            <span style="color:#30d158; flex-shrink:0; line-height:1.6">→</span>
+            <p style="font-size:1rem; color:#f5f5f7; line-height:1.6">技術調査と実装の場面でどちらを起動するか迷わずに判断できる</p>
+          </div>
+          <div style="display:flex; gap:12px; align-items:flex-start">
+            <span style="color:#30d158; flex-shrink:0; line-height:1.6">→</span>
+            <p style="font-size:1rem; color:#f5f5f7; line-height:1.6">「Claude.ai でわかったこと」を根拠に Cursor でコードを変更し、変更の正しさを上長に説明できる</p>
+          </div>
+          <div style="display:flex; gap:12px; align-items:flex-start">
+            <span style="color:#30d158; flex-shrink:0; line-height:1.6">→</span>
+            <p style="font-size:1rem; color:#f5f5f7; line-height:1.6">「Cursor でどのモデルを使うべきか」「Claude.ai の Projects に何をアップロードすべきか」を設計できる</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- フッター -->
+  <footer>
+    <p>
+      <strong>根拠とした一次情報</strong> —
+      <a href="https://www.anthropic.com/claude" target="_blank" class="source-link">Anthropic Claude 公式</a> ·
+      <a href="https://www.anthropic.com/product/claude-cowork" target="_blank" class="source-link">Claude Cowork 公式</a> ·
+      <a href="https://support.claude.com/en/articles/13345190-getting-started-with-cowork" target="_blank" class="source-link">Cowork はじめ方</a> ·
+      <a href="https://support.claude.com/en/articles/9517075-what-are-projects" target="_blank" class="source-link">Claude Projects ヘルプ</a> ·
+      <a href="https://support.claude.com/en/articles/11473015-retrieval-augmented-generation-rag-for-projects" target="_blank" class="source-link">Claude RAG ヘルプ</a> ·
+      <a href="https://support.claude.com/en/articles/8606394-how-large-is-the-context-window-on-paid-claude-plans" target="_blank" class="source-link">Claude コンテキストヘルプ</a> ·
+      <a href="https://docs.anthropic.com/en/docs/about-claude/models/overview" target="_blank" class="source-link">Claude モデル一覧</a> ·
+      <a href="https://www.cursor.com" target="_blank" class="source-link">Cursor 公式</a> ·
+      <a href="https://cursor.com/product" target="_blank" class="source-link">Cursor Product</a> ·
+      <a href="https://www.cursor.com/docs/agent/modes" target="_blank" class="source-link">Cursor Agent モード docs</a> ·
+      <a href="https://www.cursor.com/blog/plan-mode" target="_blank" class="source-link">Cursor Plan Mode</a> ·
+      <a href="https://www.cursor.com/data-use" target="_blank" class="source-link">Cursor データ利用ポリシー</a> ·
+      <a href="https://cursor.com/en/privacy" target="_blank" class="source-link">Cursor プライバシーポリシー</a> ·
+      <a href="https://www.anthropic.com/legal/consumer-terms" target="_blank" class="source-link">Anthropic 利用規約</a>
+    </p>
+    <p style="margin-top:12px; font-size:0.75rem; color:#86868b;">最終確認日: 2026年4月2日 / 機能・プランは変更される場合があります。各公式ページで最新情報を確認してください。</p>
+  </footer>
+
+</body>
+</html>
