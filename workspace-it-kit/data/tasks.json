@@ -1,0 +1,50 @@
+[
+  {
+    "id": "CIT-142",
+    "title": "6G非対応PC向け 接続設定配布",
+    "deadline": "5/22",
+    "delayed": true,
+    "bucket": "today",
+    "description": "MDM未登録端末が想定以上に多く、手動でのMDM追加が必要。\n対象デバイス：約80台のうち23台が未登録。",
+    "comments": [
+      "5/14: 対象リスト更新完了 (齊藤)",
+      "5/15: 手動登録 10台完了。残り13台。"
+    ]
+  },
+  {
+    "id": "CIT-139",
+    "title": "旧WiFiに接続中のデバイスを再調査",
+    "deadline": "5/25",
+    "delayed": false,
+    "bucket": "today",
+    "description": "旧SSID（CORP-OLD）に接続中のデバイスを特定し、新SSIDへの移行を完了させる。",
+    "comments": ["5/13: ログ解析開始。約15台を検出。"]
+  },
+  {
+    "id": "CIT-135",
+    "title": "Slack APIの管理者権限整理",
+    "deadline": "5/30",
+    "delayed": false,
+    "bucket": "week",
+    "description": "Slack APIのトークン権限を棚卸し。不要な管理者トークンを無効化し、必要最小限の権限に絞る。",
+    "comments": ["5/10: 現行トークン一覧取得済み。"]
+  },
+  {
+    "id": "CIT-128",
+    "title": "ゼロトラスト導入の技術調査",
+    "deadline": "6/10",
+    "delayed": false,
+    "bucket": "backlog",
+    "description": "Zscaler / Cloudflare Access のPoC計画を作成。ベンダー比較含む。",
+    "comments": []
+  },
+  {
+    "id": "CIT-120",
+    "title": "社内CA証明書の更新対応",
+    "deadline": "6/20",
+    "delayed": false,
+    "bucket": "backlog",
+    "description": "中間CA証明書の有効期限が7/1。更新手順書作成と本番適用を担当。",
+    "comments": []
+  }
+]
