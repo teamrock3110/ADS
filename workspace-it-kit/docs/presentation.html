@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>発表資料 — Task Worker データ設計</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card: #1e293b;
+        --border: #334155;
+        --text: #f1f5f9;
+        --muted: #94a3b8;
+        --accent: #3b82f6;
+        --accent2: #818cf8;
+        --green: #22c55e;
+        --yellow: #f59e0b;
+        --purple: #a855f7;
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+          "Noto Sans JP", sans-serif;
+        font-size: 15px;
+        line-height: 1.7;
+        color: var(--text);
+        background: var(--bg);
+      }
+
+      .hero {
+        padding: 3rem 2rem 2.5rem;
+        text-align: center;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      }
+
+      .hero .badge {
+        display: inline-block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        padding: 0.25em 0.75em;
+        border-radius: 999px;
+        background: rgba(59,130,246,0.2);
+        color: var(--accent);
+        border: 1px solid rgba(59,130,246,0.4);
+        margin-bottom: 1rem;
+      }
+
+      .hero h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+      .hero p { color: var(--muted); font-size: 0.95rem; }
+
+      .page {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2.5rem 1.5rem 5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2.5rem;
+      }
+
+      .section-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        color: var(--accent);
+        text-transform: uppercase;
+        margin-bottom: 0.5rem;
+      }
+
+      h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 1rem; letter-spacing: -0.02em; }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.5rem;
+      }
+
+      /* ── 共有の流れ ── */
+      .flow {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 1rem;
+        align-items: center;
+      }
+
+      .flow-box {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1.25rem 1rem;
+        text-align: center;
+      }
+
+      .flow-box .role {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        color: var(--muted);
+        margin-bottom: 0.4rem;
+      }
+
+      .flow-box .name { font-size: 1.1rem; font-weight: 700; }
+
+      .flow-box ul {
+        margin-top: 0.75rem;
+        padding: 0;
+        list-style: none;
+        text-align: left;
+        font-size: 0.85rem;
+        color: var(--muted);
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+      }
+
+      .flow-box ul li::before { content: "→ "; color: var(--accent); }
+      .flow-arrow { font-size: 1.5rem; color: var(--muted); text-align: center; }
+
+      /* ── 3ステップ ── */
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+      }
+
+      .step {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1.25rem;
+      }
+
+      .step .num {
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: var(--accent2);
+        line-height: 1;
+        margin-bottom: 0.5rem;
+      }
+
+      .step h3 { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.5rem; }
+      .step p { font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
+
+      /* ── ロードマップ ── */
+      .roadmap {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+      }
+
+      .rm-card {
+        border-radius: 10px;
+        padding: 1.25rem;
+        position: relative;
+      }
+
+      .rm-card.s1 { background: rgba(34,197,94,0.08);  border: 1px solid rgba(34,197,94,0.35); }
+      .rm-card.s2 { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.35); }
+      .rm-card.s3 { background: rgba(168,85,247,0.08); border: 1px solid rgba(168,85,247,0.35); }
+
+      .rm-card .step-tag {
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        padding: 0.15em 0.6em;
+        border-radius: 999px;
+        margin-bottom: 0.6rem;
+        display: inline-block;
+      }
+
+      .s1 .step-tag { background: rgba(34,197,94,0.2);  color: #86efac; }
+      .s2 .step-tag { background: rgba(245,158,11,0.2); color: #fcd34d; }
+      .s3 .step-tag { background: rgba(168,85,247,0.2); color: #d8b4fe; }
+
+      .rm-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem; }
+
+      .rm-card table { width: 100%; font-size: 0.8rem; border-collapse: collapse; }
+      .rm-card td { padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
+      .rm-card td:first-child { color: var(--muted); width: 42%; padding-right: 0.5rem; }
+      .rm-card tr:last-child td { border-bottom: none; }
+
+      /* ── 保存先テーブル ── */
+      table.main {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.87rem;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      table.main th, table.main td {
+        padding: 0.65rem 0.85rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+
+      table.main th {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        background: rgba(255,255,255,0.03);
+      }
+
+      table.main tr:last-child td { border-bottom: none; }
+
+      .tag {
+        display: inline-block;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 0.15em 0.5em;
+        border-radius: 4px;
+        white-space: nowrap;
+      }
+
+      .tag-json { background: rgba(168,85,247,0.2); color: #d8b4fe; }
+      .tag-db   { background: rgba(59,130,246,0.2);  color: #93c5fd; }
+      .tag-auto { background: rgba(34,197,94,0.2);   color: #86efac; }
+
+      /* ── Diagram ── */
+      .diagram {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1.25rem;
+        overflow-x: auto;
+        margin-top: 1rem;
+      }
+
+      .diagram .mermaid { display: flex; justify-content: center; }
+
+      /* ── ステータス ── */
+      .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+      .status-box { border-radius: 10px; padding: 1.25rem; }
+      .status-box.done { background: rgba(34,197,94,0.08);  border: 1px solid rgba(34,197,94,0.3); }
+      .status-box.wip  { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); }
+
+      .status-box h3 { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; margin-bottom: 0.75rem; }
+      .status-box.done h3 { color: var(--green); }
+      .status-box.wip  h3 { color: var(--yellow); }
+
+      .status-box ul { list-style: none; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.85rem; }
+      .status-box.done li::before { content: "✓ "; color: var(--green); }
+      .status-box.wip  li::before { content: "△ "; color: var(--yellow); }
+
+      footer {
+        text-align: center;
+        font-size: 0.75rem;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+        padding: 1.25rem;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div class="hero">
+      <div class="badge">AI Driven School — 発表資料</div>
+      <h1>Task Worker データ設計</h1>
+      <p>何を・どこに保存するか をチームに共有する</p>
+    </div>
+
+    <div class="page">
+
+      <!-- ① ツールは何をするか -->
+      <section>
+        <div class="section-label">Task Worker の例 — 1</div>
+        <h2>① ツールは何をするか・何を保存したいか</h2>
+        <div class="card">
+          <p style="margin-bottom:1rem;">
+            コーポレートIT担当が<strong>定例で進捗を口頭報告する</strong>ための補助ツール。<br>
+            タスクを見ながら 作業メモ・報告文・関連リンク を1画面で管理する。
+          </p>
+          <div class="diagram">
+            <pre class="mermaid">
+flowchart LR
+  T["P1\nタスク一覧"] --> D["P2\n詳細・報告入力"]
+  L["P3\n関連リンク"] --> D
+  D --> R["P4\n週次報告書"]
+            </pre>
+          </div>
+          <div style="margin-top:1rem;">
+            <table class="main">
+              <thead>
+                <tr><th>保存したいもの</th><th>なぜ残したいか</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>定例報告3欄（進捗・課題・相談）</td><td>毎週の定例で話す内容。リロードしても残したい</td></tr>
+                <tr><td>作業メモ</td><td>調査中の備忘録。報告とは別に残したい</td></tr>
+                <tr><td>追加リンク</td><td>Slack・資料へのリンクをすぐ開きたい</td></tr>
+                <tr><td>遅延・完了フラグ</td><td>作業状況をひと目で把握したい</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ② どこに保存するか -->
+      <section>
+        <div class="section-label">Task Worker の例 — 2</div>
+        <h2>② どこに保存するか</h2>
+
+        <!-- ペイン別データ表 -->
+        <table class="main" style="margin-bottom:1rem;">
+          <thead>
+            <tr>
+              <th>ペイン</th>
+              <th>データ</th>
+              <th>保存先（形式）</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td rowspan="3"><strong>P1</strong><br><span style="font-size:0.78rem;color:var(--muted);">タスク一覧</span></td>
+              <td>タスク一覧（タイトル・期限・バケット）</td>
+              <td><span class="tag tag-json">tasks.json</span></td>
+            </tr>
+            <tr>
+              <td>完了状態・選択中タスク</td>
+              <td><span class="tag tag-json">overlay.json</span> → <span class="tag tag-db">Neon</span></td>
+            </tr>
+            <tr>
+              <td>追加タスク（LOCAL）</td>
+              <td><span class="tag tag-json">overlay.json</span> → <span class="tag tag-db">Neon</span></td>
+            </tr>
+            <tr style="border-top:2px solid var(--border);">
+              <td rowspan="4"><strong>P2</strong><br><span style="font-size:0.78rem;color:var(--muted);">タスク詳細</span></td>
+              <td>タイトル・期限・概要・コメント</td>
+              <td><span class="tag tag-json">tasks.json</span>（表示のみ）</td>
+            </tr>
+            <tr>
+              <td>定例報告3欄（進捗・課題・相談）</td>
+              <td><span class="tag tag-json">overlay.json</span> → <span class="tag tag-db">Neon</span></td>
+            </tr>
+            <tr>
+              <td>作業メモ（備忘録）</td>
+              <td><span class="tag tag-json">overlay.json</span> → <span class="tag tag-db">Neon</span></td>
+            </tr>
+            <tr>
+              <td>遅延 ON/OFF</td>
+              <td><span class="tag tag-json">overlay.json</span> → <span class="tag tag-db">Neon</span></td>
+            </tr>
+            <tr style="border-top:2px solid var(--border);">
+              <td rowspan="2"><strong>P3</strong><br><span style="font-size:0.78rem;color:var(--muted);">関連リンク</span></td>
+              <td>初期リンク（JSON 由来）</td>
+              <td><span class="tag tag-json">task-links.json</span>（表示のみ）</td>
+            </tr>
+            <tr>
+              <td>ユーザーが追加したリンク</td>
+              <td><span class="tag tag-json">overlay.json</span> → <span class="tag tag-db">Neon</span></td>
+            </tr>
+            <tr style="border-top:2px solid var(--border);">
+              <td><strong>P4</strong><br><span style="font-size:0.78rem;color:var(--muted);">週次報告書</span></td>
+              <td>報告書プレビュー・N/M サマリ</td>
+              <td><span class="tag tag-auto">保存しない（P2 から生成）</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- ロードマップ -->
+        <div class="roadmap" style="margin-bottom:1rem;">
+          <div class="rm-card s1">
+            <div class="step-tag">STEP 1 · 今</div>
+            <h3>個人PC のみ</h3>
+            <table>
+              <tr><td>目的</td><td><strong>動くものを作る</strong></td></tr>
+              <tr><td>骨格</td><td>tasks.json（JSON）</td></tr>
+              <tr><td>作業データ</td><td>overlay.json<br><span style="font-size:0.75rem;color:#94a3b8;">.gitignore</span></td></tr>
+              <tr><td>環境</td><td>localhost</td></tr>
+            </table>
+          </div>
+          <div class="rm-card s2">
+            <div class="step-tag">STEP 2 · 次</div>
+            <h3>Vercel デプロイ</h3>
+            <table>
+              <tr><td>目的</td><td><strong>スクールの課題として公開する</strong></td></tr>
+              <tr><td>骨格</td><td>tasks.json（JSON）</td></tr>
+              <tr><td>作業データ</td><td>Neon DB</td></tr>
+              <tr><td>変えること</td><td>書き込み先<br>のみ変更</td></tr>
+            </table>
+          </div>
+          <div class="rm-card s3">
+            <div class="step-tag">STEP 3 · 将来</div>
+            <h3>JIRA 連携</h3>
+            <table>
+              <tr><td>目的</td><td><strong>チケット情報を自動で取り込む</strong></td></tr>
+              <tr><td>骨格</td><td>JIRA API</td></tr>
+              <tr><td>作業データ</td><td>Neon DB</td></tr>
+              <tr><td>変えること</td><td>読み込み元<br>のみ変更</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <!-- 保存先テーブル -->
+        <table class="main" style="margin-bottom:1rem;">
+          <thead>
+            <tr><th>データ</th><th>STEP 1</th><th>STEP 2</th><th>STEP 3</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>タスク骨格（タイトル・期限・概要）</td>
+              <td><span class="tag tag-json">tasks.json</span></td>
+              <td><span class="tag tag-json">tasks.json</span></td>
+              <td><span class="tag tag-db">JIRA API</span></td>
+            </tr>
+            <tr>
+              <td>定例報告3欄</td>
+              <td><span class="tag tag-json">overlay.json</span></td>
+              <td><span class="tag tag-db">Neon DB</span></td>
+              <td><span class="tag tag-db">Neon DB</span></td>
+            </tr>
+            <tr>
+              <td>作業メモ・追加リンク</td>
+              <td><span class="tag tag-json">overlay.json</span></td>
+              <td><span class="tag tag-db">Neon DB</span></td>
+              <td><span class="tag tag-db">Neon DB</span></td>
+            </tr>
+            <tr>
+              <td>遅延・完了フラグ</td>
+              <td><span class="tag tag-json">overlay.json</span></td>
+              <td><span class="tag tag-db">Neon DB</span></td>
+              <td><span class="tag tag-db">Neon DB</span></td>
+            </tr>
+            <tr>
+              <td>週次報告書プレビュー</td>
+              <td><span class="tag tag-auto">保存しない</span></td>
+              <td><span class="tag tag-auto">保存しない</span></td>
+              <td><span class="tag tag-auto">保存しない</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- 構成図 -->
+        <div class="diagram">
+          <pre class="mermaid">
+flowchart LR
+  subgraph Repo["リポジトリ（Git）"]
+    TJ["tasks.json\n骨格・読取専用"]
+  end
+  subgraph Local["個人PC（STEP 1）"]
+    OJ["overlay.json\n作業データ・.gitignore"]
+  end
+  subgraph Cloud["クラウド（STEP 2〜）"]
+    NE["Neon DB"]
+    VE["Vercel"]
+  end
+  Repo --> UI["4ペイン画面"]
+  OJ  --> UI
+  NE  --> VE --> UI
+  OJ  -. "STEP 2 移行時\n一括コピー" .-> NE
+          </pre>
+        </div>
+
+        <div class="card" style="margin-top:1rem; font-size:0.87rem; color:var(--muted);">
+          <strong style="color:var(--text);">overlay.json を .gitignore にした理由</strong><br>
+          保存するたびに git diff に出てしまう / 報告文・メモなどの個人データをリポジトリに残さない。
+          STEP 2 で Neon に移行するときに捨てるファイルなので、Git 管理外が自然。
+        </div>
+      </section>
+
+      <!-- ③ 実装状況 -->
+      <section>
+        <div class="section-label">Task Worker の例 — 3</div>
+        <h2>③ 実装の状況</h2>
+        <div class="status-grid">
+          <div class="status-box done">
+            <h3>✓ 実装済み</h3>
+            <ul>
+              <li>4ペイン画面（P1〜P4）</li>
+              <li>定例報告3欄の入力 UI</li>
+              <li>作業メモ・リンク追加</li>
+              <li>遅延トグル・完了/復元</li>
+              <li>週次報告書プレビュー</li>
+              <li>ブラウザ保存（localStorage）</li>
+            </ul>
+          </div>
+          <div class="status-box wip">
+            <h3>△ これから（STEP 1）</h3>
+            <ul>
+              <li>overlay.json の API Route 作成</li>
+              <li>localStorage → overlay.json に移行</li>
+              <li>LOCAL タスク追加 UI</li>
+              <li>.gitignore に overlay.json 追加</li>
+              <li>（STEP 2）Neon DB セットアップ</li>
+              <li>（STEP 2）Vercel デプロイ</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <footer>Task Worker — AI Driven School 発表資料</footer>
+
+    <script>
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: "dark",
+        flowchart: { curve: "basis", padding: 20 },
+      });
+    </script>
+  </body>
+</html>

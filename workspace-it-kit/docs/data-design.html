@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Task Worker データ設計（共有用）</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <style>
+      :root {
+        --bg: #fafafa;
+        --surface: #ffffff;
+        --text: #1a1a1a;
+        --muted: #666;
+        --border: #e5e5e5;
+        --accent: #2563eb;
+        --quote-bg: #eff6ff;
+        --quote-border: #93c5fd;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family:
+          "Hiragino Sans",
+          "Hiragino Kaku Gothic ProN",
+          "Noto Sans JP",
+          sans-serif;
+        font-size: 15px;
+        line-height: 1.7;
+        color: var(--text);
+        background: var(--bg);
+      }
+
+      .container {
+        max-width: 820px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem 4rem;
+      }
+
+      header {
+        margin-bottom: 2.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 2px solid var(--border);
+      }
+
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.75rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      .lead {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      section {
+        margin-bottom: 2.5rem;
+      }
+
+      h2 {
+        margin: 0 0 1rem;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--accent);
+      }
+
+      blockquote {
+        margin: 0;
+        padding: 1rem 1.25rem;
+        background: var(--quote-bg);
+        border-left: 4px solid var(--quote-border);
+        border-radius: 0 8px 8px 0;
+        font-weight: 500;
+      }
+
+      .diagram {
+        margin: 1.25rem 0;
+        padding: 1.25rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow-x: auto;
+      }
+
+      .diagram .mermaid {
+        display: flex;
+        justify-content: center;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      th,
+      td {
+        padding: 0.65rem 0.85rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+
+      th {
+        background: #f4f4f5;
+        font-weight: 600;
+      }
+
+      tr:last-child td {
+        border-bottom: none;
+      }
+
+      ol {
+        margin: 0;
+        padding-left: 1.25rem;
+      }
+
+      ol li {
+        margin-bottom: 0.5rem;
+      }
+
+      code {
+        font-family: ui-monospace, "Cascadia Code", monospace;
+        font-size: 0.85em;
+        background: #f4f4f5;
+        padding: 0.15em 0.4em;
+        border-radius: 4px;
+      }
+
+      footer {
+        margin-top: 3rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border);
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Task Worker データ設計（共有用）</h1>
+        <p class="lead">
+          コーポレートIT担当向けの Task Worker — タスクを見ながら作業メモ・定例報告を書く4ペインのWebツール。
+        </p>
+      </header>
+
+      <section>
+        <h2>設計の芯（1文）</h2>
+        <blockquote>
+          タスクの骨格（外部）と自分の作業データ（Task Worker）を分け、将来 JIRA
+          連携しても作業データをそのまま残せるようにしている。
+        </blockquote>
+      </section>
+
+      <section>
+        <h2>2層モデル</h2>
+        <div class="diagram">
+          <pre class="mermaid">
+flowchart TB
+  subgraph Master["骨格 Master — タスクそのもの"]
+    M1["タイトル / 期限 / 概要 / コメント"]
+  end
+
+  subgraph Overlay["作業 Overlay — Task Worker 独自"]
+    O1["定例報告 3欄"]
+    O2["作業メモ"]
+    O3["リンク / 遅延 / 完了"]
+  end
+
+  ID["task.id（例: CIT-201）"]
+  ID --> Master
+  ID --> Overlay
+          </pre>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>層</th>
+              <th>中身</th>
+              <th>将来の正本</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Master</strong></td>
+              <td>チケット情報</td>
+              <td><strong>JIRA</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Overlay</strong></td>
+              <td>報告・メモ・リンク等</td>
+              <td><strong>Neon DB</strong>（Phase 1 はブラウザ）</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Phase 1 の保存場所</h2>
+        <div class="diagram">
+          <pre class="mermaid">
+flowchart LR
+  subgraph Files["ファイル（リポジトリ）"]
+    TJ["tasks.json\n公式タスク"]
+    TL["task-links.json\n初期リンク"]
+  end
+
+  subgraph Browser["ブラウザ localStorage v3"]
+    LT["localTasks\n追加タスク LOCAL-001"]
+    OV["Overlay\n報告・メモ・リンク・完了"]
+    SEL["selectedTaskId"]
+  end
+
+  TJ --> UI["4ペイン画面"]
+  LT --> UI
+  TL --> UI
+  OV --> UI
+  SEL --> UI
+          </pre>
+        </div>
+      </section>
+
+      <section>
+        <h2>タスクは2種類だけ</h2>
+        <div class="diagram">
+          <pre class="mermaid">
+flowchart TB
+  subgraph Official["公式タスク（tasks.json）"]
+    A1["ID: CIT-201"]
+    A2["骨格: 表示のみ"]
+    A3["削除不可 → 完了のみ"]
+  end
+
+  subgraph Added["追加タスク（+ ボタン）"]
+    B1["ID: LOCAL-001"]
+    B2["骨格: 編集可"]
+    B3["削除可"]
+  end
+
+  subgraph Shared["共通（Overlay）"]
+    C1["報告・メモ・リンク\n→ 同じ保存方式"]
+  end
+
+  Official --> Shared
+  Added --> Shared
+          </pre>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>公式タスク</th>
+              <th>追加タスク</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>保存</td>
+              <td><code>tasks.json</code></td>
+              <td><code>localStorage</code></td>
+            </tr>
+            <tr>
+              <td>追加</td>
+              <td>ファイル編集</td>
+              <td>P1 の <strong>+</strong></td>
+            </tr>
+            <tr>
+              <td>骨格編集</td>
+              <td>不可</td>
+              <td>可</td>
+            </tr>
+            <tr>
+              <td>JIRA 後</td>
+              <td><strong>自動同期</strong></td>
+              <td><strong>手動で紐付け</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>ペイン別：何がどこに保存されるか</h2>
+        <div class="diagram">
+          <pre class="mermaid">
+flowchart TB
+  P1["P1 タスク一覧"]
+  P2["P2 タスク詳細"]
+  P3["P3 関連リンク"]
+  P4["P4 週次報告書"]
+
+  P1 -->|骨格・LOCAL追加| LS1["localStorage / tasks.json"]
+  P1 -->|完了・選択| LS2["localStorage Overlay"]
+
+  P2 -->|骨格 LOCALのみ| LS1
+  P2 -->|メモ・報告3欄・遅延| LS2
+
+  P3 -->|追加リンク| LS2
+  P3 -->|初期リンク| JSON["task-links.json"]
+
+  P4 -->|プレビュー| NONE["保存しない\nP2 から生成"]
+          </pre>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ペイン</th>
+              <th>保存する</th>
+              <th>保存しない</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>P1</strong></td>
+              <td>選択タスク・完了状態・LOCAL追加</td>
+              <td>報告済バッジ（計算値）</td>
+            </tr>
+            <tr>
+              <td><strong>P2</strong></td>
+              <td>メモ・報告3欄・遅延・LOCAL骨格</td>
+              <td>折りたたみ状態</td>
+            </tr>
+            <tr>
+              <td><strong>P3</strong></td>
+              <td>ユーザー追加リンク</td>
+              <td>プレビュー</td>
+            </tr>
+            <tr>
+              <td><strong>P4</strong></td>
+              <td>—</td>
+              <td>報告書本文（P2から生成）</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>将来：JIRA 連携後</h2>
+        <div class="diagram">
+          <pre class="mermaid">
+flowchart LR
+  JIRA["JIRA API\n骨格の正本"]
+  Neon["Neon DB\nOverlay の正本"]
+  App["Task Worker"]
+
+  JIRA -->|"起動時 + 手動更新"| App
+  Neon <-->|"読み書き"| App
+
+  LS["localStorage\n（Phase 1 データ）"]
+  LS -->|"初回接続時に一括移行"| Neon
+          </pre>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>操作</th>
+              <th>手動が必要？</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>JIRA チケット（CIT-xxx）を表示</td>
+              <td><strong>不要</strong> — 同期で自動</td>
+            </tr>
+            <tr>
+              <td>作業データの引き継ぎ</td>
+              <td><strong>不要</strong> — 同じ ID で紐付く</td>
+            </tr>
+            <tr>
+              <td>LOCAL → JIRA 化</td>
+              <td><strong>必要</strong> — チケット作成後に手動紐付け</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>なぜこうするか（3点）</h2>
+        <ol>
+          <li>
+            <strong>JIRA が来ても作業データを捨てない</strong> —
+            骨格と作業を最初から分離
+          </li>
+          <li>
+            <strong>Phase 1 は DB なしで動く</strong> — localStorage
+            で最速リリース
+          </li>
+          <li>
+            <strong>LOCAL は JIRA 前の仮置き</strong> —
+            本番チケットができたら昇格、それ以外は自動
+          </li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>用語</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>用語</th>
+              <th>意味</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Master / 骨格</strong></td>
+              <td>タイトル・期限・概要などチケット本体</td>
+            </tr>
+            <tr>
+              <td><strong>Overlay / 作業</strong></td>
+              <td>Task Worker で書く報告・メモなど</td>
+            </tr>
+            <tr>
+              <td><strong>公式タスク</strong></td>
+              <td><code>tasks.json</code> 由来（将来 JIRA）</td>
+            </tr>
+            <tr>
+              <td><strong>追加タスク</strong></td>
+              <td><code>LOCAL-001</code> 形式。アプリからたまに追加</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <footer>Task Worker — workspace-it-kit / AI Driven School 共有用</footer>
+    </div>
+
+    <script>
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: "neutral",
+        flowchart: { curve: "basis", padding: 16 },
+      });
+    </script>
+  </body>
+</html>
