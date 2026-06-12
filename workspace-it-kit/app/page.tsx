@@ -1,24 +1,24 @@
 import { Workspace } from "@/components/workspace/Workspace";
-import positionsData from "@/data/positions.json";
-import candidatesData from "@/data/candidates.json";
+import taskLinksData from "@/data/task-links.json";
+import tasksData from "@/data/tasks.json";
 import workspaceData from "@/data/workspace.json";
 import {
-  departmentsSchema,
-  candidatesSchema,
-  workspaceSchema,
-} from "@/lib/schema";
+  execLinksMapSchema,
+  tasksSchema,
+  workspaceMetaSchema,
+} from "@/lib/it/schema";
 
 export default function Page() {
-  const deptResult = departmentsSchema.safeParse(positionsData);
-  const candResult = candidatesSchema.safeParse(candidatesData);
-  const wsResult = workspaceSchema.safeParse(workspaceData);
+  const tasksResult = tasksSchema.safeParse(tasksData);
+  const linksResult = execLinksMapSchema.safeParse(taskLinksData);
+  const wsResult = workspaceMetaSchema.safeParse(workspaceData);
 
-  if (!deptResult.success || !candResult.success || !wsResult.success) {
+  if (!tasksResult.success || !linksResult.success || !wsResult.success) {
     const errors = [
-      !deptResult.success &&
-        `positions.json: ${deptResult.error.issues[0]?.message}`,
-      !candResult.success &&
-        `candidates.json: ${candResult.error.issues[0]?.message}`,
+      !tasksResult.success &&
+        `tasks.json: ${tasksResult.error.issues[0]?.message}`,
+      !linksResult.success &&
+        `task-links.json: ${linksResult.error.issues[0]?.message}`,
       !wsResult.success &&
         `workspace.json: ${wsResult.error.issues[0]?.message}`,
     ].filter(Boolean);
@@ -27,8 +27,8 @@ export default function Page() {
 
   return (
     <Workspace
-      initialDepartments={deptResult.data}
-      initialCandidates={candResult.data}
+      initialTasks={tasksResult.data}
+      initialExecLinks={linksResult.data}
       workspace={wsResult.data}
     />
   );

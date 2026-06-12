@@ -21,6 +21,15 @@
     "comments": ["5/13: ログ解析開始。約15台を検出。"]
   },
   {
+    "id": "CIT-201",
+    "title": "Mac Studio ローカルLLMサーバ構築",
+    "deadline": "6/15",
+    "delayed": false,
+    "bucket": "week",
+    "description": "社内検証用に Ollama + Open WebUI を構築。NW・DHCP 設定後に本番相当テストを実施。",
+    "comments": ["6/1: Mac Studio 納品確認済み"]
+  },
+  {
     "id": "CIT-135",
     "title": "Slack APIの管理者権限整理",
     "deadline": "5/30",
