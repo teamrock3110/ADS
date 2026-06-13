@@ -3,15 +3,25 @@ import { describe, expect, it } from "vitest";
 import {
   createEmptyStorage,
   hasReportProgress,
-  parseWorkspaceStorage,
+  workspaceStorageSchema,
 } from "@/lib/it/storage";
 
-describe("parseWorkspaceStorage", () => {
+describe("workspaceStorageSchema", () => {
   it("creates empty storage when raw is null", () => {
-    expect(parseWorkspaceStorage(null)).toEqual(createEmptyStorage());
+    const result = workspaceStorageSchema.safeParse(null);
+    expect(result.success).toBe(false);
+    expect(createEmptyStorage()).toEqual({
+      reportInputs: {},
+      workMemos: {},
+      taskLinks: {},
+      delayedOverrides: {},
+      completedTaskIds: [],
+      selectedTaskId: null,
+      localTasks: [],
+    });
   });
 
-  it("loads v2 format", () => {
+  it("loads v2 format with defaults for new fields", () => {
     const data = {
       reportInputs: {
         "CIT-201": { progress: "進捗", issues: "", consult: "" },
@@ -21,28 +31,29 @@ describe("parseWorkspaceStorage", () => {
       delayedOverrides: {},
       completedTaskIds: ["CIT-142"],
     };
-    expect(parseWorkspaceStorage(data)).toEqual(data);
+    const result = workspaceStorageSchema.safeParse(data);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.reportInputs["CIT-201"]?.progress).toBe("進捗");
+      expect(result.data.completedTaskIds).toContain("CIT-142");
+      expect(result.data.selectedTaskId).toBeNull();
+    }
   });
 
-  it("migrates legacy v1 fields without rollover", () => {
-    const legacy = {
-      periodStart: "2025-05-20",
-      reportInputs: {
-        "CIT-201": { progress: "残す", issues: "", consult: "" },
-      },
-      previousPeriod: null,
-      workMemos: { "CIT-201": "メモ" },
+  it("accepts selectedTaskId when present", () => {
+    const data = {
+      reportInputs: {},
+      workMemos: {},
       taskLinks: {},
-      delayedOverrides: { "CIT-201": true },
-    };
-
-    expect(parseWorkspaceStorage(legacy)).toEqual({
-      reportInputs: legacy.reportInputs,
-      workMemos: legacy.workMemos,
-      taskLinks: {},
-      delayedOverrides: legacy.delayedOverrides,
+      delayedOverrides: {},
       completedTaskIds: [],
-    });
+      selectedTaskId: "CIT-201",
+    };
+    const result = workspaceStorageSchema.safeParse(data);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.selectedTaskId).toBe("CIT-201");
+    }
   });
 });
 

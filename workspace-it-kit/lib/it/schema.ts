@@ -54,3 +54,21 @@ export const workspaceMetaSchema = z.object({
 export type TaskBucket = z.infer<typeof taskBucketSchema>;
 export type Task = z.infer<typeof taskSchema>;
 export type RelatedTicket = z.infer<typeof relatedTicketSchema>;
+
+/** LOCAL タスク（アプリから追加）。Task と同じ型で表示・処理できる */
+export const localTaskSchema = z.object({
+  id: z.string(),           // "LOCAL-001" 形式
+  title: z.string(),
+  deadline: z.string(),     // "6/15" 形式
+  description: z.string().default(""),
+  comments: z.array(z.string()).default([]),
+  bucket: taskBucketSchema.default("week"),
+  delayed: z.boolean().default(false),
+});
+
+export type LocalTask = z.infer<typeof localTaskSchema>;
+
+/** Task が LOCAL 由来かどうか */
+export function isLocalTask(task: Pick<Task, "id">): boolean {
+  return task.id.startsWith("LOCAL-");
+}

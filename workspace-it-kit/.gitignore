@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# overlay data (作業データ：ブラウザ間共有が不要な間は gitignore)
+data/overlay.json

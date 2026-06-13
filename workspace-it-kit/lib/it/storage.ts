@@ -4,10 +4,9 @@ import {
   EMPTY_WEEKLY_REPORT_INPUT,
   type WeeklyReportInput,
 } from "@/lib/it/report";
-import { execLinkSchema, type ExecLink } from "@/lib/it/schema";
+import { execLinkSchema, localTaskSchema, type ExecLink, type LocalTask } from "@/lib/it/schema";
 
-const STORAGE_KEY = "workspace-it-kit:v2";
-const LEGACY_STORAGE_KEY = "workspace-it-kit:v1";
+// ─── スキーマ ────────────────────────────────────────────────
 
 const weeklyReportInputSchema = z.object({
   progress: z.string(),
@@ -16,14 +15,16 @@ const weeklyReportInputSchema = z.object({
 });
 
 const workspaceStorageSchema = z.object({
-  reportInputs: z.record(z.string(), weeklyReportInputSchema),
-  workMemos: z.record(z.string(), z.string()),
-  taskLinks: z.record(z.string(), z.array(execLinkSchema)),
-  delayedOverrides: z.record(z.string(), z.boolean()),
+  reportInputs: z.record(z.string(), weeklyReportInputSchema).default({}),
+  workMemos: z.record(z.string(), z.string()).default({}),
+  taskLinks: z.record(z.string(), z.array(execLinkSchema)).default({}),
+  delayedOverrides: z.record(z.string(), z.boolean()).default({}),
   completedTaskIds: z.array(z.string()).default([]),
+  selectedTaskId: z.string().nullable().default(null),
+  localTasks: z.array(localTaskSchema).default([]),
 });
 
-/** v1（報告期間あり）からの移行用 */
+/** v2（localStorage）からの移行用: 古いキーを許容 */
 const legacyStorageSchema = z.object({
   reportInputs: z.record(z.string(), weeklyReportInputSchema).default({}),
   workMemos: z.record(z.string(), z.string()).default({}),
@@ -32,7 +33,12 @@ const legacyStorageSchema = z.object({
   completedTaskIds: z.array(z.string()).default([]),
 });
 
+const LEGACY_STORAGE_KEY = "workspace-it-kit:v2";
+const LEGACY_STORAGE_KEY_V1 = "workspace-it-kit:v1";
+
 export type WorkspaceStorage = z.infer<typeof workspaceStorageSchema>;
+
+// ─── デフォルト ───────────────────────────────────────────────
 
 export function createEmptyStorage(): WorkspaceStorage {
   return {
@@ -41,53 +47,87 @@ export function createEmptyStorage(): WorkspaceStorage {
     taskLinks: {},
     delayedOverrides: {},
     completedTaskIds: [],
+    selectedTaskId: null,
+    localTasks: [],
   };
 }
 
-export function parseWorkspaceStorage(raw: unknown): WorkspaceStorage {
+export type { LocalTask };
+
+function parseStorage(raw: unknown): WorkspaceStorage {
   const parsed = workspaceStorageSchema.safeParse(raw);
-  if (parsed.success) {
-    return parsed.data;
-  }
-
-  const legacy = legacyStorageSchema.safeParse(raw);
-  if (legacy.success) {
-    return legacy.data;
-  }
-
+  if (parsed.success) return parsed.data;
   return createEmptyStorage();
 }
 
-export function loadWorkspaceStorage(): WorkspaceStorage {
-  if (typeof window === "undefined") {
-    return createEmptyStorage();
-  }
+function parseLegacy(raw: unknown): WorkspaceStorage | null {
+  const parsed = legacyStorageSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  return { ...parsed.data, selectedTaskId: null, localTasks: [] };
+}
 
+// ─── localStorage 移行 ────────────────────────────────────────
+
+function readLegacyLocalStorage(): WorkspaceStorage | null {
+  if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      return parseWorkspaceStorage(JSON.parse(raw));
+    const raw =
+      window.localStorage.getItem(LEGACY_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_STORAGE_KEY_V1);
+    if (!raw) return null;
+    return parseLegacy(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function clearLegacyLocalStorage(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+  window.localStorage.removeItem(LEGACY_STORAGE_KEY_V1);
+}
+
+// ─── API Route 経由の読み書き ─────────────────────────────────
+
+export async function loadWorkspaceStorage(): Promise<WorkspaceStorage> {
+  try {
+    const res = await fetch("/api/overlay");
+    if (!res.ok) throw new Error(`GET /api/overlay failed: ${res.status}`);
+    const json: unknown = await res.json();
+    const loaded = parseStorage(json);
+
+    // overlay が空で localStorage にデータがあれば移行
+    const isEmpty =
+      Object.keys(loaded.reportInputs).length === 0 &&
+      Object.keys(loaded.workMemos).length === 0 &&
+      Object.keys(loaded.taskLinks).length === 0 &&
+      loaded.completedTaskIds.length === 0;
+
+    if (isEmpty) {
+      const legacy = readLegacyLocalStorage();
+      if (legacy) {
+        await saveWorkspaceStorage(legacy);
+        clearLegacyLocalStorage();
+        return legacy;
+      }
     }
 
-    const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (legacyRaw) {
-      const migrated = parseWorkspaceStorage(JSON.parse(legacyRaw));
-      saveWorkspaceStorage(migrated);
-      return migrated;
-    }
-
-    return createEmptyStorage();
+    return loaded;
   } catch {
     return createEmptyStorage();
   }
 }
 
-export function saveWorkspaceStorage(data: WorkspaceStorage): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+export async function saveWorkspaceStorage(data: WorkspaceStorage): Promise<void> {
+  const res = await fetch("/api/overlay", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`PUT /api/overlay failed: ${res.status}`);
 }
+
+// ─── ヘルパー ─────────────────────────────────────────────────
 
 export function getTaskLinks(
   storage: WorkspaceStorage,
@@ -118,12 +158,12 @@ export function countReportProgress(
   return { filled, total: taskIds.length };
 }
 
-/** テスト用: localStorage をクリア */
+/** テスト用 */
 export function clearWorkspaceStorageForTests(): void {
   if (typeof window !== "undefined") {
-    window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY_V1);
   }
 }
 
-export { STORAGE_KEY, workspaceStorageSchema };
+export { workspaceStorageSchema };

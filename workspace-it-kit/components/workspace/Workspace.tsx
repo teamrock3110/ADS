@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { flushActiveTextarea } from "@/components/primitives/InlineTextareaField";
 import { ExecLinksPane } from "@/components/workspace/ExecLinksPane";
@@ -13,7 +14,7 @@ import {
   generateWeeklyReport,
   type WeeklyReportInput,
 } from "@/lib/it/report";
-import { type ExecLink, type Task } from "@/lib/it/schema";
+import { type ExecLink, type Task, isLocalTask } from "@/lib/it/schema";
 import {
   countReportProgress,
   getTaskLinks,
@@ -21,6 +22,7 @@ import {
   loadWorkspaceStorage,
   saveWorkspaceStorage,
   type WorkspaceStorage,
+  type LocalTask,
 } from "@/lib/it/storage";
 
 type WorkspaceProps = {
@@ -38,8 +40,9 @@ export function Workspace({
   initialExecLinks,
   workspace,
 }: WorkspaceProps) {
-  const [tasks] = useState<Task[]>(initialTasks);
-  const [selectedTaskId, setSelectedTaskId] = useState<string>("CIT-201");
+  const [jsonTasks] = useState<Task[]>(initialTasks);
+  const [localTasks, setLocalTasks] = useState<LocalTask[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [reportInputs, setReportInputs] = useState<
     Record<string, WeeklyReportInput>
@@ -52,15 +55,26 @@ export function Workspace({
   const [completedTaskIds, setCompletedTaskIds] = useState<string[]>([]);
   const [reportPaneOpen, setReportPaneOpen] = useState(true);
 
+  // ── 初回読み込み ──────────────────────────────────────────
   useEffect(() => {
-    const loaded = loadWorkspaceStorage();
-    setReportInputs(loaded.reportInputs);
-    setWorkMemos(loaded.workMemos);
-    setTaskLinks(loaded.taskLinks);
-    setDelayedOverrides(loaded.delayedOverrides);
-    setCompletedTaskIds(loaded.completedTaskIds);
-    setHydrated(true);
+    loadWorkspaceStorage()
+      .then((loaded) => {
+        setReportInputs(loaded.reportInputs);
+        setWorkMemos(loaded.workMemos);
+        setTaskLinks(loaded.taskLinks);
+        setDelayedOverrides(loaded.delayedOverrides);
+        setCompletedTaskIds(loaded.completedTaskIds);
+        setSelectedTaskId(loaded.selectedTaskId);
+        setLocalTasks(loaded.localTasks);
+        setHydrated(true);
+      })
+      .catch(() => {
+        setHydrated(true);
+      });
   }, []);
+
+  // ── 保存（状態変化ごと）──────────────────────────────────
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -71,8 +85,17 @@ export function Workspace({
       taskLinks,
       delayedOverrides,
       completedTaskIds,
+      selectedTaskId,
+      localTasks,
     };
-    saveWorkspaceStorage(data);
+
+    // 連続した state 更新をまとめて1回だけ送る
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveWorkspaceStorage(data).catch(() => {
+        toast.error("保存に失敗しました。サーバーが起動しているか確認してください。");
+      });
+    }, 300);
   }, [
     hydrated,
     reportInputs,
@@ -80,7 +103,15 @@ export function Workspace({
     taskLinks,
     delayedOverrides,
     completedTaskIds,
+    selectedTaskId,
+    localTasks,
   ]);
+
+  // ── タスク一覧の計算 ──────────────────────────────────────
+  const tasks = useMemo<Task[]>(
+    () => [...jsonTasks, ...localTasks],
+    [jsonTasks, localTasks],
+  );
 
   const tasksWithDelayed = useMemo(
     () =>
@@ -107,19 +138,21 @@ export function Workspace({
     [tasksWithDelayed, completedTaskIds],
   );
 
-  useEffect(() => {
-    if (!hydrated) return;
+  // 選択タスクの補正（完了済み or null → 先頭へ）
+  const resolvedSelectedTaskId = useMemo(() => {
+    if (!hydrated) return null;
     if (
-      activeTasks.length > 0 &&
-      isCompleted(completedTaskIds, selectedTaskId)
+      selectedTaskId &&
+      activeTasks.some((t) => t.id === selectedTaskId)
     ) {
-      setSelectedTaskId(activeTasks[0].id);
+      return selectedTaskId;
     }
-  }, [hydrated, activeTasks, completedTaskIds, selectedTaskId]);
+    return activeTasks[0]?.id ?? null;
+  }, [hydrated, selectedTaskId, activeTasks]);
 
-  const activeTask =
-    activeTasks.find((t) => t.id === selectedTaskId) ?? activeTasks[0];
+  const activeTask = activeTasks.find((t) => t.id === resolvedSelectedTaskId);
 
+  // ── 計算値 ────────────────────────────────────────────────
   const storageSnapshot: WorkspaceStorage = useMemo(
     () => ({
       reportInputs,
@@ -127,14 +160,10 @@ export function Workspace({
       taskLinks,
       delayedOverrides,
       completedTaskIds,
+      selectedTaskId,
+      localTasks,
     }),
-    [
-      reportInputs,
-      workMemos,
-      taskLinks,
-      delayedOverrides,
-      completedTaskIds,
-    ],
+    [reportInputs, workMemos, taskLinks, delayedOverrides, completedTaskIds, selectedTaskId, localTasks],
   );
 
   const execLinks = useMemo(() => {
@@ -172,6 +201,7 @@ export function Workspace({
     return `${filled}/${total} 入力済`;
   }, [activeTasks, reportInputs]);
 
+  // ── ハンドラ ──────────────────────────────────────────────
   const handleSelectTask = useCallback((id: string) => {
     flushActiveTextarea();
     setSelectedTaskId(id);
@@ -245,6 +275,24 @@ export function Workspace({
     [],
   );
 
+  const addLocalTaskComment = useCallback(
+    (body: string) => {
+      if (!activeTask || !isLocalTask(activeTask)) return;
+      const today = new Date();
+      const datePrefix = `${today.getMonth() + 1}/${today.getDate()}`;
+      const comment = `${datePrefix}: ${body}`;
+      setLocalTasks((prev) =>
+        prev.map((t) =>
+          t.id === activeTask.id
+            ? { ...t, comments: [...t.comments, comment] }
+            : t,
+        ),
+      );
+    },
+    [activeTask],
+  );
+
+  // ── 描画 ──────────────────────────────────────────────────
   if (!hydrated) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background text-sm text-muted-foreground">
@@ -265,7 +313,7 @@ export function Workspace({
           <TaskListPane
             activeTasks={activeTasks}
             completedTasks={completedTasks}
-            selectedTaskId={selectedTaskId}
+            selectedTaskId={resolvedSelectedTaskId ?? ""}
             reportFilledByTaskId={reportFilledByTaskId}
             onSelectTask={handleSelectTask}
             onRestoreTask={handleRestoreTask}
@@ -289,7 +337,7 @@ export function Workspace({
         <TaskListPane
           activeTasks={activeTasks}
           completedTasks={completedTasks}
-          selectedTaskId={selectedTaskId}
+          selectedTaskId={resolvedSelectedTaskId ?? ""}
           reportFilledByTaskId={reportFilledByTaskId}
           onSelectTask={handleSelectTask}
           onRestoreTask={handleRestoreTask}
@@ -303,6 +351,7 @@ export function Workspace({
           onWorkMemoSave={saveWorkMemo}
           onReportFieldSave={saveReportField}
           onCompleteTask={handleCompleteTask}
+          onAddComment={isLocalTask(activeTask) ? addLocalTaskComment : undefined}
         />
         <ExecLinksPane links={execLinks} onAddLink={addExecLink} />
         <ReportPane

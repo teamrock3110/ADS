@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { type Task } from "@/lib/it/schema";
+import { type Task, isLocalTask } from "@/lib/it/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -61,6 +61,11 @@ function TaskRow({
       </span>
       <span className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
         {task.id} · {task.deadline}
+        {isLocalTask(task) && (
+          <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+            LOCAL
+          </Badge>
+        )}
         {task.delayed && (
           <Badge variant="destructive" className="h-5 px-1.5 text-[10px]">
             遅延

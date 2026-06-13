@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 
-import { type Task } from "@/lib/it/schema";
+import { type Task, isLocalTask } from "@/lib/it/schema";
 import { type WeeklyReportInput } from "@/lib/it/report";
 import { cn } from "@/lib/utils";
 import { InlineTextareaField } from "@/components/primitives/InlineTextareaField";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Collapsible,
   CollapsibleContent,
@@ -28,6 +29,7 @@ type TaskDetailPaneProps = {
     value: string,
   ) => void;
   onCompleteTask: () => void;
+  onAddComment?: (body: string) => void;
 };
 
 function CollapsibleSection({
@@ -71,7 +73,17 @@ export function TaskDetailPane({
   onWorkMemoSave,
   onReportFieldSave,
   onCompleteTask,
+  onAddComment,
 }: TaskDetailPaneProps) {
+  const [commentInput, setCommentInput] = useState("");
+  const isLocal = isLocalTask(task);
+
+  const handleAddComment = () => {
+    const body = commentInput.trim();
+    if (!body || !onAddComment) return;
+    onAddComment(body);
+    setCommentInput("");
+  };
   return (
     <section className="flex min-w-[420px] flex-1 flex-col border-r border-border bg-background">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
@@ -106,19 +118,47 @@ export function TaskDetailPane({
         <div className="flex flex-col gap-6 p-4">
           <CollapsibleSection title="概要・コメント">
             <div className="flex flex-col gap-4">
-              <p className="whitespace-pre-line text-sm leading-relaxed">
-                {task.description}
-              </p>
+              {task.description && (
+                <p className="whitespace-pre-line text-sm leading-relaxed">
+                  {task.description}
+                </p>
+              )}
               {task.comments.length > 0 && (
                 <div className="flex flex-col gap-2">
-                  {task.comments.map((comment) => (
+                  {task.comments.map((comment, i) => (
                     <div
-                      key={comment}
+                      key={i}
                       className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground"
                     >
                       {comment}
                     </div>
                   ))}
+                </div>
+              )}
+              {isLocal && onAddComment && (
+                <div className="flex gap-2">
+                  <Input
+                    value={commentInput}
+                    onChange={(e) => setCommentInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleAddComment();
+                      }
+                    }}
+                    placeholder="追記を入力… （Enter で追加）"
+                    className="h-8 text-sm"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 shrink-0"
+                    onClick={handleAddComment}
+                    disabled={!commentInput.trim()}
+                  >
+                    <Plus className="size-3.5" />
+                  </Button>
                 </div>
               )}
             </div>
