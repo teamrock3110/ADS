@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* スキャン範囲を UI コードに限定（.claude / docs 等を除外して初回コンパイルの固着を防ぐ） */
+@source "../components";
+@source "../lib";
+@source "./";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 

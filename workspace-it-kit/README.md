@@ -44,7 +44,52 @@ P2 の入力のみが報告書の中身になります（タスクJSONからは�
 
 - `data/tasks.json` — タスク
 - `data/task-links.json` — タスク別関連リンク（モック）
-- 追加リンク・メモはセッション内のみ（来月: localStorage）
+- **作業データ（Overlay）** — `DATABASE_URL` 設定時は **Neon DB**、未設定時は `data/overlay.json`
+
+## Neon DB セットアップ（Vercel 連携）
+
+### 1. Vercel アカウント作成（未登録の場合）
+
+1. [https://vercel.com/signup](https://vercel.com/signup) を開く
+2. GitHub / GitLab / Bitbucket / Email のいずれかで登録
+
+### 2. Vercel にプロジェクトを作成
+
+1. [Vercel Dashboard](https://vercel.com/dashboard) → **Add New…** → **Project**
+2. このリポジトリ（`11_ADS`）を Import
+3. **Root Directory** を `workspace-it-kit` に設定して Deploy
+
+### 3. Neon データベースを追加
+
+1. デプロイしたプロジェクトを開く → **Storage** タブ
+2. **Create Database** → **Neon** を選択
+3. リージョンは **Tokyo (ap-northeast-1)** 推奨 → **Create**
+4. 作成後 **Connect to Project** でこのプロジェクトに紐付け  
+   → `DATABASE_URL` などの環境変数が Vercel に自動設定される
+
+### 4. ローカルに環境変数を取り込む
+
+```bash
+cd workspace-it-kit
+npx vercel login          # 初回のみ
+npx vercel link           # プロジェクトを選択
+npx vercel env pull .env.local
+```
+
+### 5. テーブル作成（初回のみ）
+
+```bash
+npm run db:migrate
+```
+
+### 6. 開発サーバー再起動
+
+```bash
+npm run dev
+```
+
+`DATABASE_URL` が設定されていれば、作業データ（報告・メモ・リンク等）は Neon に保存されます。  
+既存の `data/overlay.json` がある場合、初回アクセス時に自動で Neon へ移行されます。
 
 ## 来月
 
