@@ -80,6 +80,85 @@
         padding: 1.5rem;
       }
 
+      /* ── 課題 vs 解決 ── */
+      .problem-solution {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 1rem;
+        align-items: start;
+      }
+
+      .ps-box {
+        border-radius: 10px;
+        padding: 1.25rem;
+      }
+
+      .ps-box.problem {
+        background: rgba(239,68,68,0.08);
+        border: 1px solid rgba(239,68,68,0.35);
+      }
+
+      .ps-box.solution {
+        background: rgba(34,197,94,0.08);
+        border: 1px solid rgba(34,197,94,0.35);
+      }
+
+      .ps-box .ps-label {
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        margin-bottom: 0.65rem;
+      }
+
+      .ps-box.problem .ps-label { color: #f87171; }
+      .ps-box.solution .ps-label { color: #86efac; }
+
+      .ps-box h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.65rem; }
+
+      .ps-box ul {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+
+      .ps-box.problem ul li::before { content: "✗ "; color: #f87171; }
+      .ps-box.solution ul li::before { content: "✓ "; color: #86efac; }
+
+      .ps-arrow { font-size: 2rem; color: var(--muted); text-align: center; padding-top: 2rem; }
+
+      /* 用語注釈 */
+      .note {
+        font-size: 0.75rem;
+        color: var(--muted);
+        font-weight: 400;
+      }
+
+      /* 状況カード */
+      .situation-card {
+        background: rgba(59,130,246,0.06);
+        border: 1px solid rgba(59,130,246,0.25);
+        border-radius: 10px;
+        padding: 1rem 1.5rem;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.35rem 1rem;
+        font-size: 0.87rem;
+        margin-bottom: 1.25rem;
+        align-items: baseline;
+      }
+
+      .situation-card .sc-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: var(--accent);
+        white-space: nowrap;
+        padding-top: 0.1rem;
+      }
+
       /* ── 共有の流れ ── */
       .flow {
         display: grid;
@@ -270,6 +349,50 @@
 
     <div class="page">
 
+      <!-- ★ 誰のどんな問題を解決するか -->
+      <section>
+        <div class="section-label">Task Worker とは</div>
+        <h2>誰の・どんな問題を解決するか</h2>
+
+        <!-- 状況カード -->
+        <div class="situation-card">
+          <div class="sc-label">誰が</div>
+          <div><strong>放送系企業のコーポレートIT担当</strong> <span class="note">= 放送局・メディア企業の社内IT業務を担う担当者</span></div>
+          <div class="sc-label">何してる</div>
+          <div>
+            <strong>週4回の定例</strong> <span class="note">= 各所関係者とのミーティング</span>
+            でアジェンダ <span class="note">= 議題リスト</span> にタスク状況を書いて口頭報告
+          </div>
+          <div class="sc-label">使っているもの</div>
+          <div>
+            <strong>Jira</strong> <span class="note">= チーム全員のタスクを一元管理するツール</span>
+          </div>
+        </div>
+
+        <!-- 問題 vs 解決 -->
+        <div class="problem-solution">
+          <div class="ps-box problem">
+            <div class="ps-label">BEFORE — 今の課題</div>
+            <h3>報告前の準備が毎回大変</h3>
+            <ul>
+              <li>メモ・報告文・参照リンクが複数のツールに散らばっている</li>
+              <li>Jira は全員分が混在していて「自分の担当分だけ」を見づらい</li>
+            </ul>
+          </div>
+
+          <div class="ps-arrow">→</div>
+
+          <div class="ps-box solution">
+            <div class="ps-label">AFTER — Task Worker で解決</div>
+            <h3>1画面でそのまま報告できる</h3>
+            <ul>
+              <li>タスク → メモ → 報告入力 → コピーが1画面で完結</li>
+              <li>入力内容は自動保存。次に開いても残っている</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <!-- ① ツールは何をするか -->
       <section>
         <div class="section-label">Task Worker の例 — 1</div>
@@ -283,7 +406,7 @@
             <pre class="mermaid">
 flowchart LR
   T["P1\nタスク一覧"] --> D["P2\n詳細・報告入力"]
-  L["P3\n関連リンク"] --> D
+  D <--> L["P3\n関連リンク集"]
   D --> R["P4\n週次報告書"]
             </pre>
           </div>
@@ -307,6 +430,40 @@ flowchart LR
       <section>
         <div class="section-label">Task Worker の例 — 2</div>
         <h2>② どこに保存するか</h2>
+
+        <!-- ロードマップ -->
+        <div class="roadmap" style="margin-bottom:1rem;">
+          <div class="rm-card s1">
+            <div class="step-tag">STEP 1 · 今</div>
+            <h3>個人PC のみ</h3>
+            <table>
+              <tr><td>目的</td><td><strong>動くものを作る</strong></td></tr>
+              <tr><td>骨格</td><td>tasks.json（JSON）</td></tr>
+              <tr><td>作業データ</td><td>overlay.json<br><span style="font-size:0.75rem;color:#94a3b8;">.gitignore</span></td></tr>
+              <tr><td>環境</td><td>localhost</td></tr>
+            </table>
+          </div>
+          <div class="rm-card s2">
+            <div class="step-tag">STEP 2 · 次</div>
+            <h3>Vercel デプロイ</h3>
+            <table>
+              <tr><td>目的</td><td><strong>スクールの課題として公開する</strong></td></tr>
+              <tr><td>骨格</td><td>tasks.json（JSON）</td></tr>
+              <tr><td>作業データ</td><td>Neon DB</td></tr>
+              <tr><td>変えること</td><td>書き込み先<br>のみ変更</td></tr>
+            </table>
+          </div>
+          <div class="rm-card s3">
+            <div class="step-tag">STEP 3 · 将来</div>
+            <h3>JIRA 連携</h3>
+            <table>
+              <tr><td>目的</td><td><strong>チケット情報を自動で取り込む</strong></td></tr>
+              <tr><td>骨格</td><td>JIRA API</td></tr>
+              <tr><td>作業データ</td><td>Neon DB</td></tr>
+              <tr><td>変えること</td><td>読み込み元<br>のみ変更</td></tr>
+            </table>
+          </div>
+        </div>
 
         <!-- ペイン別データ表 -->
         <table class="main" style="margin-bottom:1rem;">
@@ -364,40 +521,6 @@ flowchart LR
             </tr>
           </tbody>
         </table>
-
-        <!-- ロードマップ -->
-        <div class="roadmap" style="margin-bottom:1rem;">
-          <div class="rm-card s1">
-            <div class="step-tag">STEP 1 · 今</div>
-            <h3>個人PC のみ</h3>
-            <table>
-              <tr><td>目的</td><td><strong>動くものを作る</strong></td></tr>
-              <tr><td>骨格</td><td>tasks.json（JSON）</td></tr>
-              <tr><td>作業データ</td><td>overlay.json<br><span style="font-size:0.75rem;color:#94a3b8;">.gitignore</span></td></tr>
-              <tr><td>環境</td><td>localhost</td></tr>
-            </table>
-          </div>
-          <div class="rm-card s2">
-            <div class="step-tag">STEP 2 · 次</div>
-            <h3>Vercel デプロイ</h3>
-            <table>
-              <tr><td>目的</td><td><strong>スクールの課題として公開する</strong></td></tr>
-              <tr><td>骨格</td><td>tasks.json（JSON）</td></tr>
-              <tr><td>作業データ</td><td>Neon DB</td></tr>
-              <tr><td>変えること</td><td>書き込み先<br>のみ変更</td></tr>
-            </table>
-          </div>
-          <div class="rm-card s3">
-            <div class="step-tag">STEP 3 · 将来</div>
-            <h3>JIRA 連携</h3>
-            <table>
-              <tr><td>目的</td><td><strong>チケット情報を自動で取り込む</strong></td></tr>
-              <tr><td>骨格</td><td>JIRA API</td></tr>
-              <tr><td>作業データ</td><td>Neon DB</td></tr>
-              <tr><td>変えること</td><td>読み込み元<br>のみ変更</td></tr>
-            </table>
-          </div>
-        </div>
 
         <!-- 保存先テーブル -->
         <table class="main" style="margin-bottom:1rem;">
@@ -479,16 +602,17 @@ flowchart LR
               <li>作業メモ・リンク追加</li>
               <li>遅延トグル・完了/復元</li>
               <li>週次報告書プレビュー</li>
-              <li>ブラウザ保存（localStorage）</li>
+              <li>overlay.json による永続化（API Route）</li>
+              <li>localStorage → overlay.json 移行</li>
+              <li>LOCAL タスクのコメント追記 UI</li>
             </ul>
           </div>
           <div class="status-box wip">
-            <h3>△ これから（STEP 1）</h3>
+            <h3>△ これから（STEP 1 残り）</h3>
             <ul>
-              <li>overlay.json の API Route 作成</li>
-              <li>localStorage → overlay.json に移行</li>
-              <li>LOCAL タスク追加 UI</li>
-              <li>.gitignore に overlay.json 追加</li>
+              <li>LOCAL タスク新規追加（+ ボタン）</li>
+              <li>LOCAL タスク骨格インライン編集</li>
+              <li>LOCAL タスク削除（確認ダイアログ）</li>
               <li>（STEP 2）Neon DB セットアップ</li>
               <li>（STEP 2）Vercel デプロイ</li>
             </ul>
