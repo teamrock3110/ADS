@@ -4,7 +4,7 @@ import {
   EMPTY_WEEKLY_REPORT_INPUT,
   type WeeklyReportInput,
 } from "@/lib/it/report";
-import { execLinkSchema, localTaskSchema, type ExecLink, type LocalTask } from "@/lib/it/schema";
+import { execLinkSchema, localTaskSchema, taskBucketSchema, type ExecLink, type LocalTask } from "@/lib/it/schema";
 
 // ─── スキーマ ────────────────────────────────────────────────
 
@@ -14,6 +14,15 @@ const weeklyReportInputSchema = z.object({
   consult: z.string(),
 });
 
+const taskEditSchema = z.object({
+  title: z.string().optional(),
+  deadline: z.string().optional(),
+  bucket: taskBucketSchema.optional(),
+  description: z.string().optional(),
+});
+
+export type TaskEdit = z.infer<typeof taskEditSchema>;
+
 const workspaceStorageSchema = z.object({
   reportInputs: z.record(z.string(), weeklyReportInputSchema).default({}),
   workMemos: z.record(z.string(), z.string()).default({}),
@@ -22,6 +31,8 @@ const workspaceStorageSchema = z.object({
   completedTaskIds: z.array(z.string()).default([]),
   selectedTaskId: z.string().nullable().default(null),
   localTasks: z.array(localTaskSchema).default([]),
+  deletedTaskIds: z.array(z.string()).default([]),
+  taskEdits: z.record(z.string(), taskEditSchema).default({}),
 });
 
 /** v2（localStorage）からの移行用: 古いキーを許容 */
@@ -49,6 +60,8 @@ export function createEmptyStorage(): WorkspaceStorage {
     completedTaskIds: [],
     selectedTaskId: null,
     localTasks: [],
+    deletedTaskIds: [],
+    taskEdits: {},
   };
 }
 
@@ -63,7 +76,7 @@ function parseStorage(raw: unknown): WorkspaceStorage {
 function parseLegacy(raw: unknown): WorkspaceStorage | null {
   const parsed = legacyStorageSchema.safeParse(raw);
   if (!parsed.success) return null;
-  return { ...parsed.data, selectedTaskId: null, localTasks: [] };
+  return { ...parsed.data, selectedTaskId: null, localTasks: [], deletedTaskIds: [], taskEdits: {} };
 }
 
 // ─── localStorage 移行 ────────────────────────────────────────

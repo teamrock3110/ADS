@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
 
-import { type Task, isLocalTask } from "@/lib/it/schema";
+import { type Task, type TaskBucket, isLocalTask } from "@/lib/it/schema";
 import { type WeeklyReportInput } from "@/lib/it/report";
 import { cn } from "@/lib/utils";
 import { InlineTextareaField } from "@/components/primitives/InlineTextareaField";
@@ -16,6 +16,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { DeleteConfirmDialog } from "@/components/workspace/DeleteConfirmDialog";
+import { TaskFormDialog } from "@/components/workspace/TaskFormDialog";
 
 type TaskDetailPaneProps = {
   task: Task;
@@ -30,6 +32,8 @@ type TaskDetailPaneProps = {
   ) => void;
   onCompleteTask: () => void;
   onAddComment?: (body: string) => void;
+  onEditTask?: (updates: { title?: string; deadline?: string; bucket?: TaskBucket; description?: string }) => void;
+  onDeleteTask?: () => void;
 };
 
 function CollapsibleSection({
@@ -74,8 +78,12 @@ export function TaskDetailPane({
   onReportFieldSave,
   onCompleteTask,
   onAddComment,
+  onEditTask,
+  onDeleteTask,
 }: TaskDetailPaneProps) {
   const [commentInput, setCommentInput] = useState("");
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const isLocal = isLocalTask(task);
 
   const handleAddComment = () => {
@@ -91,6 +99,30 @@ export function TaskDetailPane({
         <Badge variant="outline">期限 {task.deadline}</Badge>
         {delayed && <Badge variant="destructive">遅延</Badge>}
         <div className="ml-auto flex items-center gap-2">
+          {onEditTask && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setShowEditDialog(true)}
+            >
+              <Pencil className="mr-1 size-3" />
+              編集
+            </Button>
+          )}
+          {onDeleteTask && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-muted-foreground hover:text-destructive"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              <Trash2 className="mr-1 size-3" />
+              削除
+            </Button>
+          )}
           <Button
             type="button"
             variant={delayed ? "secondary" : "ghost"}
@@ -237,6 +269,32 @@ export function TaskDetailPane({
           </div>
         </div>
       </ScrollArea>
+
+      {onEditTask && (
+        <TaskFormDialog
+          open={showEditDialog}
+          onOpenChange={setShowEditDialog}
+          mode="edit"
+          initialValues={{
+            title: task.title,
+            deadline: task.deadline,
+            bucket: task.bucket,
+            description: task.description,
+          }}
+          onSubmit={(values) => onEditTask(values)}
+        />
+      )}
+
+      {onDeleteTask && (
+        <DeleteConfirmDialog
+          open={showDeleteConfirm}
+          onOpenChange={setShowDeleteConfirm}
+          title="タスクを削除"
+          itemName={task.title}
+          description={`「${task.title}」を削除します。関連リンクや報告入力も失われます。`}
+          onConfirm={onDeleteTask}
+        />
+      )}
     </section>
   );
 }

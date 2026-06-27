@@ -14,7 +14,7 @@ import {
   generateWeeklyReport,
   type WeeklyReportInput,
 } from "@/lib/it/report";
-import { type ExecLink, type Task, isLocalTask } from "@/lib/it/schema";
+import { type ExecLink, type Task, type TaskBucket, isLocalTask } from "@/lib/it/schema";
 import {
   countReportProgress,
   getTaskLinks,
@@ -23,6 +23,7 @@ import {
   saveWorkspaceStorage,
   type WorkspaceStorage,
   type LocalTask,
+  type TaskEdit,
 } from "@/lib/it/storage";
 
 type WorkspaceProps = {
@@ -54,7 +55,8 @@ export function Workspace({
   >({});
   const [completedTaskIds, setCompletedTaskIds] = useState<string[]>([]);
   const [reportPaneOpen, setReportPaneOpen] = useState(true);
-
+  const [deletedTaskIds, setDeletedTaskIds] = useState<string[]>([]);
+  const [taskEdits, setTaskEdits] = useState<Record<string, TaskEdit>>({});
   // ── 初回読み込み ──────────────────────────────────────────
   useEffect(() => {
     loadWorkspaceStorage()
@@ -66,6 +68,8 @@ export function Workspace({
         setCompletedTaskIds(loaded.completedTaskIds);
         setSelectedTaskId(loaded.selectedTaskId);
         setLocalTasks(loaded.localTasks);
+        setDeletedTaskIds(loaded.deletedTaskIds);
+        setTaskEdits(loaded.taskEdits);
         setHydrated(true);
       })
       .catch(() => {
@@ -87,6 +91,8 @@ export function Workspace({
       completedTaskIds,
       selectedTaskId,
       localTasks,
+      deletedTaskIds,
+      taskEdits,
     };
 
     // 連続した state 更新をまとめて1回だけ送る
@@ -105,13 +111,19 @@ export function Workspace({
     completedTaskIds,
     selectedTaskId,
     localTasks,
+    deletedTaskIds,
+    taskEdits,
   ]);
 
   // ── タスク一覧の計算 ──────────────────────────────────────
-  const tasks = useMemo<Task[]>(
-    () => [...jsonTasks, ...localTasks],
-    [jsonTasks, localTasks],
-  );
+  const tasks = useMemo<Task[]>(() => {
+    const editedJsonTasks = jsonTasks.map((t) => {
+      const edits = taskEdits[t.id];
+      return edits ? { ...t, ...edits } : t;
+    });
+    const allTasks = [...editedJsonTasks, ...localTasks];
+    return allTasks.filter((t) => !deletedTaskIds.includes(t.id));
+  }, [jsonTasks, localTasks, taskEdits, deletedTaskIds]);
 
   const tasksWithDelayed = useMemo(
     () =>
@@ -162,8 +174,10 @@ export function Workspace({
       completedTaskIds,
       selectedTaskId,
       localTasks,
+      deletedTaskIds,
+      taskEdits,
     }),
-    [reportInputs, workMemos, taskLinks, delayedOverrides, completedTaskIds, selectedTaskId, localTasks],
+    [reportInputs, workMemos, taskLinks, delayedOverrides, completedTaskIds, selectedTaskId, localTasks, deletedTaskIds, taskEdits],
   );
 
   const execLinks = useMemo(() => {
@@ -324,6 +338,50 @@ export function Workspace({
     [activeTask],
   );
 
+  const handleAddTask = useCallback(
+    (draft: { title: string; deadline: string; bucket: TaskBucket; description: string }) => {
+      const id = `LOCAL-${Date.now()}`;
+      setLocalTasks((prev) => [
+        ...prev,
+        { id, ...draft, comments: [], delayed: false },
+      ]);
+      setSelectedTaskId(id);
+    },
+    [],
+  );
+
+  const handleDeleteTask = useCallback(
+    (id: string) => {
+      if (isLocalTask({ id })) {
+        setLocalTasks((prev) => prev.filter((t) => t.id !== id));
+      } else {
+        setDeletedTaskIds((prev) => [...prev, id]);
+      }
+      setSelectedTaskId((prev) => {
+        if (prev !== id) return prev;
+        const remaining = activeTasks.filter((t) => t.id !== id);
+        return remaining[0]?.id ?? null;
+      });
+    },
+    [activeTasks],
+  );
+
+  const handleEditTask = useCallback(
+    (id: string, updates: { title?: string; deadline?: string; bucket?: TaskBucket; description?: string }) => {
+      if (isLocalTask({ id })) {
+        setLocalTasks((prev) =>
+          prev.map((t) => (t.id === id ? { ...t, ...updates } : t)),
+        );
+      } else {
+        setTaskEdits((prev) => ({
+          ...prev,
+          [id]: { ...(prev[id] ?? {}), ...updates },
+        }));
+      }
+    },
+    [],
+  );
+
   // ── 描画 ──────────────────────────────────────────────────
   if (!hydrated) {
     return (
@@ -349,6 +407,8 @@ export function Workspace({
             reportFilledByTaskId={reportFilledByTaskId}
             onSelectTask={handleSelectTask}
             onRestoreTask={handleRestoreTask}
+            onAddTask={handleAddTask}
+            onDeleteTask={handleDeleteTask}
           />
           <section className="flex min-w-[420px] flex-1 items-center justify-center text-sm text-muted-foreground">
             進行中のタスクがありません。完了済みから「戻す」で復元できます。
@@ -373,6 +433,8 @@ export function Workspace({
           reportFilledByTaskId={reportFilledByTaskId}
           onSelectTask={handleSelectTask}
           onRestoreTask={handleRestoreTask}
+          onAddTask={handleAddTask}
+          onDeleteTask={handleDeleteTask}
         />
         <TaskDetailPane
           task={activeTask}
@@ -384,6 +446,8 @@ export function Workspace({
           onReportFieldSave={saveReportField}
           onCompleteTask={handleCompleteTask}
           onAddComment={isLocalTask(activeTask) ? addLocalTaskComment : undefined}
+          onEditTask={(updates) => handleEditTask(activeTask.id, updates)}
+          onDeleteTask={() => handleDeleteTask(activeTask.id)}
         />
         <ExecLinksPane links={execLinks} onAddLink={addExecLink} onDeleteLink={deleteExecLink} onEditLink={editExecLink} />
         <ReportPane
