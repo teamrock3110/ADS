@@ -63,18 +63,18 @@ URL を貼ることそのものが目的ではない。
 
 ### 基本形式
 
-主張の直後に、小さくさりげなくリンクを置く:
+主張の直後に改行して、短いリンクテキストでさりげなく置く:
 
 ```markdown
 有料プランのコンテキストウィンドウは **200K トークン**。
-[出典: Claude コンテキスト公式ヘルプ](https://support.claude.com/en/articles/8606394)
+[Claude コンテキスト公式ヘルプ](https://support.claude.com/en/articles/8606394)
 ```
 
 ### リンクテキストのルール
 
 - URLそのままは使わない
-- 「出典: ○○公式ドキュメント」のように、ページ内容がわかる名前にする
-- 例: `[出典: MDN Web Docs — Web API の紹介](https://developer.mozilla.org/ja/docs/...)`
+- サービス名・ドキュメント名など、ページ内容がわかる短い名前にする（「出典:」プレフィックスは不要）
+- 例: `[MDN Web Docs](https://developer.mozilla.org/ja/docs/...)`、`[Okta 管理者ヘルプ](https://...)`
 
 ### 推測・情報なしのラベル
 
