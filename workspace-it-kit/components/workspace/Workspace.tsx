@@ -262,6 +262,21 @@ export function Workspace({
     [activeTask, initialExecLinks],
   );
 
+  const deleteExecLink = useCallback(
+    (linkId: string) => {
+      if (!activeTask) return;
+      setTaskLinks((prev) => {
+        const current =
+          prev[activeTask.id] ?? initialExecLinks[activeTask.id] ?? [];
+        return {
+          ...prev,
+          [activeTask.id]: current.filter((l) => l.id !== linkId),
+        };
+      });
+    },
+    [activeTask, initialExecLinks],
+  );
+
   const handleDelayedChange = useCallback(
     (delayed: boolean) => {
       if (!activeTask) return;
@@ -353,7 +368,7 @@ export function Workspace({
           onCompleteTask={handleCompleteTask}
           onAddComment={isLocalTask(activeTask) ? addLocalTaskComment : undefined}
         />
-        <ExecLinksPane links={execLinks} onAddLink={addExecLink} />
+        <ExecLinksPane links={execLinks} onAddLink={addExecLink} onDeleteLink={deleteExecLink} />
         <ReportPane
           reportText={reportResult.text}
           warnings={reportResult.warnings}

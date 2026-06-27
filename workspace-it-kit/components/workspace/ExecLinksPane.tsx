@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, Plus } from "lucide-react";
+import { ExternalLink, Plus, Trash2 } from "lucide-react";
 
 import { type ExecLink, type ExecLinkKind } from "@/lib/it/schema";
 import {
@@ -25,9 +25,10 @@ const KINDS: ExecLinkKind[] = ["slack", "slides", "sheet", "doc", "other"];
 type ExecLinksPaneProps = {
   links: ExecLink[];
   onAddLink: (link: Omit<ExecLink, "id">) => void;
+  onDeleteLink: (linkId: string) => void;
 };
 
-export function ExecLinksPane({ links, onAddLink }: ExecLinksPaneProps) {
+export function ExecLinksPane({ links, onAddLink, onDeleteLink }: ExecLinksPaneProps) {
   const [label, setLabel] = useState("");
   const [url, setUrl] = useState("");
   const [kind, setKind] = useState<ExecLinkKind>("other");
@@ -61,24 +62,36 @@ export function ExecLinksPane({ links, onAddLink }: ExecLinksPaneProps) {
             </p>
           ) : (
             links.map((link) => (
-              <a
+              <div
                 key={link.id}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/40"
+                className="group flex items-center gap-2 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/40"
               >
-                <Badge variant="secondary" className="shrink-0">
-                  {EXEC_LINK_KIND_LABEL[link.kind]}
-                </Badge>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{link.label}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {execLinkHostname(link.url)}
-                  </p>
-                </div>
-                <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
-              </a>
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-w-0 flex-1 items-center gap-3"
+                >
+                  <Badge variant="secondary" className="shrink-0">
+                    {EXEC_LINK_KIND_LABEL[link.kind]}
+                  </Badge>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{link.label}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {execLinkHostname(link.url)}
+                    </p>
+                  </div>
+                  <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => onDeleteLink(link.id)}
+                  className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                  aria-label={`${link.label}を削除`}
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
             ))
           )}
         </div>
@@ -86,7 +99,7 @@ export function ExecLinksPane({ links, onAddLink }: ExecLinksPaneProps) {
       <div className="flex shrink-0 flex-col gap-2 border-t border-border p-3">
         <span className="text-xs font-medium text-muted-foreground">
           <Plus className="mr-1 inline size-3" />
-          リンク追加（セッション内）
+          リンク追加
         </span>
         <Input
           value={label}
