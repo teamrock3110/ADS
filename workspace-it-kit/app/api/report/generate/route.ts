@@ -1,7 +1,9 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 
-import { type MeetingType, REPORT_PROMPTS } from "@/lib/report-prompts";
+import { type MeetingType } from "@/lib/report-prompts";
+import { type AIProvider } from "@/lib/ai/types";
+import { generateWithClaude } from "@/lib/ai/claude";
+import { generateWithGemini } from "@/lib/ai/gemini";
 
 export type ReportTask = {
   id: string;
@@ -19,30 +21,26 @@ export type ReportTask = {
 export type ReportRequest = {
   meetingType: MeetingType;
   tasks: ReportTask[];
+  provider?: AIProvider;
 };
 
 export async function POST(req: NextRequest) {
   const body: ReportRequest = await req.json();
-  const { meetingType, tasks } = body;
+  const { meetingType, tasks, provider = "claude" } = body;
 
   if (!meetingType || !tasks?.length) {
     return NextResponse.json({ error: "meetingType と tasks は必須です" }, { status: 400 });
   }
 
-  const client = new Anthropic();
-
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2048,
-    system: REPORT_PROMPTS[meetingType],
-    messages: [
-      {
-        role: "user",
-        content: `今日の日付: ${new Date().toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}\n\nタスクデータ:\n${JSON.stringify(tasks, null, 2)}`,
-      },
-    ],
-  });
-
-  const text = message.content[0].type === "text" ? message.content[0].text : "";
-  return NextResponse.json({ report: text });
+  const input = { meetingType, tasks };
+  try {
+    const report =
+      provider === "gemini"
+        ? await generateWithGemini(input)
+        : await generateWithClaude(input);
+    return NextResponse.json({ report });
+  } catch (e) {
+    console.error("[report/generate]", e);
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
 }

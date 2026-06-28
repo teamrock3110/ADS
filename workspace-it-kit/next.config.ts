@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     root: projectRoot,
   },
   outputFileTracingRoot: projectRoot,
+  serverExternalPackages: ["@google-cloud/vertexai", "@anthropic-ai/sdk"],
 };
 
 export default nextConfig;

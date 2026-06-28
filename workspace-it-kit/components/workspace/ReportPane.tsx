@@ -15,6 +15,7 @@ import { type Task } from "@/lib/it/schema";
 import { type WeeklyReportInput } from "@/lib/it/report";
 import { type MeetingType } from "@/lib/report-prompts";
 import { type ReportTask } from "@/app/api/report/generate/route";
+import { type AIProvider } from "@/lib/ai/types";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,17 +70,15 @@ export function ReportPane({
   reportInputs,
   activeTask,
 }: ReportPaneProps) {
+  const [aiProvider, setAiProvider] = useState<AIProvider>("claude");
   const [aiReports, setAiReports] = useState<Partial<Record<MeetingType, string>>>({});
   const [aiLoading, setAiLoading] = useState<Partial<Record<MeetingType, boolean>>>({});
   const [aiCopied, setAiCopied] = useState<Partial<Record<MeetingType, boolean>>>({});
 
   const handleAiGenerate = async (meetingType: MeetingType) => {
-    const tasks =
-      meetingType === "火"
-        ? activeTask
-          ? [buildReportTasks([activeTask], reportInputs)[0]]
-          : []
-        : buildReportTasks(allTasks, reportInputs);
+    const tasks = activeTask
+      ? [buildReportTasks([activeTask], reportInputs)[0]]
+      : [];
 
     if (!tasks.length) return;
 
@@ -89,7 +88,7 @@ export function ReportPane({
       const res = await fetch("/api/report/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meetingType, tasks }),
+        body: JSON.stringify({ meetingType, tasks, provider: aiProvider }),
       });
       const data = await res.json();
       setAiReports((prev) => ({
@@ -167,6 +166,24 @@ export function ReportPane({
             </span>
           )}
         </span>
+        <div className="flex shrink-0 items-center rounded-md border border-border bg-muted p-0.5">
+          <Button
+            variant={aiProvider === "claude" ? "default" : "ghost"}
+            size="sm"
+            className="h-5 px-2 text-xs"
+            onClick={() => setAiProvider("claude")}
+          >
+            Claude
+          </Button>
+          <Button
+            variant={aiProvider === "gemini" ? "default" : "ghost"}
+            size="sm"
+            className="h-5 px-2 text-xs"
+            onClick={() => setAiProvider("gemini")}
+          >
+            Gemini
+          </Button>
+        </div>
       </div>
 
       {/* タブ */}
