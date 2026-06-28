@@ -456,6 +456,9 @@ export function Workspace({
           open={reportPaneOpen}
           onToggle={toggleReportPane}
           progressSummary={progressSummary}
+          allTasks={activeTasks}
+          reportInputs={reportInputs}
+          activeTask={activeTask}
         />
       </div>
     </div>
