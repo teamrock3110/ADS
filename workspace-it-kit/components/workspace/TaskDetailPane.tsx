@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
 
-import { type Task, type TaskBucket, isLocalTask } from "@/lib/it/schema";
+import { type Task, isLocalTask } from "@/lib/it/schema";
 import { type WeeklyReportInput } from "@/lib/it/report";
 import { cn } from "@/lib/utils";
 import { InlineTextareaField } from "@/components/primitives/InlineTextareaField";
@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DeleteConfirmDialog } from "@/components/workspace/DeleteConfirmDialog";
-import { TaskFormDialog } from "@/components/workspace/TaskFormDialog";
 
 type TaskDetailPaneProps = {
   task: Task;
@@ -32,7 +31,7 @@ type TaskDetailPaneProps = {
   ) => void;
   onCompleteTask: () => void;
   onAddComment?: (body: string) => void;
-  onEditTask?: (updates: { title?: string; deadline?: string; bucket?: TaskBucket; description?: string }) => void;
+  onEditTask?: (updates: { title?: string; deadline?: string; description?: string }) => void;
   onDeleteTask?: () => void;
 };
 
@@ -68,6 +67,136 @@ function CollapsibleSection({
   );
 }
 
+function InlineTitleField({
+  value,
+  onSave,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== value) onSave(trimmed);
+    else setDraft(value);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <Input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          } else if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        className="h-9 text-base font-medium"
+        aria-label="タスクタイトルを編集"
+      />
+    );
+  }
+
+  return (
+    <h2
+      role="button"
+      tabIndex={0}
+      onClick={() => setEditing(true)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") setEditing(true);
+      }}
+      className="cursor-text text-base font-medium hover:text-primary/80"
+      title="クリックして編集"
+    >
+      {value}
+    </h2>
+  );
+}
+
+function InlineDeadlineField({
+  value,
+  onSave,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed !== value) onSave(trimmed);
+    else setDraft(value);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <Input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          } else if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        className="h-7 w-20 text-xs"
+        placeholder="7/15"
+        aria-label="期日を編集"
+      />
+    );
+  }
+
+  return (
+    <Badge
+      variant="outline"
+      role="button"
+      tabIndex={0}
+      onClick={() => setEditing(true)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") setEditing(true);
+      }}
+      className="cursor-text hover:bg-accent"
+      title="クリックして編集"
+    >
+      期限 {value || "未設定"}
+    </Badge>
+  );
+}
+
 export function TaskDetailPane({
   task,
   delayed,
@@ -82,7 +211,6 @@ export function TaskDetailPane({
   onDeleteTask,
 }: TaskDetailPaneProps) {
   const [commentInput, setCommentInput] = useState("");
-  const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const isLocal = isLocalTask(task);
 
@@ -92,25 +220,21 @@ export function TaskDetailPane({
     onAddComment(body);
     setCommentInput("");
   };
+
   return (
     <section className="flex min-w-[420px] flex-1 flex-col border-r border-border bg-background">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
         <span className="text-xs text-muted-foreground">{task.id}</span>
-        <Badge variant="outline">期限 {task.deadline}</Badge>
+        {onEditTask ? (
+          <InlineDeadlineField
+            value={task.deadline}
+            onSave={(deadline) => onEditTask({ deadline })}
+          />
+        ) : (
+          <Badge variant="outline">期限 {task.deadline || "未設定"}</Badge>
+        )}
         {delayed && <Badge variant="destructive">遅延</Badge>}
         <div className="ml-auto flex items-center gap-2">
-          {onEditTask && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setShowEditDialog(true)}
-            >
-              <Pencil className="mr-1 size-3" />
-              編集
-            </Button>
-          )}
           {onDeleteTask && (
             <Button
               type="button"
@@ -144,17 +268,32 @@ export function TaskDetailPane({
         </div>
       </div>
       <div className="border-b border-border px-4 py-3">
-        <h2 className="text-base font-medium">{task.title}</h2>
+        {onEditTask ? (
+          <InlineTitleField
+            value={task.title}
+            onSave={(title) => onEditTask({ title })}
+          />
+        ) : (
+          <h2 className="text-base font-medium">{task.title}</h2>
+        )}
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-6 p-4">
           <CollapsibleSection title="概要・コメント">
             <div className="flex flex-col gap-4">
-              {task.description && (
+              {onEditTask ? (
+                <InlineTextareaField
+                  key={`${task.id}-description`}
+                  value={task.description}
+                  onSave={(description) => onEditTask({ description })}
+                  ariaLabel={`${task.id} の概要`}
+                  placeholder="タスクの詳細説明を入力..."
+                />
+              ) : task.description ? (
                 <p className="whitespace-pre-line text-sm leading-relaxed">
                   {task.description}
                 </p>
-              )}
+              ) : null}
               {task.comments.length > 0 && (
                 <div className="flex flex-col gap-2">
                   {task.comments.map((comment, i) => (
@@ -269,21 +408,6 @@ export function TaskDetailPane({
           </div>
         </div>
       </ScrollArea>
-
-      {onEditTask && (
-        <TaskFormDialog
-          open={showEditDialog}
-          onOpenChange={setShowEditDialog}
-          mode="edit"
-          initialValues={{
-            title: task.title,
-            deadline: task.deadline,
-            bucket: task.bucket,
-            description: task.description,
-          }}
-          onSubmit={(values) => onEditTask(values)}
-        />
-      )}
 
       {onDeleteTask && (
         <DeleteConfirmDialog

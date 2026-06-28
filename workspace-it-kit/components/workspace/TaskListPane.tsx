@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronDown, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { type Task, type TaskBucket, isLocalTask } from "@/lib/it/schema";
+import { type Task, isLocalTask } from "@/lib/it/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Collapsible,
   CollapsibleContent,
@@ -14,16 +15,13 @@ import {
 } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DeleteConfirmDialog } from "@/components/workspace/DeleteConfirmDialog";
-import { TaskFormDialog, type TaskFormValues } from "@/components/workspace/TaskFormDialog";
-
-const BUCKET_WEIGHT = { today: 0, week: 1, backlog: 2 } as const;
 
 function sortTasks(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     if (a.delayed !== b.delayed) return a.delayed ? -1 : 1;
-    const bucketDiff = BUCKET_WEIGHT[a.bucket] - BUCKET_WEIGHT[b.bucket];
-    if (bucketDiff !== 0) return bucketDiff;
-    return a.deadline.localeCompare(b.deadline);
+    const deadlineDiff = a.deadline.localeCompare(b.deadline);
+    if (deadlineDiff !== 0) return deadlineDiff;
+    return a.id.localeCompare(b.id);
   });
 }
 
@@ -34,7 +32,7 @@ type TaskListPaneProps = {
   reportFilledByTaskId: Record<string, boolean>;
   onSelectTask: (id: string) => void;
   onRestoreTask: (id: string) => void;
-  onAddTask: (draft: { title: string; deadline: string; bucket: TaskBucket; description: string }) => void;
+  onAddTask: (draft: { title: string; deadline: string; description: string }) => void;
   onDeleteTask: (id: string) => void;
 };
 
@@ -115,13 +113,35 @@ export function TaskListPane({
   onDeleteTask,
 }: TaskListPaneProps) {
   const [completedOpen, setCompletedOpen] = useState(false);
-  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showAddInput, setShowAddInput] = useState(false);
+  const [addTitle, setAddTitle] = useState("");
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const addInputRef = useRef<HTMLInputElement>(null);
   const sortedActive = sortTasks(activeTasks);
   const sortedCompleted = sortTasks(completedTasks);
 
-  const handleAddSubmit = (values: TaskFormValues) => {
-    onAddTask(values);
+  const handleShowAddInput = () => {
+    setShowAddInput(true);
+    setAddTitle("");
+    requestAnimationFrame(() => addInputRef.current?.focus());
+  };
+
+  const handleAddSubmit = () => {
+    const title = addTitle.trim();
+    if (!title) return;
+    onAddTask({ title, deadline: "", description: "" });
+    setAddTitle("");
+    setShowAddInput(false);
+  };
+
+  const handleAddKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddSubmit();
+    } else if (e.key === "Escape") {
+      setAddTitle("");
+      setShowAddInput(false);
+    }
   };
 
   const deleteTargetTask = deleteTargetId
@@ -139,7 +159,7 @@ export function TaskListPane({
             variant="ghost"
             size="icon"
             className="size-7"
-            onClick={() => setShowAddDialog(true)}
+            onClick={handleShowAddInput}
             aria-label="タスクを追加"
           >
             <Plus className="size-4" />
@@ -148,7 +168,7 @@ export function TaskListPane({
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-1 p-2">
-          {sortedActive.length === 0 ? (
+          {sortedActive.length === 0 && !showAddInput ? (
             <p className="px-2 py-4 text-sm text-muted-foreground">
               進行中のタスクはありません。
             </p>
@@ -163,6 +183,21 @@ export function TaskListPane({
                 onDelete={() => setDeleteTargetId(task.id)}
               />
             ))
+          )}
+
+          {showAddInput && (
+            <Input
+              ref={addInputRef}
+              value={addTitle}
+              onChange={(e) => setAddTitle(e.target.value)}
+              onKeyDown={handleAddKeyDown}
+              onBlur={() => {
+                if (!addTitle.trim()) setShowAddInput(false);
+              }}
+              placeholder="タスク名を入力… （Enter で追加）"
+              className="h-8 text-sm"
+              aria-label="新しいタスク名"
+            />
           )}
 
           {sortedCompleted.length > 0 && (
@@ -220,13 +255,6 @@ export function TaskListPane({
           )}
         </div>
       </ScrollArea>
-
-      <TaskFormDialog
-        open={showAddDialog}
-        onOpenChange={setShowAddDialog}
-        mode="add"
-        onSubmit={handleAddSubmit}
-      />
 
       <DeleteConfirmDialog
         open={deleteTargetId !== null}

@@ -339,11 +339,11 @@ export function Workspace({
   );
 
   const handleAddTask = useCallback(
-    (draft: { title: string; deadline: string; bucket: TaskBucket; description: string }) => {
+    (draft: { title: string; deadline: string; description: string }) => {
       const id = `LOCAL-${Date.now()}`;
       setLocalTasks((prev) => [
         ...prev,
-        { id, ...draft, comments: [], delayed: false },
+        { id, ...draft, bucket: "today", comments: [], delayed: false },
       ]);
       setSelectedTaskId(id);
     },
