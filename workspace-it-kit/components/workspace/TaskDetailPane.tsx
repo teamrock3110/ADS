@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Info, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 
 import { type Task, isLocalTask } from "@/lib/it/schema";
 import { type WeeklyReportInput } from "@/lib/it/report";
@@ -10,6 +10,17 @@ import { InlineTextareaField } from "@/components/primitives/InlineTextareaField
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Collapsible,
   CollapsibleContent,
@@ -235,18 +246,6 @@ export function TaskDetailPane({
         )}
         {delayed && <Badge variant="destructive">遅延</Badge>}
         <div className="ml-auto flex items-center gap-2">
-          {onDeleteTask && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs text-muted-foreground hover:text-destructive"
-              onClick={() => setShowDeleteConfirm(true)}
-            >
-              <Trash2 className="mr-1 size-3" />
-              削除
-            </Button>
-          )}
           <Button
             type="button"
             variant={delayed ? "secondary" : "ghost"}
@@ -258,13 +257,30 @@ export function TaskDetailPane({
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant="default"
             size="sm"
             className="h-7 text-xs"
             onClick={onCompleteTask}
           >
             完了にする
           </Button>
+          {onDeleteTask && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="ghost" size="icon" className="size-7 text-muted-foreground">
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem variant="destructive" onClick={() => setShowDeleteConfirm(true)}>
+                  <Trash2 />
+                  削除
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
       <div className="border-b border-border px-4 py-3">
@@ -279,7 +295,7 @@ export function TaskDetailPane({
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-6 p-4">
-          <CollapsibleSection title="概要・コメント">
+          <CollapsibleSection key={task.id} title="概要・コメント" defaultOpen>
             <div className="flex flex-col gap-4">
               {onEditTask ? (
                 <InlineTextareaField
@@ -335,7 +351,7 @@ export function TaskDetailPane({
             </div>
           </CollapsibleSection>
 
-          <CollapsibleSection title="作業メモ（備忘録）">
+          <CollapsibleSection key={`memo-${task.id}`} title="作業メモ（備忘録）">
             <div className="flex flex-col gap-2">
               <p className="text-xs text-muted-foreground">
                 調査メモ用。定例報告には含めません。
@@ -351,15 +367,24 @@ export function TaskDetailPane({
           </CollapsibleSection>
 
           <div className="flex flex-col gap-4 border-t border-border pt-4">
-            <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5">
               <span className="text-sm font-medium">定例報告の入力</span>
-              <p className="text-xs text-muted-foreground">
-                定例用の最新稿です。上書き保存され、右の週次報告書に反映されます。
-              </p>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button type="button" className="text-muted-foreground hover:text-foreground">
+                      <Info className="size-3.5" />
+                    </button>
+                  }
+                />
+                <TooltipContent>
+                  定例用の最新稿です。上書き保存され、右の週次報告書に反映されます。
+                </TooltipContent>
+              </Tooltip>
             </div>
 
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-muted-foreground">
+              <span className="text-sm font-medium">
                 進捗
                 <Badge variant="outline" className="ml-2 h-5 px-1.5 text-[10px]">
                   必須
@@ -370,12 +395,12 @@ export function TaskDetailPane({
                 value={reportInput.progress}
                 onSave={(v) => onReportFieldSave("progress", v)}
                 ariaLabel={`${task.id} の進捗`}
-                placeholder="例: Claude Codeの初期セットアップ完了"
+                placeholder="今週の進捗を記入…"
               />
             </div>
 
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-muted-foreground">
+              <span className="text-sm font-medium">
                 遅延理由・課題
                 <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px]">
                   任意
@@ -386,12 +411,12 @@ export function TaskDetailPane({
                 value={reportInput.issues}
                 onSave={(v) => onReportFieldSave("issues", v)}
                 ariaLabel={`${task.id} の遅延理由・課題`}
-                placeholder="例: Claude CodeからGoogleDriveのファイルが閲覧できない事象が発生"
+                placeholder="遅延・課題があれば記入…"
               />
             </div>
 
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-muted-foreground">
+              <span className="text-sm font-medium">
                 相談・作業承認依頼
                 <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px]">
                   任意
@@ -402,7 +427,7 @@ export function TaskDetailPane({
                 value={reportInput.consult}
                 onSave={(v) => onReportFieldSave("consult", v)}
                 ariaLabel={`${task.id} の相談・作業承認依頼`}
-                placeholder="例: GoogleWorkSpaceにClaudecodeの権限付与してもよろしいでしょうか。"
+                placeholder="相談・承認依頼があれば記入…"
               />
             </div>
           </div>

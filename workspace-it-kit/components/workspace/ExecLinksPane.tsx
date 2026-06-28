@@ -80,7 +80,7 @@ export function ExecLinksPane({ links, onAddLink, onDeleteLink, onEditLink }: Ex
   };
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-background">
+    <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-background">
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
         <span className="text-sm font-medium">関連リンク</span>
         <Badge variant="outline">{links.length}件</Badge>
@@ -196,7 +196,7 @@ export function ExecLinksPane({ links, onAddLink, onDeleteLink, onEditLink }: Ex
         <Input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="ラベル（例: 依頼 Slack）"
+          placeholder="ラベルを入力…"
           aria-label="リンクラベル"
         />
         <Input

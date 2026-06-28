@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ChevronDown, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, ChevronDown, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { type Task, isLocalTask } from "@/lib/it/schema";
@@ -55,7 +55,7 @@ function TaskRow({
         type="button"
         onClick={onSelect}
         className={cn(
-          "flex w-full flex-col gap-1 rounded-md border-l-2 px-2 py-2 pr-8 text-left transition-colors",
+          "flex w-full flex-col gap-1 rounded-lg border-l-2 px-2 py-2 pr-8 text-left transition-colors",
           selected
             ? "border-l-primary bg-sidebar-accent"
             : "border-l-transparent hover:bg-sidebar-accent/60",
@@ -76,15 +76,13 @@ function TaskRow({
               遅延
             </Badge>
           )}
-          <Badge
-            variant={filled ? "secondary" : "outline"}
-            className={cn(
-              "h-5 px-1.5 text-[10px]",
-              !filled && "text-muted-foreground",
-            )}
-          >
-            {filled ? "報告済" : "未入力"}
-          </Badge>
+          {filled ? (
+            <CheckCircle2 className="size-3.5 text-muted-foreground" />
+          ) : (
+            <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+              未入力
+            </Badge>
+          )}
         </span>
       </button>
       <button

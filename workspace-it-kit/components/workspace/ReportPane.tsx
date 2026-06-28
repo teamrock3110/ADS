@@ -106,7 +106,7 @@ export function ReportPane({
               <p className="text-xs leading-relaxed text-destructive">{warning}</p>
             </div>
           ))}
-          <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground">
+          <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-muted-foreground">
             {reportText}
           </pre>
         </div>

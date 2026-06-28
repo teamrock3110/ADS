@@ -50,7 +50,7 @@ export function InlineTextareaField({
 
   if (readOnly) {
     return (
-      <div className="min-h-24 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm leading-relaxed whitespace-pre-line text-muted-foreground">
+      <div className="min-h-16 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm leading-relaxed whitespace-pre-line text-muted-foreground">
         {value || "（未入力）"}
       </div>
     );
@@ -76,7 +76,7 @@ export function InlineTextareaField({
           (e.target as HTMLTextAreaElement).blur();
         }
       }}
-      className="min-h-24 bg-card leading-relaxed whitespace-pre-line"
+      className="min-h-16 bg-card leading-relaxed whitespace-pre-line"
     />
   );
 }
