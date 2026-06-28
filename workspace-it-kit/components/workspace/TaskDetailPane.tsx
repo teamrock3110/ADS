@@ -112,7 +112,7 @@ function InlineTitleField({
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
-          if (e.key === "Enter") {
+          if (e.key === "Enter" && !e.nativeEvent.isComposing) {
             e.preventDefault();
             commit();
           } else if (e.key === "Escape") {
@@ -176,7 +176,7 @@ function InlineDeadlineField({
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
-          if (e.key === "Enter") {
+          if (e.key === "Enter" && !e.nativeEvent.isComposing) {
             e.preventDefault();
             commit();
           } else if (e.key === "Escape") {
