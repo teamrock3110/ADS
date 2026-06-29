@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { flushActiveTextarea } from "@/components/primitives/InlineTextareaField";
-import { ExecLinksPane } from "@/components/workspace/ExecLinksPane";
 import { ItGlobalHeader } from "@/components/workspace/ItGlobalHeader";
+import { ReportInputPane } from "@/components/workspace/ReportInputPane";
 import { ReportPane } from "@/components/workspace/ReportPane";
-import { TaskDetailPane } from "@/components/workspace/TaskDetailPane";
+import { TaskContextPane } from "@/components/workspace/TaskContextPane";
 import { TaskListPane } from "@/components/workspace/TaskListPane";
 import {
   EMPTY_WEEKLY_REPORT_INPUT,
@@ -434,20 +434,26 @@ export function Workspace({
           onAddTask={handleAddTask}
           onDeleteTask={handleDeleteTask}
         />
-        <TaskDetailPane
+        <TaskContextPane
           task={activeTask}
           delayed={activeTask.delayed}
           onDelayedChange={handleDelayedChange}
           workMemo={workMemos[activeTask.id] ?? ""}
-          reportInput={activeReportInput}
           onWorkMemoSave={saveWorkMemo}
-          onReportFieldSave={saveReportField}
           onCompleteTask={handleCompleteTask}
           onAddComment={isLocalTask(activeTask) ? addLocalTaskComment : undefined}
           onEditTask={(updates) => handleEditTask(activeTask.id, updates)}
           onDeleteTask={() => handleDeleteTask(activeTask.id)}
+          links={execLinks}
+          onAddLink={addExecLink}
+          onDeleteLink={deleteExecLink}
+          onEditLink={editExecLink}
         />
-        <ExecLinksPane links={execLinks} onAddLink={addExecLink} onDeleteLink={deleteExecLink} onEditLink={editExecLink} />
+        <ReportInputPane
+          task={activeTask}
+          reportInput={activeReportInput}
+          onReportFieldSave={saveReportField}
+        />
         <ReportPane
           reportText={reportResult.text}
           warnings={reportResult.warnings}

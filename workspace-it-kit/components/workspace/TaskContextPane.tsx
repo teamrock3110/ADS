@@ -1,57 +1,64 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Info, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ExternalLink,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 
-import { type Task, isLocalTask } from "@/lib/it/schema";
-import { type WeeklyReportInput } from "@/lib/it/report";
+import { type ExecLink, type Task, isLocalTask } from "@/lib/it/schema";
+import { execLinkHostname } from "@/lib/it/links";
 import { cn } from "@/lib/utils";
 import { InlineTextareaField } from "@/components/primitives/InlineTextareaField";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DeleteConfirmDialog } from "@/components/workspace/DeleteConfirmDialog";
 
-type TaskDetailPaneProps = {
+type TaskContextPaneProps = {
   task: Task;
   delayed: boolean;
   onDelayedChange: (delayed: boolean) => void;
   workMemo: string;
-  reportInput: WeeklyReportInput;
   onWorkMemoSave: (value: string) => void;
-  onReportFieldSave: (
-    field: keyof WeeklyReportInput,
-    value: string,
-  ) => void;
   onCompleteTask: () => void;
   onAddComment?: (body: string) => void;
-  onEditTask?: (updates: { title?: string; deadline?: string; description?: string }) => void;
+  onEditTask?: (updates: {
+    title?: string;
+    deadline?: string;
+    description?: string;
+  }) => void;
   onDeleteTask?: () => void;
+  links: ExecLink[];
+  onAddLink: (link: Omit<ExecLink, "id">) => void;
+  onDeleteLink: (linkId: string) => void;
+  onEditLink: (linkId: string, updated: Omit<ExecLink, "id">) => void;
 };
 
 function CollapsibleSection({
   title,
+  badge,
   defaultOpen = false,
   children,
 }: {
   title: string;
+  badge?: string;
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
@@ -72,6 +79,9 @@ function CollapsibleSection({
           )}
         />
         <span className="text-xs font-medium text-muted-foreground">{title}</span>
+        {badge !== undefined && (
+          <span className="ml-auto text-xs text-muted-foreground">{badge}</span>
+        )}
       </CollapsibleTrigger>
       <CollapsibleContent className="pt-2">{children}</CollapsibleContent>
     </Collapsible>
@@ -208,21 +218,29 @@ function InlineDeadlineField({
   );
 }
 
-export function TaskDetailPane({
+type LinkEditState = { id: string; label: string; url: string };
+
+export function TaskContextPane({
   task,
   delayed,
   onDelayedChange,
   workMemo,
-  reportInput,
   onWorkMemoSave,
-  onReportFieldSave,
   onCompleteTask,
   onAddComment,
   onEditTask,
   onDeleteTask,
-}: TaskDetailPaneProps) {
+  links,
+  onAddLink,
+  onDeleteLink,
+  onEditLink,
+}: TaskContextPaneProps) {
   const [commentInput, setCommentInput] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [linkLabel, setLinkLabel] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkEditing, setLinkEditing] = useState<LinkEditState | null>(null);
+  const [linkAddError, setLinkAddError] = useState<string | null>(null);
   const isLocal = isLocalTask(task);
 
   const handleAddComment = () => {
@@ -232,8 +250,45 @@ export function TaskDetailPane({
     setCommentInput("");
   };
 
+  const handleAddLink = () => {
+    const trimmedLabel = linkLabel.trim();
+    const trimmedUrl = linkUrl.trim();
+    if (!trimmedLabel) {
+      setLinkAddError("ラベルを入力してください");
+      return;
+    }
+    if (!trimmedUrl) {
+      setLinkAddError("URLを入力してください");
+      return;
+    }
+    try {
+      new URL(trimmedUrl);
+    } catch {
+      setLinkAddError("正しいURL形式で入力してください（例: https://...）");
+      return;
+    }
+    setLinkAddError(null);
+    onAddLink({ label: trimmedLabel, url: trimmedUrl });
+    setLinkLabel("");
+    setLinkUrl("");
+  };
+
+  const handleLinkEditSave = () => {
+    if (!linkEditing) return;
+    const trimmedLabel = linkEditing.label.trim();
+    const trimmedUrl = linkEditing.url.trim();
+    if (!trimmedLabel || !trimmedUrl) return;
+    try {
+      new URL(trimmedUrl);
+    } catch {
+      return;
+    }
+    onEditLink(linkEditing.id, { label: trimmedLabel, url: trimmedUrl });
+    setLinkEditing(null);
+  };
+
   return (
-    <section className="flex min-w-[420px] flex-1 flex-col border-r border-border bg-background">
+    <section className="flex min-w-[380px] flex-1 flex-col border-r border-border bg-background">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
         <span className="text-xs text-muted-foreground">{task.id}</span>
         {onEditTask ? (
@@ -274,7 +329,10 @@ export function TaskDetailPane({
                 }
               />
               <DropdownMenuContent align="end">
-                <DropdownMenuItem variant="destructive" onClick={() => setShowDeleteConfirm(true)}>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => setShowDeleteConfirm(true)}
+                >
                   <Trash2 />
                   削除
                 </DropdownMenuItem>
@@ -283,6 +341,7 @@ export function TaskDetailPane({
           )}
         </div>
       </div>
+
       <div className="border-b border-border px-4 py-3">
         {onEditTask ? (
           <InlineTitleField
@@ -293,6 +352,7 @@ export function TaskDetailPane({
           <h2 className="text-base font-medium">{task.title}</h2>
         )}
       </div>
+
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-6 p-4">
           <CollapsibleSection key={task.id} title="概要・コメント" defaultOpen>
@@ -366,71 +426,149 @@ export function TaskDetailPane({
             </div>
           </CollapsibleSection>
 
-          <div className="flex flex-col gap-4 border-t border-border pt-4">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-medium">定例報告の入力</span>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button type="button" className="text-muted-foreground hover:text-foreground">
-                      <Info className="size-3.5" />
-                    </button>
-                  }
+          <CollapsibleSection
+            key={`links-${task.id}`}
+            title="関連リンク"
+            badge={`${links.length}件`}
+            defaultOpen
+          >
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2">
+                {links.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    リンク未登録。下のフォームから追加できます。
+                  </p>
+                ) : (
+                  links.map((link) =>
+                    linkEditing?.id === link.id ? (
+                      <div
+                        key={link.id}
+                        className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3"
+                      >
+                        <Input
+                          value={linkEditing.label}
+                          onChange={(e) =>
+                            setLinkEditing({ ...linkEditing, label: e.target.value })
+                          }
+                          placeholder="ラベル"
+                          aria-label="ラベルを編集"
+                          autoFocus
+                        />
+                        <Input
+                          value={linkEditing.url}
+                          onChange={(e) =>
+                            setLinkEditing({ ...linkEditing, url: e.target.value })
+                          }
+                          type="url"
+                          placeholder="https://..."
+                          aria-label="URLを編集"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleLinkEditSave}
+                            className="flex-1"
+                          >
+                            保存
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setLinkEditing(null)}
+                            className="flex-1"
+                          >
+                            キャンセル
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        key={link.id}
+                        className="group flex items-center gap-2 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/40"
+                      >
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex min-w-0 flex-1 items-center gap-3"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">{link.label}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {execLinkHostname(link.url)}
+                            </p>
+                          </div>
+                          <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
+                        </a>
+                        <div className="flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLinkEditing({
+                                id: link.id,
+                                label: link.label,
+                                url: link.url,
+                              })
+                            }
+                            className="rounded p-1 text-muted-foreground hover:text-foreground"
+                            aria-label={`${link.label}を編集`}
+                          >
+                            <Pencil className="size-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteLink(link.id)}
+                            className="rounded p-1 text-muted-foreground hover:text-destructive"
+                            aria-label={`${link.label}を削除`}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ),
+                  )
+                )}
+              </div>
+              <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
+                <span className="text-xs font-medium text-muted-foreground">
+                  <Plus className="mr-1 inline size-3" />
+                  リンク追加
+                </span>
+                <Input
+                  value={linkLabel}
+                  onChange={(e) => setLinkLabel(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddLink();
+                  }}
+                  placeholder="ラベルを入力…"
+                  aria-label="リンクラベル"
                 />
-                <TooltipContent>
-                  定例用の最新稿です。上書き保存され、右の週次報告書に反映されます。
-                </TooltipContent>
-              </Tooltip>
+                <Input
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddLink();
+                  }}
+                  type="url"
+                  placeholder="https://..."
+                  aria-label="リンクURL"
+                />
+                {linkAddError && (
+                  <p className="text-xs text-destructive">{linkAddError}</p>
+                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleAddLink}
+                >
+                  追加
+                </Button>
+              </div>
             </div>
-
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium">
-                進捗
-                <Badge variant="outline" className="ml-2 h-5 px-1.5 text-[10px]">
-                  必須
-                </Badge>
-              </span>
-              <InlineTextareaField
-                key={`${task.id}-progress`}
-                value={reportInput.progress}
-                onSave={(v) => onReportFieldSave("progress", v)}
-                ariaLabel={`${task.id} の進捗`}
-                placeholder="今週の進捗を記入…"
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium">
-                遅延理由・課題
-                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px]">
-                  任意
-                </Badge>
-              </span>
-              <InlineTextareaField
-                key={`${task.id}-issues`}
-                value={reportInput.issues}
-                onSave={(v) => onReportFieldSave("issues", v)}
-                ariaLabel={`${task.id} の遅延理由・課題`}
-                placeholder="遅延・課題があれば記入…"
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium">
-                相談・作業承認依頼
-                <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px]">
-                  任意
-                </Badge>
-              </span>
-              <InlineTextareaField
-                key={`${task.id}-consult`}
-                value={reportInput.consult}
-                onSave={(v) => onReportFieldSave("consult", v)}
-                ariaLabel={`${task.id} の相談・作業承認依頼`}
-                placeholder="相談・承認依頼があれば記入…"
-              />
-            </div>
-          </div>
+          </CollapsibleSection>
         </div>
       </ScrollArea>
 
