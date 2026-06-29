@@ -14,6 +14,11 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { DeleteConfirmDialog } from "@/components/workspace/DeleteConfirmDialog";
 
 function sortTasks(tasks: Task[]): Task[] {
@@ -49,42 +54,53 @@ function TaskRow({
   onSelect: () => void;
   onDelete: () => void;
 }) {
+  const isLocal = isLocalTask(task);
+
   return (
     <div className="group relative">
-      <button
-        type="button"
-        onClick={onSelect}
-        className={cn(
-          "flex w-full flex-col gap-1 rounded-lg border-l-2 px-2 py-2 pr-8 text-left transition-colors",
-          selected
-            ? "border-l-primary bg-sidebar-accent"
-            : "border-l-transparent hover:bg-sidebar-accent/60",
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              onClick={onSelect}
+              className={cn(
+                "flex w-full flex-col gap-1 rounded-lg border-l-2 px-2 py-2 pr-8 text-left transition-colors",
+                selected
+                  ? "border-l-primary bg-sidebar-accent"
+                  : "border-l-transparent hover:bg-sidebar-accent/60",
+              )}
+            >
+              <span className="line-clamp-2 text-sm font-medium leading-snug">
+                {task.title}
+              </span>
+              <span className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                {task.deadline && <span>{task.deadline}</span>}
+                {isLocal && (
+                  <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                    LOCAL
+                  </Badge>
+                )}
+                {task.delayed && (
+                  <Badge variant="destructive" className="h-5 px-1.5 text-[10px]">
+                    遅延
+                  </Badge>
+                )}
+                {filled ? (
+                  <CheckCircle2 className="size-3.5 text-muted-foreground" />
+                ) : (
+                  <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                    未入力
+                  </Badge>
+                )}
+              </span>
+            </button>
+          }
+        />
+        {!isLocal && (
+          <TooltipContent side="right">{task.id}</TooltipContent>
         )}
-      >
-        <span className="line-clamp-2 text-sm font-medium leading-snug">
-          {task.title}
-        </span>
-        <span className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-          {task.id} · {task.deadline}
-          {isLocalTask(task) && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-              LOCAL
-            </Badge>
-          )}
-          {task.delayed && (
-            <Badge variant="destructive" className="h-5 px-1.5 text-[10px]">
-              遅延
-            </Badge>
-          )}
-          {filled ? (
-            <CheckCircle2 className="size-3.5 text-muted-foreground" />
-          ) : (
-            <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-              未入力
-            </Badge>
-          )}
-        </span>
-      </button>
+      </Tooltip>
       <button
         type="button"
         onClick={(e) => {

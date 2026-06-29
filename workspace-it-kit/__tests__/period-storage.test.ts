@@ -18,6 +18,8 @@ describe("workspaceStorageSchema", () => {
       completedTaskIds: [],
       selectedTaskId: null,
       localTasks: [],
+      deletedTaskIds: [],
+      taskEdits: {},
     });
   });
 

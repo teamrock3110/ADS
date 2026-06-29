@@ -10,7 +10,6 @@ export type ReportTask = {
   title: string;
   deadline?: string;
   delayed?: boolean;
-  bucket?: string;
   description?: string;
   comments?: string[];
   progress?: string;

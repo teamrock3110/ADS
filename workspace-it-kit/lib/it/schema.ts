@@ -1,13 +1,10 @@
 import { z } from "zod";
 
-export const taskBucketSchema = z.enum(["today", "week", "backlog"]);
-
 export const taskSchema = z.object({
   id: z.string(),
   title: z.string(),
   deadline: z.string(),
   delayed: z.boolean(),
-  bucket: taskBucketSchema,
   description: z.string(),
   comments: z.array(z.string()),
 });
@@ -48,10 +45,8 @@ export const relatedTicketsMapSchema = z.record(
 
 export const workspaceMetaSchema = z.object({
   name: z.string(),
-  assignee: z.string(),
 });
 
-export type TaskBucket = z.infer<typeof taskBucketSchema>;
 export type Task = z.infer<typeof taskSchema>;
 export type RelatedTicket = z.infer<typeof relatedTicketSchema>;
 
@@ -62,7 +57,6 @@ export const localTaskSchema = z.object({
   deadline: z.string(),     // "6/15" 形式
   description: z.string().default(""),
   comments: z.array(z.string()).default([]),
-  bucket: taskBucketSchema.default("week"),
   delayed: z.boolean().default(false),
 });
 

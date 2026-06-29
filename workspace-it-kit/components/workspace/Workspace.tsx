@@ -14,7 +14,7 @@ import {
   generateWeeklyReport,
   type WeeklyReportInput,
 } from "@/lib/it/report";
-import { type ExecLink, type Task, type TaskBucket, isLocalTask } from "@/lib/it/schema";
+import { type ExecLink, type Task, isLocalTask } from "@/lib/it/schema";
 import {
   countReportProgress,
   getTaskLinks,
@@ -29,7 +29,7 @@ import {
 type WorkspaceProps = {
   initialTasks: Task[];
   initialExecLinks: Record<string, ExecLink[]>;
-  workspace: { name: string; assignee: string };
+  workspace: { name: string };
 };
 
 function isCompleted(completedTaskIds: string[], taskId: string): boolean {
@@ -343,7 +343,7 @@ export function Workspace({
       const id = `LOCAL-${Date.now()}`;
       setLocalTasks((prev) => [
         ...prev,
-        { id, ...draft, bucket: "today", comments: [], delayed: false },
+        { id, ...draft, comments: [], delayed: false },
       ]);
       setSelectedTaskId(id);
     },
@@ -367,7 +367,7 @@ export function Workspace({
   );
 
   const handleEditTask = useCallback(
-    (id: string, updates: { title?: string; deadline?: string; bucket?: TaskBucket; description?: string }) => {
+    (id: string, updates: { title?: string; deadline?: string; description?: string }) => {
       if (isLocalTask({ id })) {
         setLocalTasks((prev) =>
           prev.map((t) => (t.id === id ? { ...t, ...updates } : t)),
@@ -396,7 +396,6 @@ export function Workspace({
       <div className="flex h-screen w-full flex-col overflow-hidden bg-background text-foreground">
         <ItGlobalHeader
           workspaceName={workspace.name}
-          assignee={workspace.assignee}
           selectedTaskTitle="（進行中タスクなし）"
         />
         <div className="flex min-h-0 flex-1">
@@ -422,7 +421,6 @@ export function Workspace({
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background text-foreground">
       <ItGlobalHeader
         workspaceName={workspace.name}
-        assignee={workspace.assignee}
         selectedTaskTitle={activeTask.title}
       />
       <div className="flex min-h-0 flex-1">

@@ -1,16 +1,12 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-
 type ItGlobalHeaderProps = {
   workspaceName: string;
-  assignee: string;
   selectedTaskTitle: string;
 };
 
 export function ItGlobalHeader({
   workspaceName,
-  assignee,
   selectedTaskTitle,
 }: ItGlobalHeaderProps) {
   return (
@@ -20,10 +16,6 @@ export function ItGlobalHeader({
       <span className="truncate text-sm text-muted-foreground">
         {selectedTaskTitle}
       </span>
-      <div className="ml-auto flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">担当: {assignee}</span>
-        <Badge variant="outline">ブラウザに保存</Badge>
-      </div>
     </header>
   );
 }

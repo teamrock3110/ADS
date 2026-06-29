@@ -4,7 +4,7 @@ import {
   EMPTY_WEEKLY_REPORT_INPUT,
   type WeeklyReportInput,
 } from "@/lib/it/report";
-import { execLinkSchema, localTaskSchema, taskBucketSchema, type ExecLink, type LocalTask } from "@/lib/it/schema";
+import { execLinkSchema, localTaskSchema, type ExecLink, type LocalTask } from "@/lib/it/schema";
 
 // ─── スキーマ ────────────────────────────────────────────────
 
@@ -17,7 +17,6 @@ const weeklyReportInputSchema = z.object({
 const taskEditSchema = z.object({
   title: z.string().optional(),
   deadline: z.string().optional(),
-  bucket: taskBucketSchema.optional(),
   description: z.string().optional(),
 });
 

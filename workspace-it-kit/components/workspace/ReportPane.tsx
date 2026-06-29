@@ -51,7 +51,6 @@ function buildReportTasks(
     title: t.title,
     deadline: t.deadline,
     delayed: t.delayed,
-    bucket: t.bucket,
     description: t.description,
     comments: t.comments,
     progress: reportInputs[t.id]?.progress,
@@ -207,7 +206,7 @@ export function ReportPane({
               <Button
                 size="sm"
                 onClick={() => handleAiGenerate(value)}
-                disabled={!!aiLoading[value] || (value === "火" && !activeTask)}
+                disabled={!!aiLoading[value] || !activeTask}
                 className="h-7 gap-1 text-xs"
               >
                 {aiLoading[value] ? (

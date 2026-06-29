@@ -32,18 +32,3 @@ describe("data/*.json schema validation", () => {
   });
 });
 
-describe("taskSchema rejects invalid data", () => {
-  it("bucket が不正なら不可", () => {
-    expect(
-      taskSchema.safeParse({
-        id: "X",
-        title: "t",
-        deadline: "1/1",
-        delayed: false,
-        bucket: "invalid",
-        description: "",
-        comments: [],
-      }).success,
-    ).toBe(false);
-  });
-});
