@@ -1,6 +1,6 @@
 [
   {
-    "id": "CIT-142",
+    "id": "ITDX-142",
     "title": "6G非対応PC向け 接続設定配布",
     "deadline": "5/22",
     "delayed": true,
@@ -11,7 +11,7 @@
     ]
   },
   {
-    "id": "CIT-139",
+    "id": "ITDX-139",
     "title": "旧WiFiに接続中のデバイスを再調査",
     "deadline": "5/25",
     "delayed": false,
@@ -19,7 +19,7 @@
     "comments": ["5/13: ログ解析開始。約15台を検出。"]
   },
   {
-    "id": "CIT-201",
+    "id": "ITDX-201",
     "title": "Mac Studio ローカルLLMサーバ構築",
     "deadline": "6/15",
     "delayed": false,
@@ -27,7 +27,7 @@
     "comments": ["6/1: Mac Studio 納品確認済み"]
   },
   {
-    "id": "CIT-135",
+    "id": "ITDX-135",
     "title": "Slack APIの管理者権限整理",
     "deadline": "5/30",
     "delayed": false,
@@ -35,19 +35,19 @@
     "comments": ["5/10: 現行トークン一覧取得済み。"]
   },
   {
-    "id": "CIT-128",
-    "title": "ゼロトラスト導入の技術調査",
-    "deadline": "6/10",
+    "id": "ITDX-128",
+    "title": "SaaS EntraID連携",
+    "deadline": "7/31",
     "delayed": false,
-    "description": "Zscaler / Cloudflare Access のPoC計画を作成。ベンダー比較含む。",
+    "description": "SaaS製品のログインをEntra IDに統合する",
     "comments": []
   },
   {
-    "id": "CIT-120",
-    "title": "社内CA証明書の更新対応",
+    "id": "ITDX-120",
+    "title": "組織改編対応",
     "deadline": "6/20",
     "delayed": false,
-    "description": "中間CA証明書の有効期限が7/1。更新手順書作成と本番適用を担当。",
+    "description": "",
     "comments": []
   }
 ]

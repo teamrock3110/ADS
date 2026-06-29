@@ -1,5 +1,5 @@
 {
-  "CIT-201": [
+  "ITDX-201": [
     {
       "id": "lnk-1",
       "label": "依頼スレ（#corp-it）",
@@ -21,7 +21,7 @@
       "url": "https://docs.google.com/"
     }
   ],
-  "CIT-135": [
+  "ITDX-135": [
     {
       "id": "lnk-5",
       "label": "Slack API 整理の依頼",
@@ -33,7 +33,7 @@
       "url": "https://api.slack.com/"
     }
   ],
-  "CIT-142": [
+  "ITDX-142": [
     {
       "id": "lnk-7",
       "label": "MDM未登録端末リスト",

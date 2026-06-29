@@ -26,18 +26,18 @@ describe("workspaceStorageSchema", () => {
   it("loads v2 format with defaults for new fields", () => {
     const data = {
       reportInputs: {
-        "CIT-201": { progress: "進捗", issues: "", consult: "" },
+        "ITDX-201": { progress: "進捗", issues: "", consult: "" },
       },
       workMemos: {},
       taskLinks: {},
       delayedOverrides: {},
-      completedTaskIds: ["CIT-142"],
+      completedTaskIds: ["ITDX-142"],
     };
     const result = workspaceStorageSchema.safeParse(data);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.reportInputs["CIT-201"]?.progress).toBe("進捗");
-      expect(result.data.completedTaskIds).toContain("CIT-142");
+      expect(result.data.reportInputs["ITDX-201"]?.progress).toBe("進捗");
+      expect(result.data.completedTaskIds).toContain("ITDX-142");
       expect(result.data.selectedTaskId).toBeNull();
     }
   });
@@ -49,12 +49,12 @@ describe("workspaceStorageSchema", () => {
       taskLinks: {},
       delayedOverrides: {},
       completedTaskIds: [],
-      selectedTaskId: "CIT-201",
+      selectedTaskId: "ITDX-201",
     };
     const result = workspaceStorageSchema.safeParse(data);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.selectedTaskId).toBe("CIT-201");
+      expect(result.data.selectedTaskId).toBe("ITDX-201");
     }
   });
 });
