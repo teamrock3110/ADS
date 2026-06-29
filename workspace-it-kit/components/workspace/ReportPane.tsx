@@ -165,23 +165,22 @@ export function ReportPane({
             </span>
           )}
         </span>
-        <div className="flex shrink-0 items-center rounded-md border border-border bg-muted p-0.5">
-          <Button
-            variant={aiProvider === "claude" ? "default" : "ghost"}
-            size="sm"
-            className="h-5 px-2 text-xs"
-            onClick={() => setAiProvider("claude")}
-          >
-            Claude
-          </Button>
-          <Button
-            variant={aiProvider === "gemini" ? "default" : "ghost"}
-            size="sm"
-            className="h-5 px-2 text-xs"
-            onClick={() => setAiProvider("gemini")}
-          >
-            Gemini
-          </Button>
+        <div className="flex shrink-0 items-center gap-0.5 rounded border border-border bg-muted px-0.5 py-0.5">
+          {(["claude", "gemini"] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setAiProvider(p)}
+              className={[
+                "rounded px-1.5 py-0.5 text-[10px] leading-none transition-colors",
+                aiProvider === p
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              ].join(" ")}
+            >
+              {p === "claude" ? "Claude" : "Gemini"}
+            </button>
+          ))}
         </div>
       </div>
 
