@@ -11,24 +11,14 @@ export const taskSchema = z.object({
 
 export const tasksSchema = z.array(taskSchema);
 
-export const execLinkKindSchema = z.enum([
-  "slack",
-  "slides",
-  "sheet",
-  "doc",
-  "other",
-]);
-
 export const execLinkSchema = z.object({
   id: z.string(),
-  kind: execLinkKindSchema,
   label: z.string(),
   url: z.string().url(),
 });
 
 export const execLinksMapSchema = z.record(z.string(), z.array(execLinkSchema));
 
-export type ExecLinkKind = z.infer<typeof execLinkKindSchema>;
 export type ExecLink = z.infer<typeof execLinkSchema>;
 
 export const relatedTicketSchema = z.object({

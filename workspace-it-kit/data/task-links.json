@@ -2,25 +2,21 @@
   "CIT-201": [
     {
       "id": "lnk-1",
-      "kind": "slack",
       "label": "依頼スレ（#corp-it）",
       "url": "https://slack.com/"
     },
     {
       "id": "lnk-2",
-      "kind": "slides",
       "label": "NW構成案 v3",
       "url": "https://docs.google.com/"
     },
     {
       "id": "lnk-3",
-      "kind": "sheet",
       "label": "DHCPサーバ設計書",
       "url": "https://docs.google.com/"
     },
     {
       "id": "lnk-4",
-      "kind": "doc",
       "label": "Mac Studio セットアップ手順",
       "url": "https://docs.google.com/"
     }
@@ -28,13 +24,11 @@
   "CIT-135": [
     {
       "id": "lnk-5",
-      "kind": "slack",
       "label": "Slack API 整理の依頼",
       "url": "https://slack.com/"
     },
     {
       "id": "lnk-6",
-      "kind": "doc",
       "label": "Slack API 管理者ガイド",
       "url": "https://api.slack.com/"
     }
@@ -42,7 +36,6 @@
   "CIT-142": [
     {
       "id": "lnk-7",
-      "kind": "sheet",
       "label": "MDM未登録端末リスト",
       "url": "https://docs.google.com/"
     }

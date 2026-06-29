@@ -3,24 +3,11 @@
 import { useState } from "react";
 import { ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
 
-import { type ExecLink, type ExecLinkKind } from "@/lib/it/schema";
-import {
-  EXEC_LINK_KIND_LABEL,
-  execLinkHostname,
-} from "@/lib/it/links";
-import { Badge } from "@/components/ui/badge";
+import { type ExecLink } from "@/lib/it/schema";
+import { execLinkHostname } from "@/lib/it/links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-const KINDS: ExecLinkKind[] = ["slack", "slides", "sheet", "doc", "other"];
 
 type ExecLinksPaneProps = {
   links: ExecLink[];
@@ -33,13 +20,11 @@ type EditState = {
   id: string;
   label: string;
   url: string;
-  kind: ExecLinkKind;
 };
 
 export function ExecLinksPane({ links, onAddLink, onDeleteLink, onEditLink }: ExecLinksPaneProps) {
   const [label, setLabel] = useState("");
   const [url, setUrl] = useState("");
-  const [kind, setKind] = useState<ExecLinkKind>("other");
   const [editing, setEditing] = useState<EditState | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
 
@@ -55,14 +40,13 @@ export function ExecLinksPane({ links, onAddLink, onDeleteLink, onEditLink }: Ex
       return;
     }
     setAddError(null);
-    onAddLink({ kind, label: trimmedLabel, url: trimmedUrl });
+    onAddLink({ label: trimmedLabel, url: trimmedUrl });
     setLabel("");
     setUrl("");
-    setKind("other");
   };
 
   const startEdit = (link: ExecLink) => {
-    setEditing({ id: link.id, label: link.label, url: link.url, kind: link.kind });
+    setEditing({ id: link.id, label: link.label, url: link.url });
   };
 
   const handleEditSave = () => {
@@ -75,7 +59,7 @@ export function ExecLinksPane({ links, onAddLink, onDeleteLink, onEditLink }: Ex
     } catch {
       return;
     }
-    onEditLink(editing.id, { kind: editing.kind, label: trimmedLabel, url: trimmedUrl });
+    onEditLink(editing.id, { label: trimmedLabel, url: trimmedUrl });
     setEditing(null);
   };
 
@@ -83,7 +67,7 @@ export function ExecLinksPane({ links, onAddLink, onDeleteLink, onEditLink }: Ex
     <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-background">
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
         <span className="text-sm font-medium">関連リンク</span>
-        <Badge variant="outline">{links.length}件</Badge>
+        <span className="text-xs text-muted-foreground">{links.length}件</span>
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-2 p-2">
@@ -112,21 +96,6 @@ export function ExecLinksPane({ links, onAddLink, onDeleteLink, onEditLink }: Ex
                     placeholder="https://..."
                     aria-label="URLを編集"
                   />
-                  <Select
-                    value={editing.kind}
-                    onValueChange={(v) => setEditing({ ...editing, kind: v as ExecLinkKind })}
-                  >
-                    <SelectTrigger size="sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {KINDS.map((k) => (
-                        <SelectItem key={k} value={k}>
-                          {EXEC_LINK_KIND_LABEL[k]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                   <div className="flex gap-2">
                     <Button type="button" size="sm" onClick={handleEditSave} className="flex-1">
                       保存
@@ -153,9 +122,6 @@ export function ExecLinksPane({ links, onAddLink, onDeleteLink, onEditLink }: Ex
                     rel="noopener noreferrer"
                     className="flex min-w-0 flex-1 items-center gap-3"
                   >
-                    <Badge variant="secondary" className="shrink-0">
-                      {EXEC_LINK_KIND_LABEL[link.kind]}
-                    </Badge>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{link.label}</p>
                       <p className="truncate text-xs text-muted-foreground">
@@ -196,28 +162,18 @@ export function ExecLinksPane({ links, onAddLink, onDeleteLink, onEditLink }: Ex
         <Input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
           placeholder="ラベルを入力…"
           aria-label="リンクラベル"
         />
         <Input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
           type="url"
           placeholder="https://..."
           aria-label="リンクURL"
         />
-        <Select value={kind} onValueChange={(v) => setKind(v as ExecLinkKind)}>
-          <SelectTrigger size="sm">
-            <SelectValue placeholder="種類" />
-          </SelectTrigger>
-          <SelectContent>
-            {KINDS.map((k) => (
-              <SelectItem key={k} value={k}>
-                {EXEC_LINK_KIND_LABEL[k]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         {addError && (
           <p className="text-xs text-destructive">{addError}</p>
         )}
