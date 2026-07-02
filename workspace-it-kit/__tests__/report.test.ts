@@ -45,6 +45,6 @@ describe("generateWeeklyReport", () => {
     expect(text).toContain("■ 遅延理由・課題");
     expect(text).toContain("■ 相談・作業承認依頼");
     expect(text).not.toContain("なし");
-    expect(text).not.toMatch(/■ 遅延理由・課題\n[^\n■]/s);
+    expect(text).not.toMatch(/■ 遅延理由・課題\n[^\n■]/);
   });
 });
