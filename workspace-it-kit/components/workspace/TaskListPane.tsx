@@ -23,7 +23,6 @@ import { DeleteConfirmDialog } from "@/components/workspace/DeleteConfirmDialog"
 
 function sortTasks(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
-    if (a.delayed !== b.delayed) return a.delayed ? -1 : 1;
     const deadlineDiff = a.deadline.localeCompare(b.deadline);
     if (deadlineDiff !== 0) return deadlineDiff;
     return a.id.localeCompare(b.id);
@@ -37,7 +36,11 @@ type TaskListPaneProps = {
   reportFilledByTaskId: Record<string, boolean>;
   onSelectTask: (id: string) => void;
   onRestoreTask: (id: string) => void;
-  onAddTask: (draft: { title: string; deadline: string; description: string }) => void;
+  onAddTask: (draft: {
+    title: string;
+    deadline: string;
+    description: string;
+  }) => void;
   onDeleteTask: (id: string) => void;
 };
 
@@ -71,7 +74,7 @@ function TaskRow({
                   : "border-l-transparent hover:bg-sidebar-accent/60",
               )}
             >
-              <span className="line-clamp-2 text-sm font-medium leading-snug">
+              <span className="line-clamp-2 text-sm leading-snug font-medium">
                 {task.title}
               </span>
               <span className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
@@ -79,11 +82,6 @@ function TaskRow({
                 {isLocal && (
                   <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
                     LOCAL
-                  </Badge>
-                )}
-                {task.delayed && (
-                  <Badge variant="destructive" className="h-5 px-1.5 text-[10px]">
-                    遅延
                   </Badge>
                 )}
                 {filled ? (
@@ -97,9 +95,7 @@ function TaskRow({
             </button>
           }
         />
-        {!isLocal && (
-          <TooltipContent side="right">{task.id}</TooltipContent>
-        )}
+        {!isLocal && <TooltipContent side="right">{task.id}</TooltipContent>}
       </Tooltip>
       <button
         type="button"
@@ -107,7 +103,7 @@ function TaskRow({
           e.stopPropagation();
           onDelete();
         }}
-        className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+        className="absolute top-1/2 right-1 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
         aria-label={`${task.title}を削除`}
       >
         <Trash2 className="size-3.5" />
@@ -235,7 +231,10 @@ export function TaskListPane({
                 <span className="text-xs font-medium text-muted-foreground">
                   完了済み
                 </span>
-                <Badge variant="outline" className="ml-auto h-5 px-1.5 text-[10px]">
+                <Badge
+                  variant="outline"
+                  className="ml-auto h-5 px-1.5 text-[10px]"
+                >
                   {sortedCompleted.length}
                 </Badge>
               </CollapsibleTrigger>
@@ -272,7 +271,9 @@ export function TaskListPane({
 
       <DeleteConfirmDialog
         open={deleteTargetId !== null}
-        onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTargetId(null);
+        }}
         title="タスクを削除"
         itemName={deleteTargetTask?.title ?? ""}
         description={

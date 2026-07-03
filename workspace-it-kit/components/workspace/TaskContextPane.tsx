@@ -33,8 +33,6 @@ import { DeleteConfirmDialog } from "@/components/workspace/DeleteConfirmDialog"
 
 type TaskContextPaneProps = {
   task: Task;
-  delayed: boolean;
-  onDelayedChange: (delayed: boolean) => void;
   workMemo: string;
   onWorkMemoSave: (value: string) => void;
   onCompleteTask: () => void;
@@ -224,8 +222,6 @@ type LinkEditState = { id: string; label: string; url: string };
 
 export function TaskContextPane({
   task,
-  delayed,
-  onDelayedChange,
   workMemo,
   onWorkMemoSave,
   onCompleteTask,
@@ -312,17 +308,7 @@ export function TaskContextPane({
         ) : (
           <Badge variant="outline">期限 {task.deadline || "未設定"}</Badge>
         )}
-        {delayed && <Badge variant="destructive">遅延</Badge>}
         <div className="ml-auto flex items-center gap-2">
-          <Button
-            type="button"
-            variant={delayed ? "secondary" : "ghost"}
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => onDelayedChange(!delayed)}
-          >
-            {delayed ? "遅延を解除" : "遅延にする"}
-          </Button>
           <Button
             type="button"
             variant="default"

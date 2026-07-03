@@ -316,14 +316,6 @@ export function Workspace({
     [activeTask, initialExecLinks],
   );
 
-  const handleDelayedChange = useCallback(
-    (delayed: boolean) => {
-      if (!activeTask) return;
-      setDelayedOverrides((prev) => ({ ...prev, [activeTask.id]: delayed }));
-    },
-    [activeTask],
-  );
-
   const toggleReportPane = useCallback(
     () => setReportPaneOpen((v) => !v),
     [],
@@ -457,8 +449,6 @@ export function Workspace({
         />
         <TaskContextPane
           task={activeTask}
-          delayed={activeTask.delayed}
-          onDelayedChange={handleDelayedChange}
           workMemo={workMemos[activeTask.id] ?? ""}
           onWorkMemoSave={saveWorkMemo}
           onCompleteTask={handleCompleteTask}
