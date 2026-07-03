@@ -4,7 +4,7 @@ import {
   EMPTY_WEEKLY_REPORT_INPUT,
   type WeeklyReportInput,
 } from "@/lib/it/report";
-import { execLinkSchema, localTaskSchema, type ExecLink, type LocalTask } from "@/lib/it/schema";
+import { execLinkSchema, isLocalTask, localTaskSchema, type ExecLink, type LocalTask } from "@/lib/it/schema";
 
 // ─── スキーマ ────────────────────────────────────────────────
 
@@ -130,11 +130,37 @@ export async function loadWorkspaceStorage(): Promise<WorkspaceStorage> {
   }
 }
 
+/**
+ * ローカルタスク実体が存在しない LOCAL-* キーの overlay データを取り除く。
+ * LOCAL タスクはハード削除のため、残った関連データは孤児（削除タスクの残骸）。
+ * 削除直後に InlineTextareaField のアンマウント時保存が古いクロージャ経由で
+ * 削除済みキーを書き戻すレースがあるため、保存時に必ず間引く。
+ * （JSON タスクはソフト削除＝復元前提なので対象外）
+ */
+export function pruneOrphanLocalData(data: WorkspaceStorage): WorkspaceStorage {
+  const liveIds = new Set(data.localTasks.map((t) => t.id));
+  const isOrphan = (id: string) => isLocalTask({ id }) && !liveIds.has(id);
+  const pruneRecord = <T,>(record: Record<string, T>): Record<string, T> =>
+    Object.fromEntries(Object.entries(record).filter(([id]) => !isOrphan(id)));
+  return {
+    ...data,
+    reportInputs: pruneRecord(data.reportInputs),
+    workMemos: pruneRecord(data.workMemos),
+    taskLinks: pruneRecord(data.taskLinks),
+    delayedOverrides: pruneRecord(data.delayedOverrides),
+    completedTaskIds: data.completedTaskIds.filter((id) => !isOrphan(id)),
+    selectedTaskId:
+      data.selectedTaskId !== null && isOrphan(data.selectedTaskId)
+        ? null
+        : data.selectedTaskId,
+  };
+}
+
 export async function saveWorkspaceStorage(data: WorkspaceStorage): Promise<void> {
   const res = await fetch("/api/overlay", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: JSON.stringify(pruneOrphanLocalData(data)),
   });
   if (!res.ok) throw new Error(`PUT /api/overlay failed: ${res.status}`);
 }

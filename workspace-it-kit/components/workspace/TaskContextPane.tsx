@@ -78,7 +78,9 @@ function CollapsibleSection({
             open && "rotate-180",
           )}
         />
-        <span className="text-xs font-medium text-muted-foreground">{title}</span>
+        <span className="text-xs font-medium text-muted-foreground">
+          {title}
+        </span>
         {badge !== undefined && (
           <span className="ml-auto text-xs text-muted-foreground">{badge}</span>
         )}
@@ -241,6 +243,7 @@ export function TaskContextPane({
   const [linkUrl, setLinkUrl] = useState("");
   const [linkEditing, setLinkEditing] = useState<LinkEditState | null>(null);
   const [linkAddError, setLinkAddError] = useState<string | null>(null);
+  const [linkFormOpen, setLinkFormOpen] = useState(false);
   const isLocal = isLocalTask(task);
 
   const handleAddComment = () => {
@@ -250,13 +253,16 @@ export function TaskContextPane({
     setCommentInput("");
   };
 
+  const closeLinkForm = () => {
+    setLinkFormOpen(false);
+    setLinkLabel("");
+    setLinkUrl("");
+    setLinkAddError(null);
+  };
+
   const handleAddLink = () => {
     const trimmedLabel = linkLabel.trim();
     const trimmedUrl = linkUrl.trim();
-    if (!trimmedLabel) {
-      setLinkAddError("ラベルを入力してください");
-      return;
-    }
     if (!trimmedUrl) {
       setLinkAddError("URLを入力してください");
       return;
@@ -267,10 +273,17 @@ export function TaskContextPane({
       setLinkAddError("正しいURL形式で入力してください（例: https://...）");
       return;
     }
-    setLinkAddError(null);
-    onAddLink({ label: trimmedLabel, url: trimmedUrl });
-    setLinkLabel("");
-    setLinkUrl("");
+    // リンク名は任意。省略時はホスト名で補完する
+    onAddLink({
+      label: trimmedLabel || execLinkHostname(trimmedUrl),
+      url: trimmedUrl,
+    });
+    closeLinkForm();
+  };
+
+  const handleLinkInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") handleAddLink();
+    if (e.key === "Escape") closeLinkForm();
   };
 
   const handleLinkEditSave = () => {
@@ -323,7 +336,11 @@ export function TaskContextPane({
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
-                  <Button variant="ghost" size="icon" className="size-7 text-muted-foreground">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-muted-foreground"
+                  >
                     <MoreHorizontal className="size-4" />
                   </Button>
                 }
@@ -366,7 +383,7 @@ export function TaskContextPane({
                   placeholder="タスクの詳細説明を入力..."
                 />
               ) : task.description ? (
-                <p className="whitespace-pre-line text-sm leading-relaxed">
+                <p className="text-sm leading-relaxed whitespace-pre-line">
                   {task.description}
                 </p>
               ) : null}
@@ -411,7 +428,10 @@ export function TaskContextPane({
             </div>
           </CollapsibleSection>
 
-          <CollapsibleSection key={`memo-${task.id}`} title="作業メモ（備忘録）">
+          <CollapsibleSection
+            key={`memo-${task.id}`}
+            title="作業メモ（備忘録）"
+          >
             <div className="flex flex-col gap-2">
               <p className="text-xs text-muted-foreground">
                 調査メモ用。定例報告には含めません。
@@ -433,13 +453,9 @@ export function TaskContextPane({
             defaultOpen
           >
             <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-2">
-                {links.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    リンク未登録。下のフォームから追加できます。
-                  </p>
-                ) : (
-                  links.map((link) =>
+              {links.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {links.map((link) =>
                     linkEditing?.id === link.id ? (
                       <div
                         key={link.id}
@@ -448,16 +464,22 @@ export function TaskContextPane({
                         <Input
                           value={linkEditing.label}
                           onChange={(e) =>
-                            setLinkEditing({ ...linkEditing, label: e.target.value })
+                            setLinkEditing({
+                              ...linkEditing,
+                              label: e.target.value,
+                            })
                           }
-                          placeholder="ラベル"
-                          aria-label="ラベルを編集"
+                          placeholder="リンク名"
+                          aria-label="リンク名を編集"
                           autoFocus
                         />
                         <Input
                           value={linkEditing.url}
                           onChange={(e) =>
-                            setLinkEditing({ ...linkEditing, url: e.target.value })
+                            setLinkEditing({
+                              ...linkEditing,
+                              url: e.target.value,
+                            })
                           }
                           type="url"
                           placeholder="https://..."
@@ -495,7 +517,9 @@ export function TaskContextPane({
                           className="flex min-w-0 flex-1 items-center gap-3"
                         >
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">{link.label}</p>
+                            <p className="truncate text-sm font-medium">
+                              {link.label}
+                            </p>
                             <p className="truncate text-xs text-muted-foreground">
                               {execLinkHostname(link.url)}
                             </p>
@@ -528,45 +552,62 @@ export function TaskContextPane({
                         </div>
                       </div>
                     ),
-                  )
-                )}
-              </div>
-              <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
-                <span className="text-xs font-medium text-muted-foreground">
-                  <Plus className="mr-1 inline size-3" />
-                  リンク追加
-                </span>
-                <Input
-                  value={linkLabel}
-                  onChange={(e) => setLinkLabel(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleAddLink();
-                  }}
-                  placeholder="ラベルを入力…"
-                  aria-label="リンクラベル"
-                />
-                <Input
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleAddLink();
-                  }}
-                  type="url"
-                  placeholder="https://..."
-                  aria-label="リンクURL"
-                />
-                {linkAddError && (
-                  <p className="text-xs text-destructive">{linkAddError}</p>
-                )}
+                  )}
+                </div>
+              )}
+              {linkFormOpen ? (
+                <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
+                  <Input
+                    value={linkLabel}
+                    onChange={(e) => setLinkLabel(e.target.value)}
+                    onKeyDown={handleLinkInputKeyDown}
+                    placeholder="例: 設定手順書（省略可）"
+                    aria-label="リンク名"
+                    autoFocus
+                  />
+                  <Input
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    onKeyDown={handleLinkInputKeyDown}
+                    type="url"
+                    placeholder="https://..."
+                    aria-label="リンクURL"
+                  />
+                  {linkAddError && (
+                    <p className="text-xs text-destructive">{linkAddError}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAddLink}
+                      className="flex-1"
+                    >
+                      追加
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={closeLinkForm}
+                      className="flex-1"
+                    >
+                      キャンセル
+                    </Button>
+                  </div>
+                </div>
+              ) : (
                 <Button
                   type="button"
-                  variant="secondary"
+                  variant="ghost"
                   size="sm"
-                  onClick={handleAddLink}
+                  className="w-full"
+                  onClick={() => setLinkFormOpen(true)}
                 >
-                  追加
+                  <Plus className="size-4" />
+                  リンクを追加
                 </Button>
-              </div>
+              )}
             </div>
           </CollapsibleSection>
         </div>

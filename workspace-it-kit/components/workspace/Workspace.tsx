@@ -36,6 +36,14 @@ function isCompleted(completedTaskIds: string[], taskId: string): boolean {
   return completedTaskIds.includes(taskId);
 }
 
+/** record から key を除いた新しいオブジェクトを返す。key が無ければ元の参照をそのまま返す */
+function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+  if (!(key in record)) return record;
+  const next = { ...record };
+  delete next[key];
+  return next;
+}
+
 export function Workspace({
   initialTasks,
   initialExecLinks,
@@ -353,7 +361,14 @@ export function Workspace({
   const handleDeleteTask = useCallback(
     (id: string) => {
       if (isLocalTask({ id })) {
+        // LOCAL タスクは実体ごと消えるため、ID をキーにした overlay データも掃除する
+        // （JSON タスクはソフト削除なので overlay を残す）
         setLocalTasks((prev) => prev.filter((t) => t.id !== id));
+        setReportInputs((prev) => omitKey(prev, id));
+        setWorkMemos((prev) => omitKey(prev, id));
+        setTaskLinks((prev) => omitKey(prev, id));
+        setDelayedOverrides((prev) => omitKey(prev, id));
+        setCompletedTaskIds((prev) => prev.filter((t) => t !== id));
       } else {
         setDeletedTaskIds((prev) => [...prev, id]);
       }
