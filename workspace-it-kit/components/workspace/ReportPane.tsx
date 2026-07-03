@@ -16,6 +16,7 @@ import { type WeeklyReportInput } from "@/lib/it/report";
 import { type MeetingType } from "@/lib/report-prompts";
 import { type ReportTask } from "@/app/api/report/generate/route";
 import { type AIProvider } from "@/lib/ai/types";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,10 +38,12 @@ type ReportPaneProps = {
   activeTask?: Task;
 };
 
-const AI_MULTI_TABS: { value: Extract<MeetingType, "月" | "金">; label: string }[] = [
-  { value: "月", label: "月曜（センター）" },
-  { value: "金", label: "金曜（PJ定例）" },
-];
+/** lib/report-prompts.ts の REPORT_PROMPTS の会議定義に合わせた表示名 */
+const MEETING_TYPE_LABELS: Record<MeetingType, string> = {
+  火: "チーム会",
+  月: "センター",
+  金: "PJ定例",
+};
 
 function buildReportTasks(
   tasks: Task[],
@@ -165,30 +168,13 @@ export function ReportPane({
             </span>
           )}
         </span>
-        <div className="flex shrink-0 items-center gap-0.5 rounded border border-border bg-muted px-0.5 py-0.5">
-          {(["claude", "gemini"] as const).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setAiProvider(p)}
-              className={[
-                "rounded px-1.5 py-0.5 text-[10px] leading-none transition-colors",
-                aiProvider === p
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              ].join(" ")}
-            >
-              {p === "claude" ? "Claude" : "Gemini"}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* タブ */}
       <Tabs defaultValue="火" className="flex min-h-0 flex-1 flex-col">
         <div className="shrink-0 border-b border-border px-2 pt-2">
           <TabsList variant="line" className="w-full justify-start">
-            <TabsTrigger value="火" className="text-xs">火曜（PJ個別）</TabsTrigger>
+            <TabsTrigger value="火" className="text-xs">火曜</TabsTrigger>
             <TabsTrigger value="月" className="text-xs">月曜</TabsTrigger>
             <TabsTrigger value="金" className="text-xs">金曜</TabsTrigger>
           </TabsList>
@@ -226,6 +212,27 @@ export function ReportPane({
                   {aiCopied[value] ? "済" : "コピー"}
                 </Button>
               )}
+              <div className="flex-1" />
+              <Badge variant="outline" size="xs">
+                {MEETING_TYPE_LABELS[value]}
+              </Badge>
+              <div className="flex shrink-0 items-center gap-0.5 rounded border border-border bg-muted px-0.5 py-0.5">
+                {(["claude", "gemini"] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setAiProvider(p)}
+                    className={[
+                      "rounded px-1.5 py-0.5 text-[10px] leading-none transition-colors",
+                      aiProvider === p
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    ].join(" ")}
+                  >
+                    {p === "claude" ? "Claude" : "Gemini"}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {aiReports[value] ? (
