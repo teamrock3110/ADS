@@ -408,7 +408,7 @@ export function Workspace({
           workspaceName={workspace.name}
           selectedTaskTitle="（進行中タスクなし）"
         />
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 overflow-x-auto">
           <TaskListPane
             activeTasks={activeTasks}
             completedTasks={completedTasks}
@@ -433,7 +433,7 @@ export function Workspace({
         workspaceName={workspace.name}
         selectedTaskTitle={activeTask.title}
       />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 overflow-x-auto">
         <TaskListPane
           activeTasks={activeTasks}
           completedTasks={completedTasks}
