@@ -393,6 +393,12 @@ export function Workspace({
           [id]: { ...(prev[id] ?? {}), ...updates },
         }));
       }
+      // 期限を修正した = 遅延ではなくなった、という意思表示とみなして自動解除する
+      // （tasks.json の base delayed 値にフォールバックしないよう明示的に false を書く。
+      //   遅延を隠すための期限延長を防ぐため、逆方向＝手動で遅延にする操作は残す）
+      if (updates.deadline !== undefined) {
+        setDelayedOverrides((prev) => ({ ...prev, [id]: false }));
+      }
     },
     [],
   );
