@@ -9,7 +9,9 @@ import {
   Copy,
   Loader2,
   Sparkles,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { type Task } from "@/lib/it/schema";
 import { type WeeklyReportInput } from "@/lib/it/report";
@@ -85,7 +87,6 @@ export function ReportPane({
     if (!tasks.length) return;
 
     setAiLoading((prev) => ({ ...prev, [meetingType]: true }));
-    setAiReports((prev) => ({ ...prev, [meetingType]: "" }));
     try {
       const res = await fetch("/api/report/generate", {
         method: "POST",
@@ -93,12 +94,13 @@ export function ReportPane({
         body: JSON.stringify({ meetingType, tasks, provider: aiProvider }),
       });
       const data = await res.json();
-      setAiReports((prev) => ({
-        ...prev,
-        [meetingType]: data.report ?? data.error ?? "エラーが発生しました",
-      }));
+      if (!res.ok || !data.report) {
+        toast.error(data.error ?? "AI生成に失敗しました。既存の内容は変更していません。");
+        return;
+      }
+      setAiReports((prev) => ({ ...prev, [meetingType]: data.report }));
     } catch {
-      setAiReports((prev) => ({ ...prev, [meetingType]: "通信エラーが発生しました" }));
+      toast.error("通信エラーが発生しました。既存の内容は変更していません。");
     } finally {
       setAiLoading((prev) => ({ ...prev, [meetingType]: false }));
     }
@@ -110,6 +112,14 @@ export function ReportPane({
     await navigator.clipboard.writeText(text);
     setAiCopied((prev) => ({ ...prev, [meetingType]: true }));
     window.setTimeout(() => setAiCopied((prev) => ({ ...prev, [meetingType]: false })), 2000);
+  };
+
+  const handleAiDiscard = (meetingType: MeetingType) => {
+    setAiReports((prev) => {
+      const next = { ...prev };
+      delete next[meetingType];
+      return next;
+    });
   };
 
   if (!open) {
@@ -202,15 +212,26 @@ export function ReportPane({
                 {aiLoading[value] ? "生成中..." : "AI生成"}
               </Button>
               {aiReports[value] && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleAiCopy(value)}
-                  className="h-7 gap-1 px-2 text-xs"
-                >
-                  {aiCopied[value] ? <Check className="size-3" /> : <Copy className="size-3" />}
-                  {aiCopied[value] ? "済" : "コピー"}
-                </Button>
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleAiCopy(value)}
+                    className="h-7 gap-1 px-2 text-xs"
+                  >
+                    {aiCopied[value] ? <Check className="size-3" /> : <Copy className="size-3" />}
+                    {aiCopied[value] ? "済" : "コピー"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleAiDiscard(value)}
+                    className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                  >
+                    <X className="size-3" />
+                    破棄
+                  </Button>
+                </>
               )}
               <div className="ml-auto flex shrink-0 items-center gap-2">
                 <Badge variant="outline" size="xs">
@@ -237,13 +258,19 @@ export function ReportPane({
             </div>
 
             {aiReports[value] ? (
-              <Textarea
-                value={aiReports[value]}
-                onChange={(e) =>
-                  setAiReports((prev) => ({ ...prev, [value]: e.target.value }))
-                }
-                className="min-h-0 flex-1 resize-none rounded-none border-0 font-mono text-xs focus-visible:ring-0"
-              />
+              <>
+                <div className="shrink-0 border-b border-border bg-muted/50 px-2 py-1 text-[11px] text-muted-foreground">
+                  AIが生成した下書きです。保存されません。使う場合はコピーしてください。
+                </div>
+                <Textarea
+                  value={aiReports[value]}
+                  onChange={(e) =>
+                    setAiReports((prev) => ({ ...prev, [value]: e.target.value }))
+                  }
+                  disabled={!!aiLoading[value]}
+                  className="min-h-0 flex-1 resize-none rounded-none border-0 font-mono text-xs focus-visible:ring-0"
+                />
+              </>
             ) : value === "火" ? (
               /* 火曜：AI未生成時はテンプレートを表示 */
               <ScrollArea className="min-h-0 flex-1">
