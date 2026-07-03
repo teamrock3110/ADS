@@ -25,7 +25,7 @@ export function ReportInputPane({
   onReportFieldSave,
 }: ReportInputPaneProps) {
   return (
-    <section className="flex w-80 shrink-0 flex-col border-r border-border bg-background">
+    <section className="flex w-96 shrink-0 flex-col border-r border-border bg-background">
       <div className="flex h-12 shrink-0 items-center gap-1.5 border-b border-border px-4">
         <span className="text-sm font-medium">定例報告の入力</span>
         <Tooltip>

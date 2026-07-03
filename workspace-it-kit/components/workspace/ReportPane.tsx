@@ -142,7 +142,7 @@ export function ReportPane({
   }
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col bg-background">
+    <aside className="flex w-96 shrink-0 flex-col bg-background">
       {/* ヘッダー */}
       <div className="flex h-12 shrink-0 items-center gap-1 border-b border-border px-2">
         <Tooltip>
@@ -187,7 +187,7 @@ export function ReportPane({
             value={value}
             className="flex min-h-0 flex-1 flex-col gap-0"
           >
-            <div className="flex shrink-0 items-center gap-2 border-b border-border px-2 py-1">
+            <div className="flex flex-wrap shrink-0 items-center gap-x-2 gap-y-1 border-b border-border px-2 py-1">
               <Button
                 size="sm"
                 onClick={() => handleAiGenerate(value)}
@@ -212,26 +212,27 @@ export function ReportPane({
                   {aiCopied[value] ? "済" : "コピー"}
                 </Button>
               )}
-              <div className="flex-1" />
-              <Badge variant="outline" size="xs">
-                {MEETING_TYPE_LABELS[value]}
-              </Badge>
-              <div className="flex shrink-0 items-center gap-0.5 rounded border border-border bg-muted px-0.5 py-0.5">
-                {(["claude", "gemini"] as const).map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setAiProvider(p)}
-                    className={[
-                      "rounded px-1.5 py-0.5 text-[10px] leading-none transition-colors",
-                      aiProvider === p
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    ].join(" ")}
-                  >
-                    {p === "claude" ? "Claude" : "Gemini"}
-                  </button>
-                ))}
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <Badge variant="outline" size="xs">
+                  {MEETING_TYPE_LABELS[value]}
+                </Badge>
+                <div className="flex shrink-0 items-center gap-0.5 rounded border border-border bg-muted px-0.5 py-0.5">
+                  {(["claude", "gemini"] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setAiProvider(p)}
+                      className={[
+                        "rounded px-1.5 py-0.5 text-[10px] leading-none transition-colors",
+                        aiProvider === p
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      ].join(" ")}
+                    >
+                      {p === "claude" ? "Claude" : "Gemini"}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
