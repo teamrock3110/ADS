@@ -21,9 +21,21 @@ import {
 } from "@/components/ui/tooltip";
 import { DeleteConfirmDialog } from "@/components/workspace/DeleteConfirmDialog";
 
+/**
+ * "M/D" 形式の期限を月*100+日の数値に変換する。文字列比較だと "10/1" が
+ * "2/1" より前に来てしまうため、月・日をそれぞれ数値として比較する。
+ * 期限未設定（空文字）は最優先で表示する。
+ */
+function deadlineRank(deadline: string): number {
+  if (!deadline) return -1;
+  const [month, day] = deadline.split("/").map(Number);
+  if (Number.isNaN(month) || Number.isNaN(day)) return Number.MAX_SAFE_INTEGER;
+  return month * 100 + day;
+}
+
 function sortTasks(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
-    const deadlineDiff = a.deadline.localeCompare(b.deadline);
+    const deadlineDiff = deadlineRank(a.deadline) - deadlineRank(b.deadline);
     if (deadlineDiff !== 0) return deadlineDiff;
     return a.id.localeCompare(b.id);
   });
