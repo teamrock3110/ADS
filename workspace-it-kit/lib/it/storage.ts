@@ -26,7 +26,6 @@ const workspaceStorageSchema = z.object({
   reportInputs: z.record(z.string(), weeklyReportInputSchema).default({}),
   workMemos: z.record(z.string(), z.string()).default({}),
   taskLinks: z.record(z.string(), z.array(execLinkSchema)).default({}),
-  delayedOverrides: z.record(z.string(), z.boolean()).default({}),
   completedTaskIds: z.array(z.string()).default([]),
   selectedTaskId: z.string().nullable().default(null),
   localTasks: z.array(localTaskSchema).default([]),
@@ -39,7 +38,6 @@ const legacyStorageSchema = z.object({
   reportInputs: z.record(z.string(), weeklyReportInputSchema).default({}),
   workMemos: z.record(z.string(), z.string()).default({}),
   taskLinks: z.record(z.string(), z.array(execLinkSchema)).default({}),
-  delayedOverrides: z.record(z.string(), z.boolean()).default({}),
   completedTaskIds: z.array(z.string()).default([]),
 });
 
@@ -58,7 +56,6 @@ const workspaceStoragePatchSchema = z.object({
   reportInputs: z.record(z.string(), weeklyReportInputSchema).optional(),
   workMemos: z.record(z.string(), z.string()).optional(),
   taskLinks: z.record(z.string(), z.array(execLinkSchema)).optional(),
-  delayedOverrides: z.record(z.string(), z.boolean()).optional(),
   completedTaskIds: z.array(z.string()).optional(),
   selectedTaskId: z.string().nullable().optional(),
   localTasks: z.array(localTaskSchema).optional(),
@@ -72,7 +69,6 @@ const STORAGE_KEYS = [
   "reportInputs",
   "workMemos",
   "taskLinks",
-  "delayedOverrides",
   "completedTaskIds",
   "selectedTaskId",
   "localTasks",
@@ -106,7 +102,6 @@ export function createEmptyStorage(): WorkspaceStorage {
     reportInputs: {},
     workMemos: {},
     taskLinks: {},
-    delayedOverrides: {},
     completedTaskIds: [],
     selectedTaskId: null,
     localTasks: [],
@@ -198,7 +193,6 @@ export function pruneOrphanLocalData(data: WorkspaceStorage): WorkspaceStorage {
     reportInputs: pruneRecord(data.reportInputs),
     workMemos: pruneRecord(data.workMemos),
     taskLinks: pruneRecord(data.taskLinks),
-    delayedOverrides: pruneRecord(data.delayedOverrides),
     completedTaskIds: data.completedTaskIds.filter((id) => !isOrphan(id)),
     selectedTaskId:
       data.selectedTaskId !== null && isOrphan(data.selectedTaskId)

@@ -60,9 +60,6 @@ export function Workspace({
   >({});
   const [workMemos, setWorkMemos] = useState<Record<string, string>>({});
   const [taskLinks, setTaskLinks] = useState<Record<string, ExecLink[]>>({});
-  const [delayedOverrides, setDelayedOverrides] = useState<
-    Record<string, boolean>
-  >({});
   const [completedTaskIds, setCompletedTaskIds] = useState<string[]>([]);
   const [reportPaneOpen, setReportPaneOpen] = useState(true);
   const [deletedTaskIds, setDeletedTaskIds] = useState<string[]>([]);
@@ -77,7 +74,6 @@ export function Workspace({
         setReportInputs(loaded.reportInputs);
         setWorkMemos(loaded.workMemos);
         setTaskLinks(loaded.taskLinks);
-        setDelayedOverrides(loaded.delayedOverrides);
         setCompletedTaskIds(loaded.completedTaskIds);
         setSelectedTaskId(loaded.selectedTaskId);
         setLocalTasks(loaded.localTasks);
@@ -101,7 +97,6 @@ export function Workspace({
       reportInputs,
       workMemos,
       taskLinks,
-      delayedOverrides,
       completedTaskIds,
       selectedTaskId,
       localTasks,
@@ -135,7 +130,6 @@ export function Workspace({
     reportInputs,
     workMemos,
     taskLinks,
-    delayedOverrides,
     completedTaskIds,
     selectedTaskId,
     localTasks,
@@ -153,27 +147,14 @@ export function Workspace({
     return allTasks.filter((t) => !deletedTaskIds.includes(t.id));
   }, [jsonTasks, localTasks, taskEdits, deletedTaskIds]);
 
-  const tasksWithDelayed = useMemo(
-    () =>
-      tasks.map((task) => ({
-        ...task,
-        delayed: delayedOverrides[task.id] ?? task.delayed,
-      })),
-    [tasks, delayedOverrides],
-  );
-
   const activeTasks = useMemo(
-    () =>
-      tasksWithDelayed.filter(
-        (task) => !isCompleted(completedTaskIds, task.id),
-      ),
-    [tasksWithDelayed, completedTaskIds],
+    () => tasks.filter((task) => !isCompleted(completedTaskIds, task.id)),
+    [tasks, completedTaskIds],
   );
 
   const completedTasks = useMemo(
-    () =>
-      tasksWithDelayed.filter((task) => isCompleted(completedTaskIds, task.id)),
-    [tasksWithDelayed, completedTaskIds],
+    () => tasks.filter((task) => isCompleted(completedTaskIds, task.id)),
+    [tasks, completedTaskIds],
   );
 
   // 選択タスクの補正（完了済み or null → 先頭へ）
@@ -193,7 +174,6 @@ export function Workspace({
       reportInputs,
       workMemos,
       taskLinks,
-      delayedOverrides,
       completedTaskIds,
       selectedTaskId,
       localTasks,
@@ -204,7 +184,6 @@ export function Workspace({
       reportInputs,
       workMemos,
       taskLinks,
-      delayedOverrides,
       completedTaskIds,
       selectedTaskId,
       localTasks,
@@ -232,13 +211,13 @@ export function Workspace({
 
   const reportFilledByTaskId = useMemo(() => {
     const map: Record<string, boolean> = {};
-    for (const task of tasksWithDelayed) {
+    for (const task of tasks) {
       map[task.id] = hasReportProgress(
         reportInputs[task.id] ?? EMPTY_WEEKLY_REPORT_INPUT,
       );
     }
     return map;
-  }, [tasksWithDelayed, reportInputs]);
+  }, [tasks, reportInputs]);
 
   const progressSummary = useMemo(() => {
     const { filled, total } = countReportProgress(
@@ -381,7 +360,6 @@ export function Workspace({
         setReportInputs((prev) => omitKey(prev, id));
         setWorkMemos((prev) => omitKey(prev, id));
         setTaskLinks((prev) => omitKey(prev, id));
-        setDelayedOverrides((prev) => omitKey(prev, id));
         setCompletedTaskIds((prev) => prev.filter((t) => t !== id));
       } else {
         setDeletedTaskIds((prev) => [...prev, id]);
@@ -409,12 +387,6 @@ export function Workspace({
           ...prev,
           [id]: { ...(prev[id] ?? {}), ...updates },
         }));
-      }
-      // 期限を修正した = 遅延ではなくなった、という意思表示とみなして自動解除する
-      // （tasks.json の base delayed 値にフォールバックしないよう明示的に false を書く。
-      //   遅延を隠すための期限延長を防ぐため、逆方向＝手動で遅延にする操作は残す）
-      if (updates.deadline !== undefined) {
-        setDelayedOverrides((prev) => ({ ...prev, [id]: false }));
       }
     },
     [],

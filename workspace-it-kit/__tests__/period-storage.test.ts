@@ -14,7 +14,6 @@ describe("workspaceStorageSchema", () => {
       reportInputs: {},
       workMemos: {},
       taskLinks: {},
-      delayedOverrides: {},
       completedTaskIds: [],
       selectedTaskId: null,
       localTasks: [],
@@ -30,7 +29,6 @@ describe("workspaceStorageSchema", () => {
       },
       workMemos: {},
       taskLinks: {},
-      delayedOverrides: {},
       completedTaskIds: ["ITDX-142"],
     };
     const result = workspaceStorageSchema.safeParse(data);
@@ -47,7 +45,6 @@ describe("workspaceStorageSchema", () => {
       reportInputs: {},
       workMemos: {},
       taskLinks: {},
-      delayedOverrides: {},
       completedTaskIds: [],
       selectedTaskId: "ITDX-201",
     };

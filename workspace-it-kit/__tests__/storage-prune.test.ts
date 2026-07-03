@@ -28,7 +28,6 @@ function storageWithOrphans(): WorkspaceStorage {
     taskLinks: {
       "LOCAL-999": [{ id: "lnk-1", label: "x", url: "https://example.com" }],
     },
-    delayedOverrides: { "LOCAL-999": true, "LOCAL-100": true },
     completedTaskIds: ["ITDX-142", "LOCAL-999", "LOCAL-100"],
     selectedTaskId: "LOCAL-999",
   };
@@ -41,7 +40,6 @@ describe("pruneOrphanLocalData", () => {
     expect(pruned.reportInputs).not.toHaveProperty("LOCAL-999");
     expect(pruned.workMemos).not.toHaveProperty("LOCAL-999");
     expect(pruned.taskLinks).not.toHaveProperty("LOCAL-999");
-    expect(pruned.delayedOverrides).not.toHaveProperty("LOCAL-999");
     expect(pruned.completedTaskIds).not.toContain("LOCAL-999");
     expect(pruned.selectedTaskId).toBeNull();
   });
@@ -52,7 +50,6 @@ describe("pruneOrphanLocalData", () => {
     expect(pruned.reportInputs).toHaveProperty("LOCAL-100");
     expect(pruned.reportInputs).toHaveProperty("ITDX-142");
     expect(pruned.workMemos).toHaveProperty("CIT-128");
-    expect(pruned.delayedOverrides).toHaveProperty("LOCAL-100");
     expect(pruned.completedTaskIds).toEqual(["ITDX-142", "LOCAL-100"]);
   });
 
