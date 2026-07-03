@@ -17,9 +17,11 @@ import {
 import { type ExecLink, type Task, isLocalTask } from "@/lib/it/schema";
 import {
   countReportProgress,
+  diffWorkspaceStorage,
   getTaskLinks,
   hasReportProgress,
   loadWorkspaceStorage,
+  pruneOrphanLocalData,
   saveWorkspaceStorage,
   type WorkspaceStorage,
   type LocalTask,
@@ -65,6 +67,9 @@ export function Workspace({
   const [reportPaneOpen, setReportPaneOpen] = useState(true);
   const [deletedTaskIds, setDeletedTaskIds] = useState<string[]>([]);
   const [taskEdits, setTaskEdits] = useState<Record<string, TaskEdit>>({});
+  // 直近の読み込み/保存成功時点のスナップショット。保存時はこれとの差分（変更した
+  // トップレベルキーのみ）を送る。他クライアントが更新した未変更キーを上書きしないための基準点。
+  const baselineRef = useRef<WorkspaceStorage | null>(null);
   // ── 初回読み込み ──────────────────────────────────────────
   useEffect(() => {
     loadWorkspaceStorage()
@@ -78,6 +83,7 @@ export function Workspace({
         setLocalTasks(loaded.localTasks);
         setDeletedTaskIds(loaded.deletedTaskIds);
         setTaskEdits(loaded.taskEdits);
+        baselineRef.current = loaded;
         setHydrated(true);
       })
       .catch(() => {
@@ -89,9 +95,9 @@ export function Workspace({
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !baselineRef.current) return;
 
-    const data: WorkspaceStorage = {
+    const data: WorkspaceStorage = pruneOrphanLocalData({
       reportInputs,
       workMemos,
       taskLinks,
@@ -101,14 +107,28 @@ export function Workspace({
       localTasks,
       deletedTaskIds,
       taskEdits,
-    };
+    });
+
+    const patch = diffWorkspaceStorage(baselineRef.current, data);
+    if (Object.keys(patch).length === 0) return;
 
     // 連続した state 更新をまとめて1回だけ送る
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      saveWorkspaceStorage(data).catch(() => {
-        toast.error("保存に失敗しました。サーバーが起動しているか確認してください。");
-      });
+      saveWorkspaceStorage(patch)
+        .then(() => {
+          // 送った差分の分だけ baseline を進める。触っていないキーの baseline は
+          // 変えない（＝次回以降も送らない＝他クライアントの変更を上書きしない）。
+          baselineRef.current = {
+            ...(baselineRef.current as WorkspaceStorage),
+            ...patch,
+          };
+        })
+        .catch(() => {
+          toast.error(
+            "保存に失敗しました。サーバーが起動しているか確認してください。",
+          );
+        });
     }, 300);
   }, [
     hydrated,
@@ -152,19 +172,14 @@ export function Workspace({
 
   const completedTasks = useMemo(
     () =>
-      tasksWithDelayed.filter((task) =>
-        isCompleted(completedTaskIds, task.id),
-      ),
+      tasksWithDelayed.filter((task) => isCompleted(completedTaskIds, task.id)),
     [tasksWithDelayed, completedTaskIds],
   );
 
   // 選択タスクの補正（完了済み or null → 先頭へ）
   const resolvedSelectedTaskId = useMemo(() => {
     if (!hydrated) return null;
-    if (
-      selectedTaskId &&
-      activeTasks.some((t) => t.id === selectedTaskId)
-    ) {
+    if (selectedTaskId && activeTasks.some((t) => t.id === selectedTaskId)) {
       return selectedTaskId;
     }
     return activeTasks[0]?.id ?? null;
@@ -185,7 +200,17 @@ export function Workspace({
       deletedTaskIds,
       taskEdits,
     }),
-    [reportInputs, workMemos, taskLinks, delayedOverrides, completedTaskIds, selectedTaskId, localTasks, deletedTaskIds, taskEdits],
+    [
+      reportInputs,
+      workMemos,
+      taskLinks,
+      delayedOverrides,
+      completedTaskIds,
+      selectedTaskId,
+      localTasks,
+      deletedTaskIds,
+      taskEdits,
+    ],
   );
 
   const execLinks = useMemo(() => {
@@ -316,10 +341,7 @@ export function Workspace({
     [activeTask, initialExecLinks],
   );
 
-  const toggleReportPane = useCallback(
-    () => setReportPaneOpen((v) => !v),
-    [],
-  );
+  const toggleReportPane = useCallback(() => setReportPaneOpen((v) => !v), []);
 
   const addLocalTaskComment = useCallback(
     (body: string) => {
@@ -374,7 +396,10 @@ export function Workspace({
   );
 
   const handleEditTask = useCallback(
-    (id: string, updates: { title?: string; deadline?: string; description?: string }) => {
+    (
+      id: string,
+      updates: { title?: string; deadline?: string; description?: string },
+    ) => {
       if (isLocalTask({ id })) {
         setLocalTasks((prev) =>
           prev.map((t) => (t.id === id ? { ...t, ...updates } : t)),
@@ -452,7 +477,9 @@ export function Workspace({
           workMemo={workMemos[activeTask.id] ?? ""}
           onWorkMemoSave={saveWorkMemo}
           onCompleteTask={handleCompleteTask}
-          onAddComment={isLocalTask(activeTask) ? addLocalTaskComment : undefined}
+          onAddComment={
+            isLocalTask(activeTask) ? addLocalTaskComment : undefined
+          }
           onEditTask={(updates) => handleEditTask(activeTask.id, updates)}
           onDeleteTask={() => handleDeleteTask(activeTask.id)}
           links={execLinks}

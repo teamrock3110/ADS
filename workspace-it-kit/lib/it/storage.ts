@@ -48,6 +48,57 @@ const LEGACY_STORAGE_KEY_V1 = "workspace-it-kit:v1";
 
 export type WorkspaceStorage = z.infer<typeof workspaceStorageSchema>;
 
+/**
+ * PUT /api/overlay に送る部分更新ペイロード。
+ * 全キーに .default() が付いた workspaceStorageSchema を .partial() すると
+ * 未指定キーがデフォルト値で埋まってしまう（＝空パッチのつもりが全キー送信になる）ため、
+ * デフォルト無しの別スキーマとして定義する。
+ */
+const workspaceStoragePatchSchema = z.object({
+  reportInputs: z.record(z.string(), weeklyReportInputSchema).optional(),
+  workMemos: z.record(z.string(), z.string()).optional(),
+  taskLinks: z.record(z.string(), z.array(execLinkSchema)).optional(),
+  delayedOverrides: z.record(z.string(), z.boolean()).optional(),
+  completedTaskIds: z.array(z.string()).optional(),
+  selectedTaskId: z.string().nullable().optional(),
+  localTasks: z.array(localTaskSchema).optional(),
+  deletedTaskIds: z.array(z.string()).optional(),
+  taskEdits: z.record(z.string(), taskEditSchema).optional(),
+});
+
+export type WorkspaceStoragePatch = z.infer<typeof workspaceStoragePatchSchema>;
+
+const STORAGE_KEYS = [
+  "reportInputs",
+  "workMemos",
+  "taskLinks",
+  "delayedOverrides",
+  "completedTaskIds",
+  "selectedTaskId",
+  "localTasks",
+  "deletedTaskIds",
+  "taskEdits",
+] as const satisfies readonly (keyof WorkspaceStorage)[];
+
+/**
+ * baseline（前回保存/読み込み時点のスナップショット）と current を比較し、
+ * 実際に変化したトップレベルキーだけを含む部分更新を返す。
+ * 複数クライアントが同じ overlay を共有していても、触っていないキーは
+ * 送信しない＝他クライアントの変更を上書きしない（キー単位マージの前提）。
+ */
+export function diffWorkspaceStorage(
+  baseline: WorkspaceStorage,
+  current: WorkspaceStorage,
+): WorkspaceStoragePatch {
+  const patch: WorkspaceStoragePatch = {};
+  for (const key of STORAGE_KEYS) {
+    if (JSON.stringify(baseline[key]) !== JSON.stringify(current[key])) {
+      (patch as Record<string, unknown>)[key] = current[key];
+    }
+  }
+  return patch;
+}
+
 // ─── デフォルト ───────────────────────────────────────────────
 
 export function createEmptyStorage(): WorkspaceStorage {
@@ -118,7 +169,7 @@ export async function loadWorkspaceStorage(): Promise<WorkspaceStorage> {
     if (isEmpty) {
       const legacy = readLegacyLocalStorage();
       if (legacy) {
-        await saveWorkspaceStorage(legacy);
+        await saveWorkspaceStorage(pruneOrphanLocalData(legacy));
         clearLegacyLocalStorage();
         return legacy;
       }
@@ -156,11 +207,28 @@ export function pruneOrphanLocalData(data: WorkspaceStorage): WorkspaceStorage {
   };
 }
 
-export async function saveWorkspaceStorage(data: WorkspaceStorage): Promise<void> {
+/**
+ * 既存データに patch のキーだけを上書きした結果を返す（キー単位マージ）。
+ * patch に含まれないキーは existing の値がそのまま残る。
+ */
+export function applyWorkspaceStoragePatch(
+  existing: WorkspaceStorage,
+  patch: WorkspaceStoragePatch,
+): WorkspaceStorage {
+  return workspaceStorageSchema.parse({ ...existing, ...patch });
+}
+
+/**
+ * 変更のあったキーだけを送る部分更新。サーバー側は既存データに対して
+ * キー単位でマージするため、他クライアントが更新した未変更キーは保持される。
+ * 呼び出し側は pruneOrphanLocalData 済みのデータから diffWorkspaceStorage で
+ * patch を作ること。
+ */
+export async function saveWorkspaceStorage(patch: WorkspaceStoragePatch): Promise<void> {
   const res = await fetch("/api/overlay", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(pruneOrphanLocalData(data)),
+    body: JSON.stringify(patch),
   });
   if (!res.ok) throw new Error(`PUT /api/overlay failed: ${res.status}`);
 }
@@ -204,4 +272,4 @@ export function clearWorkspaceStorageForTests(): void {
   }
 }
 
-export { workspaceStorageSchema };
+export { workspaceStorageSchema, workspaceStoragePatchSchema };

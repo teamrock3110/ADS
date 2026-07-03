@@ -4,8 +4,13 @@ import path from "path";
 import { NextResponse } from "next/server";
 
 import { hasDatabaseUrl } from "@/lib/db";
-import { loadOverlayFromDb, saveOverlayToDb } from "@/lib/it/overlay-db";
-import { createEmptyStorage, workspaceStorageSchema } from "@/lib/it/storage";
+import { loadOverlayFromDb, mergeOverlayIntoDb, saveOverlayToDb } from "@/lib/it/overlay-db";
+import {
+  applyWorkspaceStoragePatch,
+  createEmptyStorage,
+  workspaceStorageSchema,
+  workspaceStoragePatchSchema,
+} from "@/lib/it/storage";
 
 const OVERLAY_PATH = path.join(process.cwd(), "data", "overlay.json");
 
@@ -63,15 +68,17 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     const raw: unknown = await request.json();
-    const parsed = workspaceStorageSchema.safeParse(raw);
+    const parsed = workspaceStoragePatchSchema.safeParse(raw);
     if (!parsed.success) {
       return NextResponse.json({ ok: false, error: "invalid payload" }, { status: 400 });
     }
+    const patch = parsed.data;
 
     if (hasDatabaseUrl()) {
-      await saveOverlayToDb(parsed.data);
+      await mergeOverlayIntoDb(patch);
     } else {
-      await saveToFile(parsed.data);
+      const current = await loadFromFile();
+      await saveToFile(applyWorkspaceStoragePatch(current, patch));
     }
 
     return NextResponse.json({ ok: true });
