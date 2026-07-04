@@ -5,7 +5,8 @@
       "name": "workspace-it-kit",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 3000
+      "port": 3001,
+      "autoPort": true
     }
   ]
 }

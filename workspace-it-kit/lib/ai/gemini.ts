@@ -17,7 +17,7 @@ export async function generateWithGemini({ meetingType, tasks }: ReportGenerator
   const today = new Date().toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" });
 
   const result = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.5-flash",
     contents: [
       {
         role: "user",
