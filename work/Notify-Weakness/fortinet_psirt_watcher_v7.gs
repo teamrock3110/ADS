@@ -4,7 +4,7 @@
  * v6 からの変更点（詳細は 設計書_MVP_8h.md）:
  *
  *   1. 資産シートを拡張（ベンダー・種別・機種・ツール対象）。
- *   2. 台帳 13 列（自社影響→製品→CVE→…→アドバイザリ）。固定5列。
+ *   2. 台帳 12 列（自社影響→製品→CVE→…→アドバイザリ）。固定5列。
  *   3. Cisco PSIRT RSS → CSAF 版比較（資産シートの IOS-XE / 17.15.5 等で決め打ち判定）。
  *   4. main() = runFortinet_() + runCisco_()。Slack は対応推奨+要調査のみ。
  *   5. 自社影響3値（対応推奨/次回定期/要調査）、KEV連携、Fortinetコード判定表。
@@ -142,14 +142,15 @@ const KEV_YES = 'あり';
 const KEV_NO = 'なし';
 
 /**
- * 台帳 13 列。
+ * 台帳 12 列。
  *
  * A 固定5列: 自社影響 → 製品 → CVE → CVSS → 最終更新日
- * B 判定表示: 公式推奨対応 → OS該当 → KEV → 影響機能 → 判定根拠
+ * B 判定表示: 公式推奨対応 → KEV → 影響機能 → 判定根拠
  * C 人の確認: 確認方法 → ユーザ影響（AI）
  * D 参照: アドバイザリ
  *
- * 外面・掌握・停止は判定の内部入力のみ（列には出さない）。
+ * OS該当は列に出さず、判定根拠の「OS=…」に含める。
+ * 外面・掌握・停止は判定の内部入力のみ。
  */
 const LEDGER_HEADERS = [
   '自社影響',     // 1  対応推奨 / 次回定期 / 要調査
@@ -157,15 +158,133 @@ const LEDGER_HEADERS = [
   'CVE',          // 3
   'CVSS',         // 4
   '最終更新日',   // 5
-  '公式推奨対応', // 6  ベンダー公式（CSAF）
-  'OS該当',       // 7  対象 / 不明（対象外は台帳に載せない）
-  'KEV',          // 8  あり / なし
-  '影響機能',     // 9  AI / フォールバック
-  '判定根拠',     // 10 OS / KEV / 機能 → 結論
-  '確認方法',     // 11 AI（読み取り専用 CLI）
-  'ユーザ影響',   // 12 AI 要約
-  'アドバイザリ'  // 13
+  '公式推奨対応', // 6  ベンダー公式（日本語）
+  'KEV',          // 7  あり / なし
+  '影響機能',     // 8
+  '判定根拠',     // 9  OS=… | KEV=… | ◯◯のため「結論」
+  '確認方法',     // 10 確認ポイント／コマンド／判断
+  'ユーザ影響',   // 11 最悪ケース50字以内
+  'アドバイザリ'  // 12
 ];
+
+/**
+ * 機能別の確認手順（行動可能）。AI 出力が不合格のときこれで差し替える。
+ * 書式: 確認ポイント / コマンド / 判断 の3行。
+ */
+const CHECK_STEPS_FORTINET = {
+  '管理GUI': [
+    '確認ポイント：管理用インターフェースで HTTP/HTTPS 管理が許可されているか',
+    'コマンド：show system interface',
+    '判断：allowaccess に http または https があれば対応が必要。無ければ次回定期で可'
+  ].join('\n'),
+  'SSH': [
+    '確認ポイント：SSH 管理アクセスと管理者 trusthost の制限有無',
+    'コマンド：show system interface\nshow system admin',
+    '判断：allowaccess に ssh があり trusthost が未設定なら対応が必要。SSH無効なら次回定期で可'
+  ].join('\n'),
+  'SSL-VPN': [
+    '確認ポイント：SSL-VPN が有効か',
+    'コマンド：show vpn ssl settings',
+    '判断：status が enable なら対応が必要。disable なら次回定期で可'
+  ].join('\n'),
+  'IPsec VPN': [
+    '確認ポイント：IPsec phase1 が設定されているか',
+    'コマンド：show vpn ipsec phase1-interface',
+    '判断：phase1 が1件以上あれば対応が必要。無ければ次回定期で可'
+  ].join('\n'),
+  'Webフィルタ': [
+    '確認ポイント：Webフィルタプロファイルがポリシーに紐づいているか',
+    'コマンド：show webfilter profile\nshow firewall policy',
+    '判断：プロファイルが有効なポリシーがあれば対応が必要。未使用なら次回定期で可'
+  ].join('\n'),
+  'SSLインスペクション': [
+    '確認ポイント：SSL/SSH 検査プロファイルが使われているか',
+    'コマンド：show firewall ssl-ssh-profile',
+    '判断：検査が有効なプロファイルがあれば対応が必要。未使用なら次回定期で可'
+  ].join('\n'),
+  'IPSエンジン': [
+    '確認ポイント：IPS センサがポリシーに適用されているか',
+    'コマンド：show ips sensor',
+    '判断：センサが有効なら対応が必要。未使用なら次回定期で可'
+  ].join('\n'),
+  'アンチウイルスエンジン': [
+    '確認ポイント：アンチウイルスプロファイルが使われているか',
+    'コマンド：show antivirus profile',
+    '判断：プロファイルが有効なら対応が必要。未使用なら次回定期で可'
+  ].join('\n'),
+  'データプレーン': [
+    '確認ポイント：版が影響範囲内か（機能設定に依存しない）',
+    'コマンド：get system status',
+    '判断：自社版が影響範囲内なら定期更新で対応。範囲外なら対応不要'
+  ].join('\n'),
+  'その他': [
+    '確認ポイント：版が影響範囲内か（機能設定に依存しない）',
+    'コマンド：get system status',
+    '判断：自社版が影響範囲内なら定期更新で対応。範囲外なら対応不要'
+  ].join('\n'),
+  '不明': [
+    '確認ポイント：版が影響範囲内か（機能設定に依存しない）',
+    'コマンド：get system status',
+    '判断：自社版が影響範囲内なら定期更新で対応。範囲外なら対応不要'
+  ].join('\n')
+};
+
+const CHECK_STEPS_CISCO = [
+  {
+    re: /http|webui|web-based|web based|management/i,
+    text: [
+      '確認ポイント：HTTP/HTTPS 管理サーバが有効か',
+      'コマンド：show running-config | include ip http server|ip http secure-server',
+      '判断：ip http server / secure-server が出れば対応が必要。無ければ次回定期で可'
+    ].join('\n')
+  },
+  {
+    re: /beep/i,
+    text: [
+      '確認ポイント：BEEP リスナーが有効か',
+      'コマンド：show running-config | include beep',
+      '判断：beep 設定が出れば対応が必要。無ければ次回定期で可'
+    ].join('\n')
+  },
+  {
+    re: /xmcp/i,
+    text: [
+      '確認ポイント：XMCP Server が有効か',
+      'コマンド：show running-config | include service-routing xmcp',
+      '判断：xmcp listen が出れば対応が必要。無ければ次回定期で可'
+    ].join('\n')
+  },
+  {
+    re: /snmp/i,
+    text: [
+      '確認ポイント：SNMP サーバが有効か',
+      'コマンド：show running-config | include snmp-server',
+      '判断：snmp-server 設定が出れば対応が必要。無ければ次回定期で可'
+    ].join('\n')
+  },
+  {
+    re: /\bssh\b|vty/i,
+    text: [
+      '確認ポイント：SSH / VTY アクセスが有効か',
+      'コマンド：show running-config | include ip ssh|line vty',
+      '判断：SSH または VTY が有効なら対応が必要。無効なら次回定期で可'
+    ].join('\n')
+  },
+  {
+    re: /sd-?wan/i,
+    text: [
+      '確認ポイント：SD-WAN 機能が設定されているか',
+      'コマンド：show running-config | include sdwan|sd-wan',
+      '判断：SD-WAN 設定が出れば対応が必要。無ければ次回定期で可'
+    ].join('\n')
+  }
+];
+
+const CHECK_STEPS_CISCO_DEFAULT = [
+  '確認ポイント：稼働バージョンが影響範囲内か',
+  'コマンド：show version',
+  '判断：自社版が影響範囲内なら定期更新で対応。範囲外なら対応不要'
+].join('\n');
 
 /** 資産シート v7。「製品」はベンダー公式表記（FortiOS / IOS-XE）。ツール対象=いいえ は台帳に出さない */
 const ASSET_HEADERS = ['ベンダー', '種別', '製品', '機種', 'バージョン', '台数', 'ツール対象', '備考'];
@@ -476,6 +595,9 @@ function runFortinet_() {
         applyFallbackDisplayFields_(r);
         if (r.needsFortinetAi && !r._lockedVerdict) finalizeFortinetVerdict_(r);
         else if (r.feature && r.feature !== '—') r.reason = buildDecisionReason_(r);
+        // finalize で機能が変わった場合に確認方法を合わせ直す
+        r.howToCheck = normalizeHowToCheck_(r);
+        r.impactJa = truncateJa_(r.impactJa || fallbackImpactJa_(r), 50);
       });
     }
 
@@ -641,6 +763,29 @@ function ciscoAffectedVersions_(vuln, idMap) {
   return versions;
 }
 
+/** CSAF の fixed / first_fixed から版番号を抜き出す */
+function ciscoFixedVersions_(vuln, idMap) {
+  const versions = [];
+  const status = vuln.product_status || {};
+  ['fixed', 'first_fixed'].forEach(function (key) {
+    (status[key] || []).forEach(function (id) {
+      const name = idMap[id] || String(id);
+      const m = /(\d+\.\d+(?:\.\d+)?)/.exec(name);
+      if (m) pushUnique_(versions, m[1]);
+    });
+  });
+  (vuln.remediations || []).forEach(function (r) {
+    if (r.category !== 'vendor_fix') return;
+    const m = /(\d+\.\d+(?:\.\d+)?)/.exec(String(r.details || ''));
+    if (m && !/has released software updates/i.test(r.details || '')) {
+      pushUnique_(versions, m[1]);
+    }
+  });
+  return versions.sort(function (a, b) {
+    return compareVersion_(parseVersion_(a) || [0], parseVersion_(b) || [0]);
+  });
+}
+
 function ciscoConfigHints_(csaf) {
   const hints = [];
   (((csaf.document || {}).notes) || []).forEach(function (n) {
@@ -777,6 +922,7 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
     });
 
     const affectedVersions = ciscoAffectedVersions_(v, idMap);
+    const fixedVersions = ciscoFixedVersions_(v, idMap);
     const fixes = [];
     (v.remediations || []).forEach(function (r) {
       if (r.category === 'vendor_fix' && r.details) pushUnique_(fixes, r.details);
@@ -801,6 +947,7 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
       vector: vector,
       unauthRemote: isUnauthRemote_(vector) ? 'はい' : 'いいえ',
       affected: affectedVersions,
+      fixedVersions: fixedVersions,
       summary: summary,
       impact: (v.threats || [])
         .filter(function (t) { return t.category === 'impact'; })
@@ -1621,20 +1768,82 @@ function applyFallbackDisplayFields_(row) {
     if (!isFortinetFeatureVocab_(row.feature)) {
       row.feature = guessFortinetFeature_(row);
     }
-  } else if (!row.feature || row.feature === '—' || row.feature === '不明') {
-    const raw = String(row.title || row.impact || '').trim().replace(/\s+/g, ' ');
-    if (raw) row.feature = raw.length > 40 ? raw.slice(0, 40) : raw;
+  } else {
+    row.feature = normalizeCiscoFeature_(row.feature || row.title || '');
   }
 
-  if (!row.howToCheck) {
-    row.howToCheck = row.vendor === VENDOR_CISCO
-      ? '確認ポイント：アドバイザリの Affected Products / Fixed Software を確認'
-      : '確認ポイント：アドバイザリの Affected Products / Solution を確認';
+  row.howToCheck = normalizeHowToCheck_(row);
+  row.impactJa = truncateJa_(row.impactJa || fallbackImpactJa_(row), 50);
+}
+
+function truncateJa_(s, max) {
+  const t = String(s || '').trim().replace(/\s+/g, ' ');
+  if (!t) return '';
+  return t.length > max ? t.slice(0, max) : t;
+}
+
+/** 英語タイトルコピーをやめ、impact から日本語の最悪ケースを引く */
+function fallbackImpactJa_(row) {
+  const text = [row.impact, row.title, row.summary].join(' ').toLowerCase();
+  if (/denial of service|\bdos\b|service stop|hang|crash|reboot/.test(text)) {
+    return '機器が停止し拠点の社内通信が全断する恐れ';
   }
-  if (!row.impactJa) {
-    const t = String(row.title || row.impact || '').trim().replace(/\s+/g, ' ');
-    if (t) row.impactJa = t.length > 40 ? t.slice(0, 40) : t;
+  if (/remote code|code execution|rce|arbitrary code|command injection/.test(text)) {
+    return '機器を乗っ取られ設定改ざんや通信傍受をされる恐れ';
   }
+  if (/information disclosure|sensitive|leak|exfiltrat/.test(text)) {
+    return '管理情報や認証情報が外部に漏れる恐れ';
+  }
+  if (/privilege|escalat|unauthorized.*admin/.test(text)) {
+    return '一般利用者が管理者権限を奪い設定を変更する恐れ';
+  }
+  if (/xss|cross.?site|injection|script/.test(text)) {
+    return '利用者ブラウザで不正操作され認証情報を盗まれる恐れ';
+  }
+  if (/auth.?bypass|authentication/.test(text)) {
+    return '認証を迂回され不正アクセスされる恐れ';
+  }
+  return '機器や接続端末が侵害され業務通信に支障が出る恐れ';
+}
+
+function normalizeCiscoFeature_(raw) {
+  let s = String(raw || '').trim().replace(/\s+/g, ' ');
+  if (!s) return 'IOS XE 基盤';
+  s = s.replace(/^Cisco\s+IOS\s*XE\s+Software\s*/i, '');
+  s = s.replace(/^Cisco\s+IOS\s*XE\s*/i, '');
+  s = s.replace(/^IOS\s*XE\s+Software\s*/i, '');
+  if (/security hardening/i.test(s) || !s) return 'IOS XE 基盤';
+  if (/web-based|webui|http server|web.?ui/i.test(s)) return 'WebUI';
+  if (/beep/i.test(s)) return 'BEEP';
+  if (/xmcp/i.test(s)) return 'XMCP Server';
+  if (/sd-?wan/i.test(s)) return 'SD-WAN';
+  if (/snmp/i.test(s)) return 'SNMP';
+  if (/\bssh\b/i.test(s)) return 'SSH';
+  if (/core/i.test(s)) return 'IOS XE 基盤';
+  if (s.length > 20) s = s.slice(0, 20);
+  return s || 'IOS XE 基盤';
+}
+
+function lookupCheckSteps_(row) {
+  if (row.vendor === VENDOR_FORTINET) {
+    const f = row.feature || 'その他';
+    return CHECK_STEPS_FORTINET[f] || CHECK_STEPS_FORTINET['その他'];
+  }
+  const text = [row.feature, row.title].join(' ');
+  for (let i = 0; i < CHECK_STEPS_CISCO.length; i++) {
+    if (CHECK_STEPS_CISCO[i].re.test(text)) return CHECK_STEPS_CISCO[i].text;
+  }
+  return CHECK_STEPS_CISCO_DEFAULT;
+}
+
+/** 確認方法が行動可能か検証し、不合格なら機能別テーブルで差し替える */
+function normalizeHowToCheck_(row) {
+  const raw = String(row.howToCheck || '').trim();
+  const hasCmd = /コマンド[：:]/.test(raw) && /(show|get|diagnose)\b/i.test(raw);
+  const hasJudge = /判断[：:]/.test(raw);
+  const useless = /アドバイザリの\s*(Affected|Fixed|Solution)|個別アドバイザリ|公開情報と対象バージョン/i.test(raw);
+  if (raw && hasCmd && hasJudge && !useless) return raw;
+  return lookupCheckSteps_(row);
 }
 
 // ============================================================
@@ -1731,13 +1940,11 @@ function normalizeServiceStop_(v) {
 }
 
 function buildDecisionReason_(row) {
-  const parts = [];
-  if (row.vendorPath) parts.push('パス=' + row.vendorPath);
-  if (row.osStatus) parts.push('OS=' + row.osStatus);
-  if (row.kev) parts.push('KEV=' + row.kev);
-  if (row.feature && row.feature !== '—') parts.push('機能=' + row.feature);
-  const tail = row.verdict ? (' → ' + row.verdict) : '';
-  return parts.join(' | ') + tail;
+  const os = row.osStatus || '不明';
+  const kev = row.kev || KEV_NO;
+  const phrase = row.reasonPhrase || '判定材料が不足しているため';
+  const verdict = row.verdict || V_UNKNOWN;
+  return 'OS=' + os + ' | KEV=' + kev + ' | ' + phrase + '「' + verdict + '」';
 }
 
 function applyCiscoVerdict_(row) {
@@ -1745,6 +1952,9 @@ function applyCiscoVerdict_(row) {
   row.osStatus = row.osStatus || '対象';
   row.kev = kevLabel_(row.cve);
   row.verdict = (row.kev === KEV_YES) ? V_URGENT : V_ROUTINE;
+  row.reasonPhrase = (row.kev === KEV_YES)
+    ? '悪用が確認されているため'
+    : '定期更新で解消見込みのため';
   row.needsDisplayAi = true;
   row.reason = buildDecisionReason_(row);
 }
@@ -1758,12 +1968,12 @@ function finalizeFortinetVerdict_(row, opts) {
 
   if (row.kev === KEV_YES) {
     row.verdict = V_URGENT;
+    row.reasonPhrase = '悪用が確認されているため';
     row.reason = buildDecisionReason_(row);
     return;
   }
 
   // AI 失敗・低confidence・統制外語彙でも、OS=対象なら要調査に倒さない。
-  // 機能を推定して判定表へ進める（推定不能は「その他」= 外面なし → 次回定期）。
   if (!row.aiOk || !isFortinetFeatureVocab_(row.feature) || row.aiConfidence === 'low') {
     row.feature = guessFortinetFeature_(row);
     if (!row.aiTechImpact) row.aiTechImpact = '不明';
@@ -1775,10 +1985,13 @@ function finalizeFortinetVerdict_(row, opts) {
 
   if (row.externalSurface === 'いいえ') {
     row.verdict = V_ROUTINE;
+    row.reasonPhrase = '影響機能が外部から到達しないため';
   } else if (row.takeover === 'total' || row.serviceStop === 'はい') {
     row.verdict = V_URGENT;
+    row.reasonPhrase = '外部到達面の' + row.feature + 'を悪用され重大な影響が出るため';
   } else {
     row.verdict = V_ROUTINE;
+    row.reasonPhrase = '外部到達面だが影響が部分的で定期更新で解消できるため';
   }
   row.reason = buildDecisionReason_(row);
 }
@@ -1797,6 +2010,7 @@ function decideNotification_(row, assets) {
     row.verdict = V_UNKNOWN;
     row.osStatus = '不明';
     row.kev = kevLabel_(row.cve);
+    row.reasonPhrase = '製品を特定できないため';
     row.needsDisplayAi = true;
     row.reason = buildDecisionReason_(row);
     row._lockedVerdict = true;
@@ -1808,7 +2022,8 @@ function decideNotification_(row, assets) {
     row.verdict = V_ROUTINE;
     row.osStatus = '対象外';
     row.kev = kevLabel_(row.cve);
-    row.reason = row.product + ' を自社で使用していない';
+    row.reasonPhrase = row.product + ' を自社で使用していないため';
+    row.reason = buildDecisionReason_(row);
     row._lockedVerdict = true;
     return;
   }
@@ -1820,7 +2035,12 @@ function decideNotification_(row, assets) {
     row.verdict = V_ROUTINE;
     row.kev = kevLabel_(row.cve);
     row.vendorPath = (row.vendor === VENDOR_CISCO) ? 'Cisco固定' : 'Fortinet';
-    row.reason = 'OS=対象外 | ' + os.detail + ' → ' + V_ROUTINE;
+    if (os.detail && /ため$/.test(os.detail)) {
+      row.reasonPhrase = os.detail;
+    } else {
+      row.reasonPhrase = (os.detail || '影響対象外') + 'のため';
+    }
+    row.reason = buildDecisionReason_(row);
     row._lockedVerdict = true;
     return;
   }
@@ -1829,8 +2049,9 @@ function decideNotification_(row, assets) {
     row.verdict = V_UNKNOWN;
     row.kev = kevLabel_(row.cve);
     row.vendorPath = (row.vendor === VENDOR_CISCO) ? 'Cisco固定' : 'Fortinet';
+    row.reasonPhrase = '自社利用バージョンを判定できないため';
     row.needsDisplayAi = true;
-    row.reason = 'OS=不明 | ' + os.detail + ' → ' + V_UNKNOWN;
+    row.reason = buildDecisionReason_(row);
     row._lockedVerdict = true;
     return;
   }
@@ -1847,6 +2068,7 @@ function decideNotification_(row, assets) {
   if (row.kev === KEV_YES) {
     row.vendorPath = 'Fortinet';
     row.verdict = V_URGENT;
+    row.reasonPhrase = '悪用が確認されているため';
     row.reason = buildDecisionReason_(row);
   }
 }
@@ -1982,14 +2204,37 @@ function migrateTarget_(row, branchLabel) {
   return best ? best.s : '';
 }
 
-/** 台帳の公式推奨対応列用。判定結果に関わらず公式の修正指示を出す。 */
+/** 台帳の公式推奨対応列用。英語を残さない。 */
 function formatOfficialAction_(row) {
-  const fix = jpFix_(row);
-  if (fix) return fix;
   if (row.vendor === VENDOR_CISCO) {
+    const vers = row.fixedVersions || [];
+    if (vers.length) return vers[0] + ' 以上に更新が必要';
+    const raw = String(row.fixesRaw || '');
+    if (/has released software updates/i.test(raw)) {
+      return '修正済みソフトウェアが公開済み。アドバイザリの Fixed Software を確認して更新';
+    }
+    if (/no workarounds/i.test(raw)) return '回避策なし。修正版へ更新';
     return '修正版はアドバイザリの Fixed Software を参照';
   }
-  return '';
+  const fix = jpFix_(row);
+  if (!fix) return '';
+  return jpFixEnglishFallback_(fix);
+}
+
+/** 残った英語の修正指示を日本語の定型へ */
+function jpFixEnglishFallback_(text) {
+  return String(text || '').split('\n').map(function (line) {
+    const t = line.trim();
+    if (!t) return '';
+    if (/has released software updates/i.test(t)) {
+      return '修正済みソフトウェアが公開済み。アドバイザリを確認して更新';
+    }
+    if (/Upgrade to\s+([\d.]+)/i.test(t) && !/[\u3040-\u30ff\u4e00-\u9faf]/.test(t)) {
+      const m = /Upgrade to\s+([\d.]+)/i.exec(t);
+      return m[1] + ' 以上に更新が必要';
+    }
+    return t;
+  }).filter(Boolean).join('\n');
 }
 
 function countVerdicts_(rows) {
@@ -2040,9 +2285,12 @@ function enrichWithAI_(rows) {
         r.aiTechImpact = v.technical_impact || '不明';
         r.aiServiceStop = v.service_stop;
         r.aiConfidence = v.confidence || '';
-        r.impactJa = v['ユーザ影響'] || '';
+        r.impactJa = truncateJa_(v['ユーザ影響'] || '', 50);
         r.howToCheck = v['確認方法'] || '';
-        if (r.vendor !== VENDOR_CISCO && !isFortinetFeatureVocab_(r.feature)) {
+        if (r.vendor === VENDOR_CISCO) {
+          r.feature = normalizeCiscoFeature_(r.feature);
+          r.aiOk = true;
+        } else if (!isFortinetFeatureVocab_(r.feature)) {
           r.aiOk = false;
         } else {
           r.aiOk = !!(r.feature && r.feature !== '不明' && r.aiConfidence !== 'low');
@@ -2083,12 +2331,13 @@ function buildEnrichPrompt_(rows) {
 
   return [
     'あなたは社内の情報システム担当者です。脆弱性について、',
-    '人が読む影響機能・確認方法・ユーザ影響と、Fortinet 判定用の機能分類を JSON で返してください。',
+    '人が読んで行動できる確認方法・最悪ケースの影響・機能分類を JSON で返してください。',
     '',
     '【禁止】',
     '- 最終判定（対応推奨 / 次回定期 / 要調査）を書かない',
     '- 自然文の判定根拠を書かない',
     '- set / execute / configure など変更系 CLI',
+    '- 「アドバイザリを確認」だけなど、操作しても判断できない文言',
     '- アドバイザリに無い推測',
     '',
     '【入力】',
@@ -2097,22 +2346,25 @@ function buildEnrichPrompt_(rows) {
     '【出力フィールド】',
     'affected_feature:',
     '  Fortinet: 次のいずれか1つ → ' + FORTINET_AI_FEATURES.join(' / '),
-    '  Cisco: 影響を受ける機能・プロトコルを短く（例: SNMP / SSH / HTTP Server）',
-    'technical_impact: total / partial / 不明（Fortinet 判定用。Cisco も埋めてよい）',
+    '  Cisco: 短い機能名（例: WebUI / BEEP / XMCP Server / SNMP）。製品名の長いタイトルは不可',
+    'technical_impact: total / partial / 不明',
     'service_stop: true / false / null',
     'attack_position: network / adjacent / local / physical / 不明',
     'auth_required: none / low / high / 不明',
     'evidence: アドバイザリの根拠を20字以内',
     'confidence: high / medium / low',
-    '確認方法: 読み取り専用のみ。Fortinet は show/get/diagnose。Cisco は show 系またはアドバイザリ確認手順',
-    'ユーザ影響: 想定最悪ケースを40字以内の一文',
+    '確認方法: 必ず次の3行。読んだ人がその通り操作して対応要否を判断できること',
+    '  確認ポイント：〈何が有効なら影響を受けるか〉',
+    '  コマンド：〈読み取り専用。Fortinet は show/get/diagnose。Cisco は show 系〉',
+    '  判断：〈この出力なら対応が必要／この出力なら次回定期で可〉',
+    'ユーザ影響: 悪用された場合の最悪ケースを、業務影響が想像できる日本語で50字以内。抽象語のみ禁止',
     '',
     '出力は次の JSON 配列のみ。前置き・コードフェンスを含めないこと。',
     '[{"key":"FG-IR-26-154|CVE-2025-43892|FortiOS","affected_feature":"Webフィルタ",',
     '  "technical_impact":"partial","service_stop":false,"attack_position":"network",',
     '  "auth_required":"none","evidence":"CSAF記載","confidence":"high",',
-    '  "確認方法":"確認ポイント：Webフィルタプロファイルが有効か\\nコマンド：show webfilter profile",',
-    '  "ユーザ影響":"フィルタ経由で不正コンテンツが通過し社内端末が侵害される"}]'
+    '  "確認方法":"確認ポイント：Webフィルタプロファイルがポリシーに紐づいているか\\nコマンド：show webfilter profile\\n判断：有効なポリシーがあれば対応が必要。未使用なら次回定期で可",',
+    '  "ユーザ影響":"警告画面経由で端末が操作され社内認証情報が盗まれる恐れ"}]'
   ].join('\n');
 }
 
@@ -2373,7 +2625,6 @@ function toRowArray_(r) {
     : r.advisoryId;
 
   const action = formatOfficialAction_(r);
-
   const cvss = (r.cvss === '' || r.cvss === undefined) ? '' : String(r.cvss);
 
   return [
@@ -2383,13 +2634,12 @@ function toRowArray_(r) {
     cvss,                             // 4  CVSS
     r.pubDate || '',                  // 5  最終更新日
     action,                           // 6  公式推奨対応
-    r.osStatus || '',                 // 7  OS該当
-    r.kev || '',                      // 8  KEV
-    r.feature || '',                  // 9  影響機能
-    r.reason || '',                   // 10 判定根拠
-    r.howToCheck || '',               // 11 確認方法
-    r.impactJa || '',                 // 12 ユーザ影響
-    advisoryCell                      // 13 アドバイザリ
+    r.kev || '',                      // 7  KEV
+    r.feature || '',                  // 8  影響機能
+    r.reason || '',                   // 9  判定根拠
+    r.howToCheck || '',               // 10 確認方法
+    r.impactJa || '',                 // 11 ユーザ影響
+    advisoryCell                      // 12 アドバイザリ
   ];
 }
 
@@ -2439,7 +2689,7 @@ function formatLedger_(sh) {
     .setFontWeight('bold')
     .setBackground('#f0f0f0');
 
-  const widths = [90, 100, 140, 95, 100, 220, 70, 55, 140, 280, 300, 200, 150];
+  const widths = [90, 100, 140, 70, 100, 220, 55, 120, 280, 320, 220, 150];
   widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
 
   sh.setFrozenColumns(5);
@@ -2466,10 +2716,8 @@ function backfillAiColumns_() {
   let count = 0;
   for (let i = 0; i < values.length; i++) {
     const verdict = values[i][COL['自社影響'] - 1];
-    const osStatus = values[i][COL['OS該当'] - 1];
     const advisoryId = display[i][COL['アドバイザリ'] - 1];
     const vendor = vendorFromAdvisoryId_(advisoryId) || VENDOR_FORTINET;
-    if (osStatus === '対象外') continue;
     if (verdict !== V_URGENT && verdict !== V_UNKNOWN && verdict !== V_ROUTINE) continue;
     if (String(values[i][COL['ユーザ影響'] - 1]).trim() &&
         String(values[i][COL['影響機能'] - 1]).trim() &&
@@ -2544,6 +2792,8 @@ function backfillAiColumns_() {
     applyFallbackDisplayFields_(r);
     if (r.needsFortinetAi && !r._lockedVerdict) finalizeFortinetVerdict_(r);
     else r.reason = buildDecisionReason_(r);
+    r.howToCheck = normalizeHowToCheck_(r);
+    r.impactJa = truncateJa_(r.impactJa || fallbackImpactJa_(r), 50);
   });
 
   let written = 0;
@@ -2749,9 +2999,11 @@ function testJudge() {
       aiTechImpact: c.tech, aiServiceStop: c.stop, aiConfidence: c.aiOk ? 'high' : 'low'
     };
     finalizeFortinetVerdict_(row, { skipKev: true });
-    const ok = row.verdict === c.expect;
+    const fmtOk = /^OS=対象 \| KEV=(あり|なし) \| .+「.+」$/.test(row.reason)
+      && row.reason.indexOf('パス=') === -1;
+    const ok = row.verdict === c.expect && fmtOk;
     if (ok) pass++;
-    Logger.log((ok ? 'OK  ' : 'NG  ') + JSON.stringify(c) + ' → ' + row.verdict + ' / ' + row.feature + ' / ' + row.reason);
+    Logger.log((ok ? 'OK  ' : 'NG  ') + JSON.stringify(c) + ' → ' + row.verdict + ' / ' + row.reason);
   });
   Logger.log('Fortinet 判定表: ' + pass + ' / ' + cases.length + ' 件が期待どおり');
 }
@@ -2759,19 +3011,58 @@ function testJudge() {
 /** Cisco KEV 固定ルールの単体テスト */
 function testCiscoKevJudge() {
   const urgent = {
-    vendorPath: 'Cisco固定', osStatus: '対象', kev: KEV_YES,
-    feature: 'SNMP', verdict: V_URGENT
+    osStatus: '対象', kev: KEV_YES, reasonPhrase: '悪用が確認されているため',
+    verdict: V_URGENT
   };
   urgent.reason = buildDecisionReason_(urgent);
   const routine = {
-    vendorPath: 'Cisco固定', osStatus: '対象', kev: KEV_NO,
-    feature: 'SSH', verdict: V_ROUTINE
+    osStatus: '対象', kev: KEV_NO, reasonPhrase: '定期更新で解消見込みのため',
+    verdict: V_ROUTINE
   };
   routine.reason = buildDecisionReason_(routine);
-  Logger.log('KEV=あり → ' + urgent.reason + '（期待: 対応推奨）');
-  Logger.log('KEV=なし → ' + routine.reason + '（期待: 次回定期）');
-  Logger.log(urgent.verdict === V_URGENT && routine.verdict === V_ROUTINE
-    ? 'Cisco 固定ルール: OK' : 'Cisco 固定ルール: NG');
+  const ok = urgent.reason.indexOf('「対応推奨」') !== -1
+    && routine.reason.indexOf('「次回定期」') !== -1
+    && urgent.reason.indexOf('パス=') === -1;
+  Logger.log('KEV=あり → ' + urgent.reason);
+  Logger.log('KEV=なし → ' + routine.reason);
+  Logger.log(ok ? 'Cisco 固定ルール: OK' : 'Cisco 固定ルール: NG');
+}
+
+/** 確認手順テーブルの単体テスト */
+function testCheckSteps() {
+  let pass = 0;
+  let total = 0;
+  Object.keys(CHECK_STEPS_FORTINET).forEach(function (f) {
+    total++;
+    const row = { vendor: VENDOR_FORTINET, feature: f, howToCheck: 'アドバイザリの Affected Products を確認' };
+    const got = normalizeHowToCheck_(row);
+    const ok = /コマンド[：:]/.test(got) && /(show|get|diagnose)\b/i.test(got) && /判断[：:]/.test(got);
+    if (ok) pass++;
+    Logger.log((ok ? 'OK  ' : 'NG  ') + 'Fortinet ' + f);
+  });
+  ['WebUI', 'BEEP', 'XMCP Server', 'IOS XE 基盤', 'SD-WAN'].forEach(function (f) {
+    total++;
+    const row = { vendor: VENDOR_CISCO, feature: f, title: f, howToCheck: '' };
+    const got = normalizeHowToCheck_(row);
+    const ok = /コマンド[：:]/.test(got) && /show\b/i.test(got) && /判断[：:]/.test(got);
+    if (ok) pass++;
+    Logger.log((ok ? 'OK  ' : 'NG  ') + 'Cisco ' + f + ' → ' + got.split('\n')[0]);
+  });
+  Logger.log('確認手順: ' + pass + ' / ' + total + ' 件が期待どおり');
+}
+
+/** Cisco 影響機能名の正規化テスト */
+function testCiscoFeatureNormalize_() {
+  const cases = [
+    ['Cisco IOS XE Software Security Hardening', 'IOS XE 基盤'],
+    ['Cisco IOS XE Software Web-Based Management', 'WebUI'],
+    ['BEEP', 'BEEP'],
+    ['XMCP Server', 'XMCP Server']
+  ];
+  cases.forEach(function (c) {
+    const got = normalizeCiscoFeature_(c[0]);
+    Logger.log((got === c[1] ? 'OK  ' : 'NG  ') + c[0] + ' → ' + got + '（期待 ' + c[1] + '）');
+  });
 }
 
 /** 外面判定の単体テスト */
