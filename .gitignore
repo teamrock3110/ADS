@@ -1,2 +1,11 @@
 .DS_Store
 **/.DS_Store
+
+# 人物評と社内情報を含むため、コミットしない（*.example.md のみ共有する）
+writing-proposals/context/profile.md
+writing-proposals/context/audiences.md
+
+# 大容量バイナリはコミットしない（講義PDF・埋め込みフォント）。
+# 実ファイルはローカルに残す。必要なら Git LFS か外部ストレージへ。
+*.pdf
+**/assets/fonts/

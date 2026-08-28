@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta property="og:title" content="第10回講義：AI時代のストーリーライティング">
+  <meta property="og:description" content="説明ではなく体験を届ける「ストーリーライティング」の技術。心を動かす絵の作り方・興味を生む公式・プレゼンの構成を図解で解説します。">
+  <meta property="og:type" content="article">
+  <title>第10回講義：AI時代のストーリーライティング</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFFFFF'/><rect x='8' y='8' width='84' height='84' rx='14' fill='none' stroke='%230D6CA7' stroke-width='4'/><circle cx='32' cy='40' r='10' fill='%230D6CA7' opacity='0.8'/><circle cx='68' cy='40' r='10' fill='%233A8FCA' opacity='0.8'/><rect x='25' y='62' width='50' height='6' rx='3' fill='%238A96A5' opacity='0.6'/><rect x='30' y='74' width='40' height='6' rx='3' fill='%238A96A5' opacity='0.3'/></svg>">
+  <link href="assets/fonts/noto-sans-jp.css" rel="stylesheet">
+  <script src="assets/tailwindcss.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ads: {
+              bg: '#FFFFFF',
+              surface: '#F8FAFB',
+              hover: '#F1F5F9',
+              border: '#E2E8F0',
+              accent: '#0D6CA7',
+              'accent-dark': '#223A49',
+              'accent-light': '#3A8FCA',
+              text: '#1A2332',
+              muted: '#5A6B7D',
+              dim: '#8A96A5',
+              positive: '#1B7A5A',
+              negative: '#B91C1C',
+              warning: '#92650A',
+            },
+            blue: {
+              200: '#B3D9EF',
+              300: '#7FBCDD',
+              400: '#3A8FCA',
+              500: '#0D6CA7',
+              600: '#0B5E93',
+              700: '#094D7A',
+            }
+          },
+          fontFamily: {
+            sans: ['"Noto Sans JP"', '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Yu Gothic UI"', '"Meiryo"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { border-top: none !important; }
+      .rounded-xl { break-inside: avoid; }
+      .md\:flex-row { flex-direction: row !important; }
+      .md\:hidden { display: none !important; }
+      .hidden.md\:block { display: block !important; }
+      .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+      .md\:mb-20 { margin-bottom: 5rem !important; }
+      .md\:py-16 { padding-top: 4rem !important; padding-bottom: 4rem !important; }
+      .bg-clip-text.text-transparent {
+        -webkit-background-clip: initial !important;
+        background-clip: initial !important;
+        color: #0D6CA7 !important;
+        -webkit-text-fill-color: #0D6CA7 !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-ads-bg text-slate-600 antialiased leading-relaxed border-t-4 border-ads-accent">
+  <div class="no-print max-w-3xl mx-auto px-5 pt-2 flex justify-end">
+    <button onclick="window.print()" class="flex items-center gap-1.5 text-xs text-ads-dim hover:text-ads-accent transition-colors cursor-pointer">
+      <i data-lucide="download" class="w-3.5 h-3.5"></i>
+      PDF
+    </button>
+  </div>
+  <main class="max-w-3xl mx-auto px-5 py-10 md:py-16">
+<!-- CONTENT_START -->
+
+<!-- ============================================================ -->
+<!--  HERO                                                        -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-ads-accent/10 text-ads-accent-light px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <i data-lucide="compass" class="w-4 h-4"></i>
+    AI-Driven School 第10回講義
+  </div>
+  <h1 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight mb-6">
+    AI時代の<span class="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">ストーリーライティング</span>
+  </h1>
+  <p class="text-lg text-ads-muted max-w-xl mx-auto leading-relaxed">
+    正しいだけの文章では、人の心は動かない。<br>
+    心を動かし、人を動かす「ストーリーライティング」の技術 ──
+  </p>
+</div>
+
+
+<!-- ============================================================ -->
+<!--  ONE-PAGE SUMMARY: 伝える力の2つの力                            -->
+<!-- ============================================================ -->
+<div class="bg-ads-surface border border-ads-border rounded-2xl p-6 md:p-10 mb-6">
+  <div class="text-center mb-8 md:mb-10">
+    <p class="text-xl md:text-2xl font-black text-slate-900 mb-2">
+      伝える力 = <span class="text-ads-accent-light">わかってもらう力</span> ＋ <span class="text-ads-accent-light">動いてもらう力</span>
+    </p>
+    <p class="text-sm text-ads-muted">
+      前回学んだのは半分だけ。今回はもう半分、心を動かす技術を学ぶ
+    </p>
+  </div>
+
+  <div class="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-0 mb-8">
+    <div class="flex flex-col items-center w-48 p-3">
+      <div class="w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="message-square" class="w-7 h-7 text-blue-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm whitespace-nowrap">ビジネスライティング</div>
+      <div class="text-[11px] text-blue-600/70 mt-0.5">わかってもらう力</div>
+      <div class="text-[10px] text-ads-dim">前回・結論から伝える</div>
+    </div>
+
+    <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+      <span class="text-xl font-black text-ads-accent">＋</span>
+    </div>
+
+    <div class="flex flex-col items-center w-48 p-3">
+      <div class="w-14 h-14 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="book-open" class="w-7 h-7 text-purple-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm whitespace-nowrap">ストーリーライティング</div>
+      <div class="text-[11px] text-purple-600/70 mt-0.5">動いてもらう力</div>
+      <div class="text-[10px] text-ads-dim">今回・絵で心を動かす</div>
+    </div>
+
+    <div class="flex items-center justify-center md:w-12 py-1 md:py-0">
+      <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+      <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+    </div>
+
+    <div class="flex flex-col items-center w-44 p-4 bg-ads-accent/5 border-2 border-ads-accent/20 rounded-2xl">
+      <div class="w-16 h-16 rounded-2xl bg-ads-accent/15 border-2 border-ads-accent/30 flex items-center justify-center mb-2.5">
+        <i data-lucide="heart" class="w-8 h-8 text-ads-accent-light"></i>
+      </div>
+      <div class="font-bold text-ads-accent-light text-base text-center">心が動くプレゼン</div>
+      <div class="text-[10px] text-ads-dim text-center mt-0.5">わかって、動いてもらう</div>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-4 mb-6">
+    <div class="flex-1 border-t border-ads-border/50"></div>
+    <div class="text-[11px] text-ads-dim font-medium">今日持ち帰ってほしい一言</div>
+    <div class="flex-1 border-t border-ads-border/50"></div>
+  </div>
+
+  <div class="flex justify-center">
+    <div class="bg-white border border-ads-border rounded-full px-5 py-2 text-sm font-bold text-slate-900">
+      説明するな、体験させろ
+    </div>
+  </div>
+</div>
+
+<p class="text-center text-ads-muted mb-16 md:mb-20">
+  ここから先で、心を動かす仕組みをひとつずつ解説していきます。
+</p>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 1: 伝える力には2つある                                  -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-500/10 flex-shrink-0">
+      <i data-lucide="scale" class="w-5 h-5 text-blue-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">伝える力には2つある</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    前回学んだビジネスライティングは、<strong class="text-ads-accent-light">相手の頭に正しく素早く届ける</strong>技術でした。でもそれだけでは、言っていることはわかっても<strong class="text-ads-accent-light">強烈に心を動かすことは難しい</strong>です。今回のストーリーライティングは、相手の心を動かして、実際に行動につなげてもらう技術です。
+  </p>
+
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5">
+        <div class="flex items-center justify-between gap-2 mb-4">
+          <div class="flex items-center gap-2">
+            <i data-lucide="message-square" class="w-5 h-5 text-blue-600 flex-shrink-0"></i>
+            <span class="font-bold text-blue-700">ビジネスライティング</span>
+          </div>
+          <span class="text-[10px] font-bold text-blue-600 bg-blue-500/10 px-2 py-0.5 rounded-full flex-shrink-0">前回</span>
+        </div>
+        <ul class="space-y-3 text-sm text-ads-muted">
+          <li class="flex items-start gap-2.5">
+            <i data-lucide="target" class="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0"></i>
+            <span><strong class="text-slate-800">目的:</strong> わかってもらう</span>
+          </li>
+          <li class="flex items-start gap-2.5">
+            <i data-lucide="clock" class="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0"></i>
+            <span><strong class="text-slate-800">使う場面:</strong> 日常のあらゆる文章</span>
+          </li>
+          <li class="flex items-start gap-2.5">
+            <i data-lucide="layers" class="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0"></i>
+            <span><strong class="text-slate-800">位置づけ:</strong> 仕事の基本・土台</span>
+          </li>
+        </ul>
+      </div>
+      <div class="bg-purple-500/5 border border-purple-500/20 rounded-xl p-5">
+        <div class="flex items-center justify-between gap-2 mb-4">
+          <div class="flex items-center gap-2">
+            <i data-lucide="book-open" class="w-5 h-5 text-purple-600 flex-shrink-0"></i>
+            <span class="font-bold text-purple-700">ストーリーライティング</span>
+          </div>
+          <span class="text-[10px] font-bold text-purple-600 bg-purple-500/10 px-2 py-0.5 rounded-full flex-shrink-0">今回</span>
+        </div>
+        <ul class="space-y-3 text-sm text-ads-muted">
+          <li class="flex items-start gap-2.5">
+            <i data-lucide="heart" class="w-4 h-4 text-purple-500 mt-0.5 flex-shrink-0"></i>
+            <span><strong class="text-slate-800">目的:</strong> 動いてもらう</span>
+          </li>
+          <li class="flex items-start gap-2.5">
+            <i data-lucide="clock" class="w-4 h-4 text-purple-500 mt-0.5 flex-shrink-0"></i>
+            <span><strong class="text-slate-800">使う場面:</strong> プレゼン・発表・スピーチなど尺のある場面</span>
+          </li>
+          <li class="flex items-start gap-2.5">
+            <i data-lucide="layers" class="w-4 h-4 text-purple-500 mt-0.5 flex-shrink-0"></i>
+            <span><strong class="text-slate-800">位置づけ:</strong> 土台の上に加えるエッセンス</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"></i>
+      <div class="text-sm text-ads-muted leading-relaxed">
+        <strong class="text-amber-700 block mb-1">誤解注意</strong> ストーリーライティングはビジネスライティングを置き換えるものではありません。普段の仕事の基本はあくまでビジネスライティングです。ストーリーライティングは、まとまった尺をもらえる場面で<strong class="text-slate-800">エッセンスとして取り入れる</strong>ことで効果的になります。
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 2: 説明するな、体験させろ                               -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-purple-500/10 flex-shrink-0">
+      <i data-lucide="image" class="w-5 h-5 text-purple-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">心が動かない理由 ── 「説明」だけになっている</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    結論から始まり、根拠も数字で説明できている。ビジネスライティングとしては完璧なのに、心が動かない文章があります。その理由は<strong class="text-ads-accent-light">「説明」しかないから</strong>。説明だけの文章は理解はできますが、心を動かすことはできません。
+  </p>
+
+  <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-2">
+      <div class="p-6 border-b md:border-b-0 md:border-r border-ads-border/60">
+        <div class="inline-flex items-center gap-1.5 bg-red-500/10 text-red-600 px-3 py-1 rounded-full text-xs font-bold mb-4">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          説明
+        </div>
+        <p class="text-slate-800 font-medium mb-2">彼は悲しかった。</p>
+        <p class="text-xs text-ads-dim">「悲しい」と言葉で言っているだけ</p>
+      </div>
+      <div class="p-6 bg-emerald-500/5">
+        <div class="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold mb-4">
+          <i data-lucide="check" class="w-3.5 h-3.5"></i>
+          体験
+        </div>
+        <p class="text-slate-800 font-medium mb-2">彼は皿を洗い続けた。<br>とっくに泡は消えていた。</p>
+        <p class="text-xs text-ads-dim">「悲しい」は一度も出てこないのに、頭に絵が浮かび心がキュッとなる</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-2">
+      <div class="p-6 border-b md:border-b-0 md:border-r border-ads-border/60">
+        <div class="inline-flex items-center gap-1.5 bg-red-500/10 text-red-600 px-3 py-1 rounded-full text-xs font-bold mb-4">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          説明
+        </div>
+        <p class="text-slate-800 font-medium mb-2 leading-relaxed">定例会議は非効率で、<br>時間が無駄になっています。</p>
+        <p class="text-xs text-ads-dim">正論だが、心は動かない</p>
+      </div>
+      <div class="p-6 bg-emerald-500/5">
+        <div class="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold mb-4">
+          <i data-lucide="check" class="w-3.5 h-3.5"></i>
+          体験
+        </div>
+        <p class="text-slate-800 font-medium mb-2 leading-relaxed">先週の定例30分のうち25分が資料の読み上げ。参加者7人のうち口を開いたのは2人だけでした。</p>
+        <p class="text-xs text-ads-dim">「非効率」と言わずに、その場の光景を想像させる</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-ads-accent/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="lightbulb" class="w-4 h-4 text-ads-accent-light"></i>
+      </div>
+      <div>
+        <p class="font-bold text-ads-accent-light mb-1">ポイント</p>
+        <p class="text-ads-muted leading-relaxed text-sm">
+          「非効率・重要・課題・改善」のような<strong class="text-slate-800">抽象的な言葉が出てきたら、それは説明のサイン</strong>です。その裏にある具体的な場面に戻してあげることが、絵を浮かばせるということです。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 3: 心を動かす絵の作り方                                 -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-500/10 flex-shrink-0">
+      <i data-lucide="pen-tool" class="w-5 h-5 text-emerald-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">心を動かす「絵」の作り方</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    絵を浮かばせる材料には<strong class="text-ads-accent-light">強さの順番</strong>があります。大事なのは、この順番で素材を探すことです。
+  </p>
+
+  <div class="space-y-3 mb-8">
+    <div class="bg-ads-accent/5 border-2 border-ads-accent/25 rounded-xl p-5 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-full bg-ads-accent text-white font-black flex items-center justify-center flex-shrink-0">1</div>
+      <div>
+        <div class="font-bold text-slate-900 text-sm mb-1">自分が実際に見た場面（最も強い）</div>
+        <div class="text-xs text-ads-muted leading-relaxed">「先週の定例で口を開いたのは7人中2人でした」<br class="md:hidden">── AIには絶対に作れない、自分だけの素材</div>
+      </div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-full bg-slate-400 text-white font-black flex items-center justify-center flex-shrink-0">2</div>
+      <div>
+        <div class="font-bold text-slate-900 text-sm mb-1">聞き手にとって身近な<br class="md:hidden">たとえ・イメージ</div>
+        <div class="text-xs text-ads-muted leading-relaxed">「朝礼で長い校長先生の話を聞いているようです」── 自分の経験がなくても作れる</div>
+      </div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-full bg-slate-300 text-white font-black flex items-center justify-center flex-shrink-0">3</div>
+      <div>
+        <div class="font-bold text-slate-900 text-sm mb-1">数字・データ（土台として必須）</div>
+        <div class="text-xs text-ads-muted leading-relaxed">絶対に必要な土台だが、数字だけでは絵にならず、心は動かない</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    絵を作るコツは3つあります。マラソン完走の一文を例に見てみましょう。
+  </p>
+
+  <div class="space-y-4 mb-8">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-start gap-4">
+      <div class="w-10 h-10 rounded-full bg-blue-500 text-white font-black flex items-center justify-center flex-shrink-0">1</div>
+      <div class="flex-1">
+        <div class="font-bold text-slate-900 text-sm mb-2">超具体的にする</div>
+        <p class="text-xs text-ads-muted leading-relaxed mb-3">その場面をスローモーションで<br class="md:hidden">見るのがコツ</p>
+        <p class="text-xs text-slate-700 italic leading-relaxed bg-blue-500/5 border-l-2 border-blue-500/40 rounded-r-lg pl-3 pr-2 py-2">ゴール手前で足がつり、息苦しいなか最後の力を振り絞り、涙をこらえながらなんとかフィニッシュしました。</p>
+      </div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-start gap-4">
+      <div class="w-10 h-10 rounded-full bg-purple-500 text-white font-black flex items-center justify-center flex-shrink-0">2</div>
+      <div class="flex-1">
+        <div class="font-bold text-slate-900 text-sm mb-2">心の声を入れる</div>
+        <p class="text-xs text-ads-muted leading-relaxed mb-3">その場面で自分や誰かが<br class="md:hidden">どう思ったかを入れる</p>
+        <p class="text-xs text-slate-700 italic leading-relaxed bg-purple-500/5 border-l-2 border-purple-500/40 rounded-r-lg pl-3 pr-2 py-2">息苦しくて、泣きそう。でも諦めない。<br>ラストスパート足がつりそう。<br>でも、もう１歩。最後の力を振り絞ってゴール！</p>
+      </div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-start gap-4">
+      <div class="w-10 h-10 rounded-full bg-emerald-500 text-white font-black flex items-center justify-center flex-shrink-0">3</div>
+      <div class="flex-1">
+        <div class="font-bold text-slate-900 text-sm mb-2">例える</div>
+        <p class="text-xs text-ads-muted leading-relaxed mb-3">相手が知らないことを、<br class="md:hidden">知っていることに乗せる</p>
+        <p class="text-xs text-slate-700 italic leading-relaxed bg-emerald-500/5 border-l-2 border-emerald-500/40 rounded-r-lg pl-3 pr-2 py-2">ラストスパート、足は鉛のように重く、<br>1歩踏み出すたびに膝に激痛が走る。ゴールした瞬間、<br>電池の切れたロボットのようにその場に倒れ込んだ。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-purple-500/5 border border-purple-500/20 rounded-xl p-5 mb-6">
+    <div class="flex items-start gap-3">
+      <i data-lucide="heart-crack" class="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5"></i>
+      <div class="text-sm text-ads-muted leading-relaxed">
+        <strong class="text-purple-700 block mb-1">もう1つのコツは「弱さを見せる」こと</strong> 隙のない立派なプレゼンよりも、ちょっとした弱さやつまずきを見せた人に、人は心を寄せます。「正直最初は半信半疑だった」という一言に説得力が宿ります。自分の弱さの話は、AIには作れません。
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <i data-lucide="alert-circle" class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"></i>
+      <div class="text-sm text-ads-muted leading-relaxed">
+        <strong class="text-amber-700 block mb-1">注意</strong> 絵は結論の代わりではありません。<strong class="text-slate-800">絵は結論の根拠</strong>です。まず結論を言い切り、そのあとに絵を根拠として置きます。絵だけの文章は、何が言いたいのかわからない小学生の作文になってしまいます。
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 4: 興味の公式                                         -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-cyan-500/10 flex-shrink-0">
+      <i data-lucide="gauge" class="w-5 h-5 text-cyan-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">興味の公式</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+どんなに心が動く絵を用意しても、見せる前に相手が話を聞くのをやめてしまえば意味がありません。絵を最後まで届けるには、聞き手に聞き続けたいと思わせる力がいります。それが興味です。興味には、シンプルな公式があります。
+  </p>
+
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8 text-center">
+    <p class="text-xl md:text-2xl font-black text-slate-900">
+      興味 = <span class="text-ads-accent-light">知りたいこと</span><br class="md:hidden"> − <span class="text-ads-dim">今、知っていること</span>
+    </p>
+    <p class="text-sm text-ads-muted mt-3">全部わかってしまうと人は退屈します。この「差」には2種類あります</p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-5">
+      <div class="inline-flex items-center gap-1.5 bg-red-500/10 text-red-600 px-3 py-1 rounded-full text-xs font-bold mb-4">
+        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        悪い差
+      </div>
+      <p class="text-xs text-ads-dim">不安と混乱を感じさせ、聞き手は離脱する</p>
+    </div>
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-5">
+      <div class="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold mb-4">
+        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+        良い差
+      </div>
+      <p class="text-xs text-ads-dim">何の話かはわかった上で、前のめりにさせる</p>
+    </div>
+  </div>
+
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5 mb-8">
+    <div class="flex items-start gap-3">
+      <i data-lucide="lightbulb" class="w-5 h-5 text-ads-accent-light flex-shrink-0 mt-0.5"></i>
+      <div class="text-sm text-ads-muted leading-relaxed">
+        <strong class="text-ads-accent-light block mb-1">悪い差を防ぐのが結論ファースト</strong> 結論を最初に渡すことで「何の話なんだろう」という悪い差が消えます。聞き手に「要するにこの人は何が言いたいのか」を常にわかってもらいながら、良い差で引っ張り続けます。
+      </div>
+    </div>
+  </div>
+
+  <p class="mb-6 leading-relaxed font-bold text-slate-900">良い差分を生み出す3つの方法</p>
+
+  <div class="space-y-4">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-start gap-4">
+      <div class="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="help-circle" class="w-4.5 h-4.5 text-blue-600"></i>
+      </div>
+      <div class="flex-1">
+        <div class="font-bold text-slate-900 text-sm mb-2">① 問いかける</div>
+        <p class="text-xs text-ads-muted leading-relaxed mb-3">人は質問されると、頭の中で考え始める。<br class="md:hidden">乱用は注意</p>
+        <p class="text-xs text-slate-700 italic leading-relaxed bg-blue-500/5 border-l-2 border-blue-500/40 rounded-r-lg pl-3 pr-2 py-2">「うちの定例会議、<br class="md:hidden">週に何本あると思います？」</p>
+      </div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-start gap-4">
+      <div class="w-9 h-9 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="eye" class="w-4.5 h-4.5 text-purple-600"></i>
+      </div>
+      <div class="flex-1">
+        <div class="font-bold text-slate-900 text-sm mb-2">② チラ見せする</div>
+        <p class="text-xs text-ads-muted leading-relaxed mb-3">結論は常に伝えたうえで、続きを気にさせる</p>
+        <p class="text-xs text-slate-700 italic leading-relaxed bg-purple-500/5 border-l-2 border-purple-500/40 rounded-r-lg pl-3 pr-2 py-2">「実は一番の無駄は会議の数<br class="md:hidden">じゃなかったんです」</p>
+      </div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-start gap-4">
+      <div class="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="trending-down" class="w-4.5 h-4.5 text-emerald-600"></i>
+      </div>
+      <div class="flex-1">
+        <div class="font-bold text-slate-900 text-sm mb-2">③ 掛け金を上げる</div>
+        <p class="text-xs text-ads-muted leading-relaxed mb-3">失うものを具体化することで、<br class="md:hidden">人は真剣になる</p>
+        <p class="text-xs text-slate-700 italic leading-relaxed bg-emerald-500/5 border-l-2 border-emerald-500/40 rounded-r-lg pl-3 pr-2 py-2">「このまま放置すれば、週3時間・年70時間＝まるまる1ヶ月分が毎年消える」</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 5: 心を動かすプレゼンの構成                             -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-amber-500/10 flex-shrink-0">
+      <i data-lucide="list-ordered" class="w-5 h-5 text-amber-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">心を動かすプレゼンの構成</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    興味を生む差を作りながら、心を動かす絵を見せます。この流れを、企画を通すプレゼンの6ステップに落とし込みます。
+  </p>
+
+  <div class="space-y-3 mb-8">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-center gap-4">
+      <div class="w-9 h-9 rounded-full bg-blue-500 text-white font-black text-sm flex items-center justify-center flex-shrink-0">1</div>
+      <div><span class="font-bold text-slate-900">フック</span><span class="text-ads-muted text-sm"> ── 絵か問いで、つかむ</span></div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-center gap-4">
+      <div class="w-9 h-9 rounded-full bg-blue-500 text-white font-black text-sm flex items-center justify-center flex-shrink-0">2</div>
+      <div><span class="font-bold text-slate-900">結論</span><span class="text-ads-muted text-sm"> ── 何を提案するか、一言で</span></div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-center gap-4">
+      <div class="w-9 h-9 rounded-full bg-blue-500 text-white font-black text-sm flex items-center justify-center flex-shrink-0">3</div>
+      <div><span class="font-bold text-slate-900">なぜ</span><span class="text-ads-muted text-sm"> ── 今の困りを絵で見せる＋放置すると何を失うか（掛け金）</span></div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-center gap-4">
+      <div class="w-9 h-9 rounded-full bg-blue-500 text-white font-black text-sm flex items-center justify-center flex-shrink-0">4</div>
+      <div><span class="font-bold text-slate-900">どうやって</span><span class="text-ads-muted text-sm"> ── やり方を短く</span></div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-center gap-4">
+      <div class="w-9 h-9 rounded-full bg-blue-500 text-white font-black text-sm flex items-center justify-center flex-shrink-0">5</div>
+      <div><span class="font-bold text-slate-900">どうなる</span><span class="text-ads-muted text-sm"> ── 変わった未来を<br class="md:hidden">絵で見せる</span></div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 flex items-center gap-4">
+      <div class="w-9 h-9 rounded-full bg-blue-500 text-white font-black text-sm flex items-center justify-center flex-shrink-0">6</div>
+      <div><span class="font-bold text-slate-900">お願い</span><span class="text-ads-muted text-sm"> ── 承認してほしいことを、<br class="md:hidden">はっきり</span></div>
+    </div>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    どれだけ話を引っ張っていいかは、聞き手がどれだけ簡単にやめられるかで決まります。
+  </p>
+
+  <div class="grid grid-cols-2 gap-4 mb-4 max-w-md mx-auto">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-4 text-center">
+      <i data-lucide="film" class="w-6 h-6 text-slate-600 mx-auto mb-2"></i>
+      <div class="font-bold text-slate-900 text-sm mb-2">映画・小説</div>
+      <div class="inline-block text-[10px] font-medium text-slate-600 bg-slate-500/10 px-2 py-0.5 rounded-full mb-1.5">途中でやめにくい</div>
+      <div class="text-xs text-ads-muted">長く引っ張れる</div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-4 text-center">
+      <i data-lucide="monitor-play" class="w-6 h-6 text-slate-600 mx-auto mb-2"></i>
+      <div class="font-bold text-slate-900 text-sm mb-2">YouTube</div>
+      <div class="inline-block text-[10px] font-medium text-slate-600 bg-slate-500/10 px-2 py-0.5 rounded-full mb-1.5">すぐ離脱される</div>
+      <div class="text-xs text-ads-muted">退屈は一切許されない</div>
+    </div>
+  </div>
+
+  <div class="bg-ads-accent/5 border-2 border-ads-accent/20 rounded-xl p-5 text-center mb-8 max-w-md mx-auto">
+    <i data-lucide="briefcase" class="w-7 h-7 text-ads-accent-light mx-auto mb-2"></i>
+    <div class="font-bold text-ads-accent-light text-base mb-2">仕事のプレゼン</div>
+    <div class="inline-block text-[10px] font-medium text-ads-accent-light bg-ads-accent/10 px-2 py-0.5 rounded-full mb-1.5">両方の厳しさがある</div>
+    <div class="text-sm text-ads-muted">短い波で興味を保つ</div>
+  </div>
+
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <i data-lucide="waves" class="w-5 h-5 text-ads-accent-light flex-shrink-0 mt-0.5"></i>
+      <div class="text-sm text-ads-muted leading-relaxed">
+        <strong class="text-ads-accent-light block mb-1">仕事のプレゼンのコツは「短い波を繰り返す」こと</strong> 1つの話を引っ張ったら、数十秒〜1、2分で回収します。小さく問いを開いて、絵で閉じる。また開いて、閉じる。この繰り返しで興味を引き続けます。
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 6: AIとの付き合い方                                    -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-ads-accent/10 flex-shrink-0">
+      <i data-lucide="bot" class="w-5 h-5 text-ads-accent-light"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">AIとの付き合い方</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    今回配られた「プレゼン作成スキル」は、前回の「提案スキル」と組み合わせて使う前提です。<br>ただし、引き出す対象が正反対です。
+  </p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5">
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="scale" class="w-5 h-5 text-blue-600 flex-shrink-0"></i>
+          <span class="font-bold text-blue-700">提案スキル</span>
+        </div>
+        <span class="text-[10px] font-bold text-blue-600 bg-blue-500/10 px-2 py-0.5 rounded-full flex-shrink-0">前回</span>
+      </div>
+      <p class="text-sm text-ads-muted leading-relaxed">
+        自分の<strong class="text-slate-800">外側</strong>にある答えを整理する道具。相手は誰か・相手の問いは何か・根拠は何か。
+      </p>
+    </div>
+    <div class="bg-purple-500/5 border border-purple-500/20 rounded-xl p-5">
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="book-open" class="w-5 h-5 text-purple-600 flex-shrink-0"></i>
+          <span class="font-bold text-purple-700">プレゼン作成スキル</span>
+        </div>
+        <span class="text-[10px] font-bold text-purple-600 bg-purple-500/10 px-2 py-0.5 rounded-full flex-shrink-0">今回</span>
+      </div>
+      <p class="text-sm text-ads-muted leading-relaxed">
+        自分の<strong class="text-slate-800">内側</strong>にある情報を引き出す道具。実際に見た場面・感じたこと・つまずいた瞬間・なぜやりたいと思ったのか。
+      </p>
+    </div>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    もう1つのAI活用が<strong class="text-ads-accent-light">サブエージェントレビュー</strong>です。作った原稿を、フレッシュな別のAIに聞き手役として読ませます。
+  </p>
+
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 mb-6">
+    <div class="flex flex-col md:flex-row items-center justify-center gap-3 md:gap-0">
+      <div class="w-40 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-center">
+        <i data-lucide="user" class="w-6 h-6 text-blue-600 mx-auto mb-2"></i>
+        <div class="font-bold text-blue-700 text-sm mb-1">プレゼン原稿</div>
+        <div class="text-[11px] text-ads-muted">本体AIのチャットで作成</div>
+      </div>
+      <div class="flex items-center justify-center md:w-14 py-1 md:py-0">
+        <div class="flex flex-col items-center gap-0.5">
+          <span class="text-[9px] text-ads-muted">依頼</span>
+          <i data-lucide="arrow-right" class="w-5 h-5 text-purple-500 hidden md:block"></i>
+          <i data-lucide="arrow-down" class="w-5 h-5 text-purple-500 md:hidden"></i>
+        </div>
+      </div>
+      <div class="w-40 bg-purple-500/10 border-2 border-purple-500/30 rounded-xl p-4 text-center">
+        <i data-lucide="search" class="w-6 h-6 text-purple-600 mx-auto mb-2"></i>
+        <div class="font-bold text-purple-700 text-sm mb-1">サブエージェント</div>
+        <div class="text-[11px] text-ads-muted">時系列で心の声を出す</div>
+      </div>
+      <div class="flex items-center justify-center md:w-14 py-1 md:py-0">
+        <div class="flex flex-col items-center gap-0.5">
+          <span class="text-[9px] text-ads-muted">気づき</span>
+          <i data-lucide="arrow-right" class="w-5 h-5 text-purple-500 hidden md:block"></i>
+          <i data-lucide="arrow-down" class="w-5 h-5 text-purple-500 md:hidden"></i>
+        </div>
+      </div>
+      <div class="w-40 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center">
+        <i data-lucide="check-circle" class="w-6 h-6 text-emerald-600 mx-auto mb-2"></i>
+        <div class="font-bold text-emerald-700 text-sm mb-1">磨かれた原稿</div>
+        <div class="text-[11px] text-ads-muted">冒頭のつまずきも<br>発見できる</div>
+      </div>
+    </div>
+    <p class="text-xs text-ads-dim text-center mt-4">
+      例:「このプレゼンを聞く社長として、サブエージェントを立ち上げて、<br class="md:hidden">時系列で心の声を出してください」
+    </p>
+  </div>
+
+  <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"></i>
+      <div class="text-sm text-ads-muted leading-relaxed">
+        <strong class="text-amber-700 block mb-1">注意</strong> 引っ張りすぎは「釣り」になります。引っ張るのは、相手の注意の前借りです。大げさに煽って中身がなければ、次から話を聞いてもらえなくなります。相手の立場に立てなくなった瞬間に、削りすぎ・引っ張りすぎが起きます。
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 7: 人間の価値                                         -->
+<!-- ============================================================ -->
+<section class="mb-4">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-rose-500/10 flex-shrink-0">
+      <i data-lucide="fingerprint" class="w-5 h-5 text-rose-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">AIの時代に残る「人間の価値」</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    AIが何度も反復練習しなくても心を動かすプレゼンを作れる時代です。この時代の人間の価値とは何でしょうか。答えはシンプルで、<strong class="text-ads-accent-light">AIが作れないもの</strong>です。言い換えれば、自分が生きてきて見てきたこと・感じてきたこと、AIが持っていないデータそのものです。
+  </p>
+
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-6 mb-6">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-ads-accent/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="book-open" class="w-4 h-4 text-ads-accent-light"></i>
+      </div>
+      <div>
+        <p class="font-bold text-ads-accent-light mb-1">論理が民主化した時代、自分だけの価値は「自分だけの物語」</p>
+        <p class="text-ads-muted leading-relaxed text-sm">
+          同じ経験をしても、それをどう捉えるかは人それぞれです。辛い経験をトラウマと捉えるか、チャンスと捉えるかは、今の自分が決められます。自分の過去を物語にできている人ほど、AIを使うのがうまいです。迷いがなく、AIの出す正論に惑わされないからです。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <p class="leading-relaxed">
+    残り約1ヶ月で卒業制作です。発表では「こんな便利なツールを作りました」だけでなく、<strong class="text-ads-accent-light">なぜそのツールを作ったのか、自分の人生にとって大事なことは何なのか</strong>、Whyのところから語ることが求められます。
+  </p>
+
+  <div class="text-center mt-10 pt-8 border-t border-ads-border">
+    <p class="text-lg md:text-xl font-black text-slate-900 mb-3">
+      最も学びが深まるのは、<span class="text-ads-accent-light">本気で向き合ったとき</span>
+    </p>
+    <p class="text-ads-muted leading-relaxed max-w-xl mx-auto">
+      講義を聞いたときではありません。<br>
+      自分が作りたいと思うものを決めて、本気で向き合ったときです。<br>
+      やり切ったと思える最終発表に向けて、ギアを上げていきましょう。
+    </p>
+  </div>
+</section>
+
+<!-- CONTENT_END -->
+  </main>
+  <footer class="max-w-3xl mx-auto px-5 pb-10 pt-6 border-t border-ads-border/30">
+    <p class="text-xs text-ads-dim text-center">AI-Driven School の図解ツールで作成</p>
+  </footer>
+  <script src="assets/lucide.js"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta property="og:title" content="提案スキルをチューニングして、AI一発出しの質を上げた話">
+  <meta property="og:description" content="例題専用の修正ではなく、次も使える汎用スキルへ育てた記録。相手・提案文Before/After・工夫と苦戦を図解します。">
+  <meta property="og:type" content="article">
+  <title>提案スキルをチューニングして、AI一発出しの質を上げた話</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFFFFF'/><rect x='8' y='8' width='84' height='84' rx='14' fill='none' stroke='%233B82F6' stroke-width='4'/><circle cx='32' cy='40' r='10' fill='%233B82F6' opacity='0.8'/><circle cx='68' cy='40' r='10' fill='%2360A5FA' opacity='0.8'/><rect x='25' y='62' width='50' height='6' rx='3' fill='%2394A3B8' opacity='0.6'/><rect x='30' y='74' width='40' height='6' rx='3' fill='%2394A3B8' opacity='0.3'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ads: {
+              bg: '#FFFFFF',
+              surface: '#F8FAFC',
+              hover: '#F1F5F9',
+              border: '#E2E8F0',
+              accent: '#3B82F6',
+              'accent-light': '#2563EB',
+              text: '#1E293B',
+              muted: '#64748B',
+              dim: '#94A3B8',
+              positive: '#10B981',
+              negative: '#EF4444',
+              warning: '#F59E0B',
+            }
+          },
+          fontFamily: {
+            sans: ['"Noto Sans JP"', '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Yu Gothic UI"', '"Meiryo"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { border-top: none !important; }
+      .rounded-xl { break-inside: avoid; }
+      .md\:flex-row { flex-direction: row !important; }
+      .md\:hidden { display: none !important; }
+      .hidden.md\:block { display: block !important; }
+      .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+      .md\:mb-20 { margin-bottom: 5rem !important; }
+      .md\:py-16 { padding-top: 4rem !important; padding-bottom: 4rem !important; }
+      .bg-clip-text.text-transparent {
+        -webkit-background-clip: initial !important;
+        background-clip: initial !important;
+        color: #2563EB !important;
+        -webkit-text-fill-color: #2563EB !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-ads-bg text-slate-600 antialiased leading-relaxed border-t-4 border-ads-accent">
+  <div class="no-print max-w-3xl mx-auto px-5 pt-2 flex justify-end">
+    <button onclick="window.print()" class="flex items-center gap-1.5 text-xs text-ads-dim hover:text-ads-accent transition-colors cursor-pointer">
+      <i data-lucide="download" class="w-3.5 h-3.5"></i>
+      PDF
+    </button>
+  </div>
+  <main class="max-w-3xl mx-auto px-5 py-10 md:py-16">
+<!-- CONTENT_START -->
+
+<!-- ============================================================ -->
+<!--  HERO                                                        -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-ads-accent/10 text-ads-accent-light px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <i data-lucide="sparkles" class="w-4 h-4"></i>
+    AI活用 / スキル設計
+  </div>
+  <h1 class="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-6 leading-tight">
+    提案スキルをチューニングして、<br class="hidden sm:block">
+    <span class="bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">AI一発出し</span>の質を上げた話
+  </h1>
+  <p class="text-lg text-ads-muted max-w-xl mx-auto leading-relaxed">
+    配布された提案スキルを、そのまま使うだけでは足りなかった。<br>
+    ひとことで言うと ──
+  </p>
+</div>
+
+
+<!-- ============================================================ -->
+<!--  ONE-PAGE SUMMARY                                             -->
+<!-- ============================================================ -->
+<div class="bg-ads-surface border border-ads-border rounded-2xl p-6 md:p-10 mb-6">
+  <div class="text-center mb-8 md:mb-10">
+    <p class="text-xl md:text-2xl font-black text-slate-900 mb-2">
+      「今回の例題を通す」ではなく、<br class="sm:hidden">
+      <span class="text-ads-accent-light">「次も使えるスキル」</span>に育てる
+    </p>
+    <p class="text-sm text-ads-muted">
+      Agent Skills（AIに手順を教える再利用可能な指示セット）を、汎用のまま磨く
+    </p>
+    <p class="text-xs text-ads-dim mt-2">
+      出典: <a href="https://cursor.com/docs/skills" class="underline decoration-ads-dim/30 hover:text-ads-accent transition-colors">Cursor Docs — Agent Skills</a>
+    </p>
+  </div>
+
+  <!-- Core flow -->
+  <div class="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-0 mb-8">
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="file-text" class="w-7 h-7 text-red-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">配布スキル</div>
+      <div class="text-[11px] text-red-600/70 mt-0.5">長い・ズレやすい</div>
+    </div>
+
+    <div class="flex items-center justify-center md:w-14 py-1 md:py-0">
+      <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+      <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+    </div>
+
+    <div class="flex flex-col items-center w-40 p-4 bg-ads-accent/5 border-2 border-ads-accent/20 rounded-2xl">
+      <div class="w-16 h-16 rounded-2xl bg-ads-accent/15 border-2 border-ads-accent/30 flex items-center justify-center mb-2.5">
+        <i data-lucide="sliders-horizontal" class="w-8 h-8 text-ads-accent-light"></i>
+      </div>
+      <div class="font-bold text-ads-accent-light text-base">チューニング</div>
+      <div class="text-[11px] text-ads-muted mt-0.5 mb-2">骨子合意・文字数・推測禁止</div>
+      <div class="text-[10px] text-ads-muted bg-white rounded-lg px-2.5 py-1 border border-ads-border/50">本題はここ</div>
+    </div>
+
+    <div class="flex items-center justify-center md:w-14 py-1 md:py-0">
+      <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+      <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+    </div>
+
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="check-circle-2" class="w-7 h-7 text-emerald-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">一発出し提案文</div>
+      <div class="text-[11px] text-emerald-600/70 mt-0.5">短く・刺さる・手直しなし</div>
+    </div>
+  </div>
+
+  <!-- Line drawing -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
+    <div class="bg-red-500/5 border border-red-500/15 rounded-xl p-4 flex items-start gap-3">
+      <i data-lucide="x" class="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0"></i>
+      <div>
+        <div class="text-sm font-bold text-red-700 mb-1">やらない線引き</div>
+        <p class="text-xs text-ads-muted leading-relaxed">例題が通るための個別コンテキスト強化（上長の癖・社内ツール状況の埋め込み）</p>
+      </div>
+    </div>
+    <div class="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4 flex items-start gap-3">
+      <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+      <div>
+        <div class="text-sm font-bold text-emerald-700 mb-1">やる線引き</div>
+        <p class="text-xs text-ads-muted leading-relaxed">どんな提案でも品質を底上げする汎用ルールと、育つコンテキスト設計</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-4 mb-6">
+    <div class="flex-1 border-t border-ads-border/50"></div>
+    <div class="text-[11px] text-ads-dim font-medium">この図解で見せること</div>
+    <div class="flex-1 border-t border-ads-border/50"></div>
+  </div>
+
+  <div class="flex flex-wrap justify-center gap-2">
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="users" class="w-3.5 h-3.5 text-blue-500"></i>
+      誰に・何を
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="columns-2" class="w-3.5 h-3.5 text-purple-500"></i>
+      提案文 Before / After
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="git-branch" class="w-3.5 h-3.5 text-cyan-500"></i>
+      フローの変化
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="flame" class="w-3.5 h-3.5 text-orange-500"></i>
+      工夫と苦戦
+    </div>
+  </div>
+</div>
+
+<p class="text-center text-ads-muted mb-16 md:mb-20">
+  ここから先で、提出に必要な4点をひとつずつ見ていきます。
+</p>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 1: 誰に・何を                                        -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-500/10 flex-shrink-0">
+      <i data-lucide="target" class="w-5 h-5 text-blue-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">想定した相手と、変えたいこと</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    提案スキルを試す題材として選んだのは、<strong class="text-slate-900">セキュリティ検知チャンネルへのAI要約導入</strong>です。技術に強いマネージャーが「それで！」と即断できる文章を目指しました。
+  </p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
+          <i data-lucide="user-round-check" class="w-5 h-5 text-blue-600"></i>
+        </div>
+        <div class="text-xs font-bold text-blue-600 tracking-wide">誰に</div>
+      </div>
+      <p class="font-bold text-slate-900 text-lg mb-2">IT技術に強いマネージャー</p>
+      <p class="text-sm text-ads-muted leading-relaxed">承認ルートの1人目。技術評価志向が高く、読む量は少ない想定。結論と数字で先に答えたい人。</p>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+          <i data-lucide="refresh-cw" class="w-5 h-5 text-emerald-600"></i>
+        </div>
+        <div class="text-xs font-bold text-emerald-600 tracking-wide">何を変える</div>
+      </div>
+      <p class="font-bold text-slate-900 text-lg mb-2">検知チャンネルへのAI要約試験導入</p>
+      <p class="text-sm text-ads-muted leading-relaxed">通知スレッドにアラート要点を自動投稿する。目視確認は残し、1か月試験運用の承認を依頼する。</p>
+    </div>
+  </div>
+
+  <!-- Numbers -->
+  <div class="grid grid-cols-3 gap-3 mb-8">
+    <div class="bg-white border border-ads-border rounded-xl p-4 text-center">
+      <div class="text-2xl md:text-3xl font-black text-blue-600 mb-1">3〜5</div>
+      <div class="text-[11px] text-ads-muted">件/日の通知</div>
+    </div>
+    <div class="bg-white border border-ads-border rounded-xl p-4 text-center">
+      <div class="text-2xl md:text-3xl font-black text-purple-600 mb-1">5分</div>
+      <div class="text-[11px] text-ads-muted">1件あたりの確認</div>
+    </div>
+    <div class="bg-white border border-ads-border rounded-xl p-4 text-center">
+      <div class="text-2xl md:text-3xl font-black text-emerald-600 mb-1">6.7h</div>
+      <div class="text-[11px] text-ads-muted">月の確認時間</div>
+    </div>
+  </div>
+  <p class="text-xs text-ads-dim text-center mb-2">
+    計算: 4件/日 × 5分 × 20営業日 ＝ 月約6.7時間（出どころ: Jamf Protect 管理画面）
+  </p>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 2: Before / After 提案文                             -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-purple-500/10 flex-shrink-0">
+      <i data-lucide="columns-2" class="w-5 h-5 text-purple-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">提案文の Before / After</h2>
+  </div>
+
+  <p class="mb-4 leading-relaxed">
+    左が配布スキルのまま出した文章、右がチューニング後に<strong class="text-slate-900">手直しなしで一発出し</strong>した文章です。同じ題材でも、読み手への刺さり方が変わります。
+  </p>
+  <p class="mb-8 text-sm text-ads-muted leading-relaxed">
+    提出ルールどおり、出力をそのまま掲載しています。
+  </p>
+
+  <!-- Diff highlights first -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-5 md:p-6 mb-8">
+    <h3 class="text-sm font-bold text-slate-900 mb-4 text-center">見た目でわかる差分</h3>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="flex items-start gap-2.5 text-sm">
+        <i data-lucide="x" class="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0"></i>
+        <span>説明が長く、結論が埋もれやすい</span>
+      </div>
+      <div class="flex items-start gap-2.5 text-sm">
+        <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+        <span>結論2行 → 課題 → 提案 → 費用 → リスク</span>
+      </div>
+      <div class="flex items-start gap-2.5 text-sm">
+        <i data-lucide="x" class="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0"></i>
+        <span>詳細に寄りすぎて横長になりやすい</span>
+      </div>
+      <div class="flex items-start gap-2.5 text-sm">
+        <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+        <span>1行60字・全体800字のガードレール</span>
+      </div>
+      <div class="flex items-start gap-2.5 text-sm">
+        <i data-lucide="x" class="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0"></i>
+        <span>数字はあるが場面が弱い</span>
+      </div>
+      <div class="flex items-start gap-2.5 text-sm">
+        <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+        <span>数字のあとに「誤検知が並んだ日」の場面</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 gap-6">
+    <!-- BEFORE proposal as Slack-like card -->
+    <div class="border border-red-500/20 rounded-xl overflow-hidden">
+      <div class="bg-red-500/10 px-4 py-3 flex items-center gap-2 border-b border-red-500/15">
+        <i data-lucide="x-circle" class="w-4 h-4 text-red-600"></i>
+        <span class="text-sm font-bold text-red-700">チューニング前（配布スキルのまま）</span>
+      </div>
+      <div class="bg-slate-900 p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-7 h-7 rounded bg-slate-700 flex items-center justify-center">
+            <i data-lucide="bot" class="w-4 h-4 text-slate-300"></i>
+          </div>
+          <div>
+            <div class="text-xs font-bold text-slate-200">提案スキル（配布版）</div>
+            <div class="text-[10px] text-slate-500">AI出力・手直しなし</div>
+          </div>
+        </div>
+        <div class="bg-slate-800 rounded-lg p-4 text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap font-sans">【提案】セキュリティ検知Slackチャンネルに、検知アプリ名と公式ページURLを自動返信するAI機能を追加したいです。まず1ヶ月の試験導入としてご承認をお願いします。
+
+◎ 現状の課題
+セキュリティ検知チャンネルには毎日3〜5件の通知が届く。そのうち9割は、Mac上でAIエージェント系アプリ（例：Codex）をインストールした際に「Dockタイル」系拡張がONになることをトリガーとした同種の検知である。
+検知時は担当者がSlack投稿のURLからJamfProtectのページにアクセスし、何のアプリで検知したか、それが一般的で問題ないアプリかを確認している。この確認作業に毎回5分かかり、月換算で約6.7時間（4件/日×20営業日×5分）を占めている。
+
+◎ 提案する理由
+検知内容の9割が同種パターンであれば、アプリ名の特定と公式ページの提示はAIで自動化できる。JamfProtectのアラート内容をもとに検知アプリ名と公式ページURLをSlackスレッドに自動返信すれば、担当者は確認の起点となる情報をすぐに得られ、確認作業の時間を短縮できる。
+
+◎ 実現方法
+まず私自身が試作する。JamfProtectのアラート情報からアプリ名を特定し、公式ページURLを添えてSlackスレッドに返信する仕組みを想定している。現時点では構想段階で未検証のため、小さく試験導入する。
+
+◎ リスクと対策
+Geminiに渡す情報はJamfProtectアラートに含まれるアプリ名やイベント情報に限定し、機密情報は渡さない。
+AIの回答は判断の補助とし、問題ないアプリかどうかの最終判断は引き続き担当者が行う。自動でアラートをクローズするなどの操作は行わない。
+まず1ヶ月試験運用し、精度や運用上の課題を確認したうえで継続を判断する。</div>
+      </div>
+    </div>
+
+    <div class="flex justify-center">
+      <div class="flex items-center gap-2 text-ads-accent text-sm font-bold">
+        <i data-lucide="arrow-down" class="w-4 h-4"></i>
+        スキルをチューニングして一発出し
+      </div>
+    </div>
+
+    <!-- AFTER proposal -->
+    <div class="border border-emerald-500/20 rounded-xl overflow-hidden">
+      <div class="bg-emerald-500/10 px-4 py-3 flex items-center gap-2 border-b border-emerald-500/15">
+        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
+        <span class="text-sm font-bold text-emerald-700">チューニング後（AI一発出し・手直しなし）</span>
+      </div>
+      <div class="bg-slate-900 p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-7 h-7 rounded bg-emerald-700/40 flex items-center justify-center">
+            <i data-lucide="bot" class="w-4 h-4 text-emerald-300"></i>
+          </div>
+          <div>
+            <div class="text-xs font-bold text-slate-200">提案スキル（チューニング後）</div>
+            <div class="text-[10px] text-slate-500">AI出力・手直しなし</div>
+          </div>
+        </div>
+        <div class="bg-slate-800 rounded-lg p-4 text-[11px] leading-relaxed text-slate-300 whitespace-pre-wrap font-sans">【提案】セキュリティ検知チャンネルに、AI要約の自動投稿を試験導入したいです。
+1か月の試験運用として、ご承認をお願いします。
+
+■ 現状の課題
+検知チャンネルには通知が1日3〜5件届きます。
+1件ごとに本文を読み、Jamf Protect を開いて内容を確認しています。
+この確認に月約6.7時間かかっています（4件/日 × 5分 × 20営業日）。
+同じ検知が3件並び、確認した結果、すべて誤検知だった日もありました。
+
+■ 提案内容
+通知のスレッドに、アラートの要点をAIが要約して自動投稿します。
+目視確認は残します。要約は判断の代わりにはしません。
+試作は私が行います。
+
+■ 費用対効果
+追加費用はAPIの利用料のみです。金額は試験期間中に実測して報告します。
+削減の対象は、確認にかけている月約6.7時間です。
+
+■ リスクと対策
+・要約に渡すのはアラートの種別とアプリ名のみです。端末名と利用者名は渡しません
+・最終判断は担当者が行います。自動でのクローズはしません
+・承認後すぐに開始し、1か月後に精度とAPIの利用料を報告して継続を判断したいです
+
+◎コンテキストに無く、今回の対話で確認した項目
+API利用時の決裁範囲 / 社外AIに渡してよい情報の範囲 / 少額と判断する金額の目安</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 3: Workflow Before → After                           -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-cyan-500/10 flex-shrink-0">
+      <i data-lucide="git-branch" class="w-5 h-5 text-cyan-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">ワークフローはどう変わったか</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    文章の質が上がったのは、プロンプトを少し直したからではありません。<strong class="text-slate-900">書く前の流れ</strong>をスキルに組み込んだからです。
+  </p>
+
+  <!-- Before flow -->
+  <div class="bg-red-500/5 border border-red-500/15 rounded-xl p-5 md:p-6 mb-4">
+    <div class="inline-flex items-center gap-1.5 bg-red-500/10 text-red-600 px-3 py-1 rounded-full text-xs font-bold mb-5">
+      <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
+      BEFORE — 配布スキルの流れ
+    </div>
+    <div class="flex flex-col md:flex-row items-stretch gap-2 md:gap-0">
+      <div class="flex-1 bg-white border border-red-500/15 rounded-lg p-3 text-center">
+        <div class="text-xs font-bold text-slate-900 mb-1">材料ヒアリング</div>
+        <div class="text-[11px] text-ads-muted">対話で聞き取り</div>
+      </div>
+      <div class="flex items-center justify-center md:px-2">
+        <i data-lucide="chevron-right" class="w-4 h-4 text-red-400 hidden md:block"></i>
+        <i data-lucide="chevron-down" class="w-4 h-4 text-red-400 md:hidden"></i>
+      </div>
+      <div class="flex-1 bg-white border border-red-500/15 rounded-lg p-3 text-center">
+        <div class="text-xs font-bold text-slate-900 mb-1">すぐ提案文出力</div>
+        <div class="text-[11px] text-ads-muted">骨子合意なし</div>
+      </div>
+      <div class="flex items-center justify-center md:px-2">
+        <i data-lucide="chevron-right" class="w-4 h-4 text-red-400 hidden md:block"></i>
+        <i data-lucide="chevron-down" class="w-4 h-4 text-red-400 md:hidden"></i>
+      </div>
+      <div class="flex-1 bg-red-50 border border-red-500/20 rounded-lg p-3 text-center">
+        <div class="text-xs font-bold text-red-700 mb-1">長い・ズレやすい</div>
+        <div class="text-[11px] text-red-600/70">推測が混ざる余地</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- After flow -->
+  <div class="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-5 md:p-6 mb-8">
+    <div class="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold mb-5">
+      <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+      AFTER — チューニング後の流れ
+    </div>
+
+    <div class="space-y-3">
+      <div class="flex items-start gap-3">
+        <div class="w-7 h-7 rounded-full bg-emerald-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
+        <div class="flex-1 bg-white border border-emerald-500/15 rounded-lg p-3">
+          <div class="text-sm font-bold text-slate-900 mb-1">コンテキストを読む</div>
+          <p class="text-xs text-ads-muted">profile.md（提案者）と audiences.md（承認者カード）を先に確認。埋まっている項目は聞き返さない。</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-3">
+        <div class="w-7 h-7 rounded-full bg-emerald-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
+        <div class="flex-1 bg-white border border-emerald-500/15 rounded-lg p-3">
+          <div class="text-sm font-bold text-slate-900 mb-1">対話で材料を集める</div>
+          <p class="text-xs text-ads-muted">課題の数値化（推測禁止）。数字のあとに「実際に見た場面」を1つ聞く。</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-3">
+        <div class="w-7 h-7 rounded-full bg-ads-accent text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
+        <div class="flex-1 bg-ads-accent/5 border-2 border-ads-accent/25 rounded-lg p-3">
+          <div class="text-sm font-bold text-ads-accent-light mb-1">骨子＋仮定で認識合わせ</div>
+          <p class="text-xs text-ads-muted">完成文の前に1画面で合意。ズレ検出が目的で、この場で文章を磨かない。</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-3">
+        <div class="w-7 h-7 rounded-full bg-emerald-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">4</div>
+        <div class="flex-1 bg-white border border-emerald-500/15 rounded-lg p-3">
+          <div class="text-sm font-bold text-slate-900 mb-1">一発出し（手直し禁止）</div>
+          <p class="text-xs text-ads-muted">1行60字・全体800字。出力後の編集はルール違反。</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-3">
+        <div class="w-7 h-7 rounded-full bg-emerald-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">5</div>
+        <div class="flex-1 bg-white border border-emerald-500/15 rounded-lg p-3">
+          <div class="text-sm font-bold text-slate-900 mb-1">初見コンテキストを報告</div>
+          <p class="text-xs text-ads-muted">今回初めて聞いた項目を1行で出す。任意でコンテキストへ追加 → スキルが育つ。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ASCII summary -->
+  <div class="bg-slate-900 rounded-xl p-5 md:p-8 overflow-x-auto mb-6">
+    <pre class="font-mono text-[11px] md:text-sm leading-relaxed text-emerald-400 whitespace-pre">[profile / audiences]
+        │
+        ▼
+ 対話で材料収集 ──▶ 数字のあと「場面」を1つ
+        │
+        ▼
+ 骨子＋仮定で合意（ズレ検出）
+        │
+        ▼
+ 一発出し（60字/行・800字・手直し禁止）
+        │
+        ▼
+ 初見項目を報告 → 任意でコンテキスト追加</pre>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 4: 工夫したポイント                                   -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-amber-500/10 flex-shrink-0">
+      <i data-lucide="wrench" class="w-5 h-5 text-amber-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">工夫したポイント</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    チューニングで入れた変更は、どれも<strong class="text-slate-900">「この例題専用」ではなく「次の提案でも効く」</strong>ものに限定しました。
+  </p>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center mb-3">
+        <i data-lucide="image" class="w-5 h-5 text-blue-600"></i>
+      </div>
+      <h3 class="font-bold text-slate-900 mb-2">数字のあとに場面の1文</h3>
+      <p class="text-sm text-ads-muted leading-relaxed">月6.7時間という数字のあと、「同じ検知が3件並び、すべて誤検知だった日」を置く。説明ではなく絵が浮かぶ締めにする。</p>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center mb-3">
+        <i data-lucide="id-card" class="w-5 h-5 text-purple-600"></i>
+      </div>
+      <h3 class="font-bold text-slate-900 mb-2">profile / audiences を追加</h3>
+      <p class="text-sm text-ads-muted leading-relaxed">提案者（自分）の体裁・文体と、よく使う承認者カードを記録。毎回ゼロから説明しなくてよい土台をつくる。</p>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center mb-3">
+        <i data-lucide="list-checks" class="w-5 h-5 text-cyan-600"></i>
+      </div>
+      <h3 class="font-bold text-slate-900 mb-2">出力前に骨子で合意</h3>
+      <p class="text-sm text-ads-muted leading-relaxed">完成文の前に相手・結論・数字・仮定を1画面で出す。文章を磨く場ではなく、ズレを見つける場にする。</p>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-3">
+        <i data-lucide="ruler" class="w-5 h-5 text-emerald-600"></i>
+      </div>
+      <h3 class="font-bold text-slate-900 mb-2">読んでもらえる文字量</h3>
+      <p class="text-sm text-ads-muted leading-relaxed">1行60字・全体800字。Slackに貼っても横に長くならず、忙しい承認者が途中で閉じにくい量に抑える。</p>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 sm:col-span-2">
+      <div class="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center mb-3">
+        <i data-lucide="sprout" class="w-5 h-5 text-orange-600"></i>
+      </div>
+      <h3 class="font-bold text-slate-900 mb-2">初見項目の報告 → スキルが育つ</h3>
+      <p class="text-sm text-ads-muted leading-relaxed">今回の対話で初めて確認した項目（決裁範囲・渡してよい情報・少額の目安など）を出力末尾に報告する。任意でコンテキストへ追加でき、使うほど再利用できる指示セットになる。</p>
+    </div>
+  </div>
+
+  <!-- 骨子サンプル（体験再現） -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-5 md:p-6">
+    <h3 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+      <i data-lucide="clipboard-list" class="w-4 h-4 text-ads-accent"></i>
+      実際に出した骨子（認識合わせ用）
+    </h3>
+    <div class="bg-white border border-ads-border rounded-lg p-4 text-[11px] md:text-xs leading-relaxed text-slate-700 whitespace-pre-wrap font-mono">■ 出す相手：マネージャー（1人目・承認）
+■ 結論1行：セキュリティ検知チャンネルにAI要約の自動投稿を試験導入したいです
+■ 使う数字：日3〜5件、1件5分 → 月6.7時間（Jamf Protect）
+■ 締めの場面：同じ内容の通知が並んでいた（対話で語られたもの）
+■ 仮定した点（違えば指摘してください）
+   ・渡すのはアラート種別とアプリ名のみ
+   ・目視確認は残す / 試作は自分が行う / 試験は1か月</div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 5: 苦戦と乗り越え方                                   -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-red-500/10 flex-shrink-0">
+      <i data-lucide="flame" class="w-5 h-5 text-red-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">苦戦したポイントと、どう乗り越えたか</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    いちばんの衝突は、<strong class="text-slate-900">AIと自分で「直したいスコープ」が違った</strong>ことです。ここを言語化できないと、スキルは例題専用のパッチだらけになります。
+  </p>
+
+  <!-- Conflict -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
+      <div class="inline-flex items-center gap-1.5 bg-red-500/10 text-red-600 px-3 py-1 rounded-full text-xs font-bold mb-4">
+        <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+        AIがやりたがること
+      </div>
+      <p class="font-bold text-red-700 mb-3">例題が通るための個別最適化</p>
+      <ul class="space-y-2 text-sm">
+        <li class="flex items-start gap-2">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0"></i>
+          <span>上長の特徴・気にすることを埋め込む</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0"></i>
+          <span>会社の利用ツール状況をスキルに固定する</span>
+        </li>
+      </ul>
+    </div>
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-6">
+      <div class="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold mb-4">
+        <i data-lucide="user" class="w-3.5 h-3.5"></i>
+        自分がやりたかったこと
+      </div>
+      <p class="font-bold text-emerald-700 mb-3">どんな提案でも使える汎用スキル</p>
+      <ul class="space-y-2 text-sm">
+        <li class="flex items-start gap-2">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+          <span>誰の承認を得るかを柔軟に設計できること</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+          <span>提案の種類が変わっても品質を底上げできること</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- How overcome -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 mb-8">
+    <h3 class="font-bold text-slate-900 mb-4 flex items-center gap-2">
+      <i data-lucide="compass" class="w-5 h-5 text-ads-accent"></i>
+      どう乗り越えたか
+    </h3>
+    <div class="space-y-4">
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-ads-accent/10 flex items-center justify-center flex-shrink-0">
+          <span class="text-sm font-black text-ads-accent-light">1</span>
+        </div>
+        <div>
+          <p class="font-bold text-slate-900 text-sm mb-1">「汎用スキルにしたい」と明示した</p>
+          <p class="text-sm text-ads-muted">例題のブラッシュアップではなく、スキル本体の修正だと伝えた。</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-ads-accent/10 flex items-center justify-center flex-shrink-0">
+          <span class="text-sm font-black text-ads-accent-light">2</span>
+        </div>
+        <div>
+          <p class="font-bold text-slate-900 text-sm mb-1">「一発出しにこだわる」と明示した</p>
+          <p class="text-sm text-ads-muted">出力後の手直しはルール違反。品質はスキル側で担保する前提にした。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Good vs Bad fixes -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-5">
+      <div class="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold mb-4">
+        <i data-lucide="thumbs-up" class="w-3.5 h-3.5"></i>
+        良い修正
+      </div>
+      <ul class="space-y-3 text-sm">
+        <li class="flex items-start gap-2">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+          <span><strong class="text-slate-900">推測値・仮説を本文に入れない</strong>ルールを追加した</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+          <span>不足情報を毎回報告し、<strong class="text-slate-900">任意でコンテキストへ追加</strong>できるようにした</span>
+        </li>
+      </ul>
+    </div>
+    <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-5">
+      <div class="inline-flex items-center gap-1.5 bg-red-500/10 text-red-600 px-3 py-1 rounded-full text-xs font-bold mb-4">
+        <i data-lucide="thumbs-down" class="w-3.5 h-3.5"></i>
+        悪い修正
+      </div>
+      <ul class="space-y-3 text-sm">
+        <li class="flex items-start gap-2">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0"></i>
+          <span>細かい質問を増やすだけ（使うたびに忘れる）</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <i data-lucide="x" class="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0"></i>
+          <span>対話を複雑にして、スキル本体が育たない状態</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-ads-accent/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="lightbulb" class="w-4 h-4 text-ads-accent-light"></i>
+      </div>
+      <div>
+        <p class="font-bold text-ads-accent-light mb-1">本質はスキルの修正である</p>
+        <p class="text-ads-muted leading-relaxed text-sm">
+          一発出しの品質を上げたいなら、対話を増やすより先に<strong class="text-slate-800">スキル側のガードレールとコンテキスト設計</strong>を直す。不足情報の報告は「忘れ防止」ではなく「スキルを育てる導線」として残した。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  CLOSING                                                      -->
+<!-- ============================================================ -->
+<section class="mb-8">
+  <div class="bg-gradient-to-br from-blue-50 to-cyan-50 border border-ads-accent/20 rounded-2xl p-6 md:p-8 text-center">
+    <div class="w-12 h-12 rounded-2xl bg-ads-accent/10 flex items-center justify-center mx-auto mb-4">
+      <i data-lucide="flag" class="w-6 h-6 text-ads-accent-light"></i>
+    </div>
+    <h2 class="text-xl font-black text-slate-900 mb-3">学びの一言</h2>
+    <p class="text-base md:text-lg font-bold text-slate-900 leading-relaxed mb-3">
+      スキルチューニングの線引きは、<br class="hidden sm:block">
+      「今回の提案を通す」ではなく<br>
+      <span class="text-ads-accent-light">「次の提案でも使える状態を残す」</span>こと
+    </p>
+    <p class="text-sm text-ads-muted leading-relaxed max-w-md mx-auto">
+      例題専用の最適化は短期で効く。汎用ルールと育つコンテキストは、使うたびに回収できる。
+    </p>
+  </div>
+</section>
+
+<!-- CONTENT_END -->
+  </main>
+  <footer class="max-w-3xl mx-auto px-5 pb-10 pt-6 border-t border-ads-border/30">
+    <p class="text-xs text-ads-dim text-center">AI-Driven School の図解ツールで作成</p>
+  </footer>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

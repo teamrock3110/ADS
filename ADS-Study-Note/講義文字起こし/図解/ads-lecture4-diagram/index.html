@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta property="og:title" content="第4回講義：知っていれば作れる・選べる人になる">
+  <meta property="og:description" content="アイデアを企画にする4ステップとAI活用の3つの観点を図解で解説します。">
+  <meta property="og:type" content="article">
+  <title>第4回講義：知っていれば作れる・選べる人になる</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFFFFF'/><rect x='8' y='8' width='84' height='84' rx='14' fill='none' stroke='%230D6CA7' stroke-width='4'/><circle cx='32' cy='40' r='10' fill='%230D6CA7' opacity='0.8'/><circle cx='68' cy='40' r='10' fill='%233A8FCA' opacity='0.8'/><rect x='25' y='62' width='50' height='6' rx='3' fill='%238A96A5' opacity='0.6'/><rect x='30' y='74' width='40' height='6' rx='3' fill='%238A96A5' opacity='0.3'/></svg>">
+  <link href="assets/fonts/noto-sans-jp.css" rel="stylesheet">
+  <script src="assets/tailwindcss.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ads: {
+              bg: '#FFFFFF',
+              surface: '#F8FAFB',
+              hover: '#F1F5F9',
+              border: '#E2E8F0',
+              accent: '#0D6CA7',
+              'accent-light': '#0D6CA7',
+              text: '#1A2332',
+              muted: '#5A6B7D',
+              dim: '#8A96A5',
+              positive: '#1B7A5A',
+              negative: '#B91C1C',
+              warning: '#92650A',
+            },
+            blue: {
+              200: '#B3D9EF',
+              300: '#7FBCDD',
+              400: '#3A8FCA',
+              500: '#0D6CA7',
+              600: '#0B5E93',
+              700: '#094D7A',
+            }
+          },
+          fontFamily: {
+            sans: ['"Noto Sans JP"', '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Yu Gothic UI"', '"Meiryo"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { border-top: none !important; }
+      .rounded-xl { break-inside: avoid; }
+      .md\:flex-row { flex-direction: row !important; }
+      .md\:hidden { display: none !important; }
+      .hidden.md\:block { display: block !important; }
+      .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+      .md\:mb-20 { margin-bottom: 5rem !important; }
+      .md\:py-16 { padding-top: 4rem !important; padding-bottom: 4rem !important; }
+      .bg-clip-text.text-transparent {
+        -webkit-background-clip: initial !important;
+        background-clip: initial !important;
+        color: #0D6CA7 !important;
+        -webkit-text-fill-color: #0D6CA7 !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-ads-bg text-slate-600 antialiased leading-relaxed border-t-4 border-ads-accent">
+  <div class="no-print max-w-3xl mx-auto px-5 pt-2 flex justify-end">
+    <button onclick="window.print()" class="flex items-center gap-1.5 text-xs text-ads-dim hover:text-ads-accent transition-colors cursor-pointer">
+      <i data-lucide="download" class="w-3.5 h-3.5"></i>
+      PDF
+    </button>
+  </div>
+  <main class="max-w-3xl mx-auto px-5 py-10 md:py-16">
+<!-- CONTENT_START -->
+
+<!-- ============================================================ -->
+<!--  HERO                                                        -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-ads-accent/10 text-ads-accent-light px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <i data-lucide="map" class="w-4 h-4"></i>
+    AI-Driven School 第4回講義
+  </div>
+  <h1 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight mb-6">
+    知っていれば<br><span class="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">作れる</span><span class="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">・</span><span class="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">選べる人</span>になる
+  </h1>
+  <p class="text-lg text-ads-muted max-w-xl mx-auto leading-relaxed">
+    漠然としたアイデアを、実際に動くツールに変える。その思考プロセスと、AI活用を深める3つの観点 ──
+  </p>
+</div>
+
+
+<!-- ============================================================ -->
+<!--  ONE-PAGE SUMMARY: 3パート構成                                -->
+<!-- ============================================================ -->
+<div class="bg-ads-surface border border-ads-border rounded-2xl p-6 md:p-8 mb-16 md:mb-20">
+  <p class="text-center text-sm text-ads-muted mb-6">この講義の3つのパート</p>
+  <div class="space-y-3">
+    <div class="flex items-start gap-4 bg-purple-500/5 border border-purple-500/15 rounded-xl px-5 py-4">
+      <div class="text-lg font-black text-purple-500 leading-none mt-0.5">1</div>
+      <div>
+        <p class="font-bold text-slate-900 text-sm">Anthropicブログの核心</p>
+        <p class="text-xs text-ads-muted mt-0.5">AI活用の本質を一言で ──「そのトークンはコンテキストを消費するに値するのか」</p>
+      </div>
+    </div>
+    <div class="flex items-start gap-4 bg-cyan-500/5 border border-cyan-500/15 rounded-xl px-5 py-4">
+      <div class="text-lg font-black text-cyan-500 leading-none mt-0.5">2</div>
+      <div>
+        <p class="font-bold text-slate-900 text-sm">AI活用が上手になる3つの観点</p>
+        <p class="text-xs text-ads-muted mt-0.5">聞き方・スキル磨き・ルール設定</p>
+      </div>
+    </div>
+    <div class="flex items-start gap-4 bg-amber-500/5 border border-amber-500/15 rounded-xl px-5 py-4">
+      <div class="text-lg font-black text-amber-500 leading-none mt-0.5">3</div>
+      <div>
+        <p class="font-bold text-slate-900 text-sm">アイデアを企画にする4つのステップ</p>
+        <p class="text-xs text-ads-muted mt-0.5">分解 → 見極め → MVP → POC</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 1: Anthropicブログの核心                               -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-purple-500/10 text-purple-600 px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <i data-lucide="book-open" class="w-4 h-4"></i>
+    Part 1
+  </div>
+  <h2 class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight mb-4">
+    AI活用の「<span class="bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent">聖書</span>」<br>Anthropicブログの核心
+  </h2>
+</div>
+
+<section class="mb-16 md:mb-20">
+  <p class="mb-6 leading-relaxed">
+    Anthropic社が公開した公式エンジニアリングブログ『<a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents" target="_blank" rel="noopener noreferrer" class="text-ads-accent-light underline underline-offset-2 hover:text-blue-400 transition-colors">Effective Context Engineering for AI Agents</a>』。AI活用のすべてはこの記事に書いてあることに収束されると言ってもいいほど重要な記事です。
+  </p>
+
+  <div class="bg-gradient-to-b from-purple-50 to-white border-2 border-purple-500/20 rounded-2xl p-6 md:p-10 mb-8 text-center">
+    <div class="inline-flex items-center gap-1.5 bg-purple-500/10 text-purple-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-6">
+      <i data-lucide="quote" class="w-3.5 h-3.5"></i>
+      AI活用の本質を一言で
+    </div>
+    <p class="text-xl md:text-2xl font-black text-slate-900 leading-relaxed mb-4">
+      「そのトークンは<br class="md:hidden"><span class="text-purple-600">コンテキストを消費する</span>に<br class="md:hidden">値するのか」
+    </p>
+    <p class="text-sm text-ads-muted max-w-md mx-auto leading-relaxed">
+      AIに指示をする時に、少なすぎず多すぎない ── 特に多すぎるのは良くない。本当に必要な情報だけを与えることができているだろうか。これがAI活用の極意。
+    </p>
+  </div>
+
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-ads-accent/10 flex-shrink-0 mt-0.5">
+        <i data-lucide="lightbulb" class="w-4 h-4 text-ads-accent-light"></i>
+      </div>
+      <div>
+        <p class="font-bold text-ads-accent-light mb-1">今はわからなくても大丈夫</p>
+        <p class="text-ads-muted leading-relaxed text-sm">
+          これはHowToというよりビジョン（指針）。自分でツールを作る中で、どこかのタイミングで腹落ちする瞬間が必ず来る。今は「そうなんだ」で置いておいて、<strong class="text-slate-800">常にこの問いが土台にある</strong>ことだけ覚えておく。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 2: AI活用の3つの観点                                   -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-cyan-500/10 text-cyan-600 px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <i data-lucide="sparkles" class="w-4 h-4"></i>
+    Part 2
+  </div>
+  <h2 class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight mb-4">
+    AI活用が<span class="bg-gradient-to-r from-cyan-600 to-cyan-400 bg-clip-text text-transparent">上手になる</span>3つの観点
+  </h2>
+  <p class="text-base text-ads-muted max-w-lg mx-auto leading-relaxed">
+    講義を受けて課題に取り組んできた今だからこそ、知っておいてほしい3つのポイント。
+  </p>
+</div>
+
+<section class="mb-16 md:mb-20">
+
+  <div class="space-y-4 mb-8">
+    <!-- 観点1: わからない時のAIへの聞き方 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-blue-500/5 border-b border-ads-border/50">
+        <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="message-circle-question" class="w-5 h-5 text-blue-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">観点1: わからない時のAIへの聞き方</h3>
+          <p class="text-xs text-ads-muted">何がわからないかを渡しやすくするのが最初</p>
+        </div>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="bg-violet-500/5 border border-violet-500/15 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2.5">
+              <i data-lucide="camera" class="w-4 h-4 text-violet-600"></i>
+              <span class="font-bold text-slate-900 text-sm">スクショ共有を効率化</span>
+            </div>
+            <p class="text-xs text-ads-muted leading-relaxed">
+              画面キャプチャを一発でコピーできる環境を整えておく。手打ちより圧倒的に早い。
+            </p>
+            <div class="bg-white border border-violet-200 rounded-lg p-3 text-xs text-slate-700 leading-relaxed mt-2.5">
+              MacユーザーにはCleanShotがおすすめ
+            </div>
+          </div>
+          <div class="bg-blue-500/5 border border-blue-500/15 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2.5">
+              <i data-lucide="message-square-text" class="w-4 h-4 text-blue-600"></i>
+              <span class="font-bold text-slate-900 text-sm">AIに噛み砕かせるフレーズ</span>
+            </div>
+            <div class="bg-white border border-blue-200 rounded-lg p-3 text-xs text-slate-700 leading-relaxed mb-2.5">
+              「入社したての新卒社会人でもわかるように、専門用語は解説しながら説明して」
+            </div>
+            <p class="text-xs text-ads-muted leading-relaxed">
+              概念が複雑な時は「アスキーアートで直感的にわかるように図解して」を追加。
+            </p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="flex gap-3 bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+            <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="check-check" class="w-4 h-4 text-emerald-600"></i>
+            </div>
+            <div>
+              <h4 class="font-bold text-slate-900 text-sm mb-1">理解度をAIに確かめてもらう</h4>
+              <p class="text-xs text-ads-muted leading-relaxed">「こういう理解で合っていますか」と自分の言葉で説明してフィードバックをもらう。人に説明できるレベルが「理解できた」の基準。</p>
+            </div>
+          </div>
+          <div class="flex gap-3 bg-amber-500/5 border border-amber-500/15 rounded-xl p-4">
+            <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+              <i data-lucide="globe" class="w-4 h-4 text-amber-600"></i>
+            </div>
+            <div>
+              <h4 class="font-bold text-slate-900 text-sm mb-1">ウェブ検索をさせる</h4>
+              <p class="text-xs text-ads-muted leading-relaxed">AIは学習時点で知識が止まる。最新情報が欲しい時は「検索して」と伝えるか、ウェブ検索が走っているか確認する。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 観点2: 仕事を楽にする -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-violet-500/5 border-b border-ads-border/50">
+        <div class="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="zap" class="w-5 h-5 text-violet-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">観点2: 仕事を楽にする</h3>
+          <p class="text-xs text-ads-muted">スキルを磨いてコンテキストを整理するに尽きる</p>
+        </div>
+      </div>
+      <div class="px-6 py-5">
+        <p class="text-sm text-ads-muted leading-relaxed mb-4">
+          新しいエージェントを立ち上げるたびに、ゼロからプロジェクト情報を渡すのは非効率。だから<strong class="text-slate-800">コンテキストを整理してスキルを磨き続ける</strong>。
+        </p>
+        <div class="bg-violet-500/5 border border-violet-500/15 rounded-xl p-5">
+          <h4 class="text-sm font-bold text-violet-700 mb-3 flex items-center gap-2">
+            <i data-lucide="pen-tool" class="w-4 h-4"></i>
+            実例: Inside Stories（月額マガジン）の原稿スキル
+          </h4>
+          <div class="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-0">
+            <div class="flex flex-col items-center w-28 p-2">
+              <div class="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center mb-1.5">
+                <i data-lucide="file-text" class="w-5 h-5 text-violet-600"></i>
+              </div>
+              <div class="text-xs font-bold text-slate-900">企画骨子</div>
+            </div>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-violet-400 hidden md:block"></i>
+            <i data-lucide="arrow-down" class="w-4 h-4 text-violet-400 md:hidden"></i>
+            <div class="flex flex-col items-center w-28 p-2">
+              <div class="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center mb-1.5">
+                <i data-lucide="search" class="w-5 h-5 text-violet-600"></i>
+              </div>
+              <div class="text-xs font-bold text-slate-900">リサーチ</div>
+            </div>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-violet-400 hidden md:block"></i>
+            <i data-lucide="arrow-down" class="w-4 h-4 text-violet-400 md:hidden"></i>
+            <div class="flex flex-col items-center w-28 p-2">
+              <div class="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center mb-1.5">
+                <i data-lucide="file-pen" class="w-5 h-5 text-violet-600"></i>
+              </div>
+              <div class="text-xs font-bold text-slate-900">叩き案作成</div>
+            </div>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-violet-400 hidden md:block"></i>
+            <i data-lucide="arrow-down" class="w-4 h-4 text-violet-400 md:hidden"></i>
+            <div class="flex flex-col items-center w-28 p-2">
+              <div class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center mb-1.5">
+                <i data-lucide="eye" class="w-5 h-5 text-purple-600"></i>
+              </div>
+              <div class="text-xs font-bold text-slate-900">サブAGレビュー</div>
+            </div>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-violet-400 hidden md:block"></i>
+            <i data-lucide="arrow-down" class="w-4 h-4 text-violet-400 md:hidden"></i>
+            <div class="flex flex-col items-center w-28 p-2">
+              <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-1.5">
+                <i data-lucide="check-circle" class="w-5 h-5 text-emerald-600"></i>
+              </div>
+              <div class="text-xs font-bold text-slate-900">完成</div>
+            </div>
+          </div>
+          <p class="text-xs text-ads-muted text-center mt-3">1年以上かけて磨いてきた結果、そのまま読み上げても問題ないレベルに</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 観点3: 最初から全部わかっているAIに育てる -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 bg-emerald-500/5 border-b border-ads-border/50">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="settings" class="w-5 h-5 text-emerald-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">観点3: 最初から全部わかっているAIに育てる</h3>
+          <p class="text-xs text-ads-muted">常に適用したいルールを設定する</p>
+        </div>
+      </div>
+      <div class="px-6 py-5">
+        <p class="text-sm text-ads-muted leading-relaxed mb-4">
+          毎回「新入社員でもわかるように」と伝えるのは面倒。<strong class="text-slate-800">共通のルール設定</strong>で、どんな時もAIが自分好みに振る舞うようにできる。
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          <div class="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <i data-lucide="user" class="w-4 h-4 text-emerald-600"></i>
+              <span class="font-bold text-emerald-700 text-sm">ユーザールール</span>
+            </div>
+            <p class="text-xs text-ads-muted leading-relaxed">
+              どんなプロジェクトでも常に適用。例: 「専門用語を避けて説明して」「Macを使っている」「オフィスは〇〇」
+            </p>
+          </div>
+          <div class="bg-blue-500/5 border border-blue-500/15 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <i data-lucide="folder" class="w-4 h-4 text-blue-600"></i>
+              <span class="font-bold text-blue-700 text-sm">プロジェクトルール</span>
+            </div>
+            <p class="text-xs text-ads-muted leading-relaxed">
+              特定のリポジトリだけで適用。例: Cursor Rules、CLAUDE.md
+            </p>
+          </div>
+        </div>
+        <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
+          <div class="flex items-start gap-3">
+            <i data-lucide="alert-circle" class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"></i>
+            <div class="text-sm text-ads-muted leading-relaxed">
+              <strong class="text-amber-700">注意: 優先順位がある。</strong>チャットの指示 > プロジェクトルール > ユーザールール。共通ルールは優先度が低いので、<strong class="text-slate-800">迷ったら余計なことは書かない方がいい</strong>。AIにとってノイズになる。
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  PART 3 HERO: アイデアを企画にする4つのステップ                  -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-amber-500/10 text-amber-600 px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <i data-lucide="map" class="w-4 h-4"></i>
+    Part 3
+  </div>
+  <h2 class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight mb-4">
+    アイデアを<span class="bg-gradient-to-r from-amber-600 to-amber-400 bg-clip-text text-transparent">企画</span>にする4つのステップ
+  </h2>
+  <p class="text-base text-ads-muted max-w-lg mx-auto leading-relaxed">
+    無人島に地図もコンパスもなく放り出された状態から、道を作るプロセス。<br>
+    リアルタイム議事録ツールを実例に解説します。
+  </p>
+</div>
+
+<div class="bg-ads-surface border border-ads-border rounded-2xl p-6 md:p-8 mb-16 md:mb-20">
+  <div class="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-0 mb-8">
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="unplug" class="w-7 h-7 text-amber-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">課題を分解する</div>
+      <div class="text-[11px] text-amber-600/70 mt-0.5">Step 1</div>
+    </div>
+    <div class="flex items-center justify-center md:w-12 py-1 md:py-0">
+      <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+      <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+    </div>
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="search" class="w-7 h-7 text-violet-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">意味を見極める</div>
+      <div class="text-[11px] text-violet-600/70 mt-0.5">Step 2</div>
+    </div>
+    <div class="flex items-center justify-center md:w-12 py-1 md:py-0">
+      <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+      <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+    </div>
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-ads-accent/10 border border-ads-accent/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="scissors" class="w-7 h-7 text-ads-accent-light"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">MVPを定義する</div>
+      <div class="text-[11px] text-ads-accent-light/70 mt-0.5">Step 3</div>
+    </div>
+    <div class="flex items-center justify-center md:w-12 py-1 md:py-0">
+      <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+      <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+    </div>
+    <div class="flex flex-col items-center w-36 p-3">
+      <div class="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="flask-conical" class="w-7 h-7 text-emerald-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">POCで検証する</div>
+      <div class="text-[11px] text-emerald-600/70 mt-0.5">Step 4</div>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 3: Step 1 課題を分解する                               -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-amber-500/10 flex-shrink-0">
+      <i data-lucide="unplug" class="w-5 h-5 text-amber-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">Step 1: 課題を分解する</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    「何を作ればいいかがわからない」── 多くの人が最初にぶつかる壁。その原因は、<strong class="text-slate-900">物事を塊として見てしまっている</strong>こと。分解すればアイデアが見えてくる。
+  </p>
+
+  <!-- アンラーニングの説明 -->
+  <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-6 mb-8">
+    <h3 class="font-bold text-amber-700 mb-4 flex items-center gap-2">
+      <i data-lucide="brain" class="w-5 h-5"></i>
+      アンラーニング = 無意識を意識に変えること
+    </h3>
+    <div class="bg-white border border-amber-200 rounded-xl p-5 mb-4">
+      <div class="flex flex-col md:flex-row items-center gap-4 md:gap-6">
+        <div class="flex-1 text-center">
+          <div class="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-3">
+            <i data-lucide="dumbbell" class="w-7 h-7 text-amber-600"></i>
+          </div>
+          <p class="text-sm font-bold text-slate-900 mb-1">プロ野球選手</p>
+          <p class="text-xs text-ads-muted leading-relaxed">感覚でバットを振れる。初心者に「どうやるの？」と聞かれると困る。無意識でやっていることを<strong class="text-slate-800">言語化（＝分解）</strong>しなければ教えられない。</p>
+        </div>
+        <div class="flex items-center justify-center">
+          <i data-lucide="equal" class="w-6 h-6 text-amber-500"></i>
+        </div>
+        <div class="flex-1 text-center">
+          <div class="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-3">
+            <i data-lucide="briefcase" class="w-7 h-7 text-amber-600"></i>
+          </div>
+          <p class="text-sm font-bold text-slate-900 mb-1">会議に慣れた人</p>
+          <p class="text-xs text-ads-muted leading-relaxed">「会議は面倒だな」で止まっている。何が面倒なのかを<strong class="text-slate-800">分解してみると</strong>、見えていなかった課題が次々に出てくる。</p>
+        </div>
+      </div>
+    </div>
+    <p class="text-sm text-amber-700/80">
+      <i data-lucide="info" class="w-4 h-4 inline"></i>
+      良いアイデアを出すとは、自分が無意識でやっていることを意識すること。
+    </p>
+  </div>
+
+  <!-- 分解の実例 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-3">「会議は面倒だな」を分解してみる</h3>
+    <p class="text-sm text-ads-muted text-center mb-6">漠然とした1つの不満が、9つの具体的な面倒に変わる</p>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">1</span>
+        <span class="text-xs text-ads-muted">聞き取れなかったことを確認する面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">2</span>
+        <span class="text-xs text-ads-muted">誰がいつ何を言ったか思い出す面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">3</span>
+        <span class="text-xs text-ads-muted">テキストに起こす面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">4</span>
+        <span class="text-xs text-ads-muted">要点を整理する面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">5</span>
+        <span class="text-xs text-ads-muted">タスクを抜き出す面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">6</span>
+        <span class="text-xs text-ads-muted">「なるはやで」を「4/15まで」に変換する面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">7</span>
+        <span class="text-xs text-ads-muted">決定が覆った時に修正する面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">8</span>
+        <span class="text-xs text-ads-muted">タスク管理ツールに登録する面倒</span>
+      </div>
+      <div class="flex items-start gap-2.5 bg-white border border-ads-border rounded-lg p-3">
+        <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">9</span>
+        <span class="text-xs text-ads-muted">関係者に共有する面倒</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- AIに聞き出してもらうコツ -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-amber-500">
+    <div class="flex items-start gap-4">
+      <div class="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="message-square-plus" class="w-5 h-5 text-amber-600"></i>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-900 mb-2">分解のコツ: AIに聞き出してもらう</h3>
+        <div class="bg-white border border-amber-200 rounded-lg p-3 text-xs text-slate-700 leading-relaxed mb-3">
+          「私が普段やっている会議の流れの解像度を上げたいので、最初から最後まで全部聞き出してほしい。<strong>質問は1つずつ</strong>お願いします」
+        </div>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          自分で書き出すとつい省略してしまう。AIに聞かれると省略できない。「何も言わないと一気に質問をぶつけられるので、<strong class="text-slate-800">1つずつ聞いて</strong>」がポイント。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 4: Step 2 自分が作る意味を見極める                      -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-violet-500/10 flex-shrink-0">
+      <i data-lucide="search" class="w-5 h-5 text-violet-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">Step 2: 自分が作る意味を見極める</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    課題を分解してアイデアが出たら、<strong class="text-slate-900">同じことができるものが世の中にないか</strong>を調べる。ポイントは<strong class="text-slate-900">分解した後に</strong>調べること。分解前に調べても、自分が何に困っているかわからないから良し悪しを見極められない。
+  </p>
+
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-6">既存サービスでカバーできる範囲を見極める</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+      <div class="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
+          <span class="font-bold text-emerald-700 text-sm">既存で解決できる</span>
+        </div>
+        <ul class="space-y-1.5 text-xs text-ads-muted">
+          <li class="flex items-start gap-2"><i data-lucide="check" class="w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0"></i>テキストに起こす</li>
+          <li class="flex items-start gap-2"><i data-lucide="check" class="w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0"></i>要点を整理する</li>
+          <li class="flex items-start gap-2"><i data-lucide="check" class="w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0"></i>タスクを抜き出す（精度は課題あり）</li>
+        </ul>
+      </div>
+      <div class="bg-blue-500/5 border border-blue-500/15 rounded-xl p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <i data-lucide="plus-circle" class="w-4 h-4 text-blue-600"></i>
+          <span class="font-bold text-blue-700 text-sm">自分が作る価値がある</span>
+        </div>
+        <ul class="space-y-1.5 text-xs text-ads-muted">
+          <li class="flex items-start gap-2"><i data-lucide="star" class="w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0"></i>リアルタイムにToDoが出る</li>
+          <li class="flex items-start gap-2"><i data-lucide="star" class="w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0"></i>曖昧な表現を自動で具体化</li>
+          <li class="flex items-start gap-2"><i data-lucide="star" class="w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0"></i>自社の会議に最適化</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- なぜないのかを考える -->
+  <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
+    <h3 class="font-bold text-red-700 mb-4 flex items-center gap-2">
+      <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+      「誰も思いついていなかった」はあり得ない
+    </h3>
+    <p class="text-sm text-ads-muted leading-relaxed mb-4">
+      アイデアは必ず思いつかれている。何かしらの<strong class="text-slate-800">ネック</strong>があって実現できないか、優先順位が下がっていると考えるべき。
+    </p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="bg-white border border-red-200 rounded-xl p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <i data-lucide="banknote" class="w-4 h-4 text-red-600"></i>
+          <span class="font-bold text-slate-900 text-sm">コストのネック</span>
+        </div>
+        <p class="text-xs text-ads-muted leading-relaxed">リアルタイム処理はAPIの使用量が多く、顧客に一定料金内で提供するにはコストが高すぎる</p>
+      </div>
+      <div class="bg-white border border-red-200 rounded-xl p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <i data-lucide="shield-alert" class="w-4 h-4 text-red-600"></i>
+          <span class="font-bold text-slate-900 text-sm">プロダクトリスク</span>
+        </div>
+        <p class="text-xs text-ads-muted leading-relaxed">会議途中の曖昧な段階でToDoを表示すると間違える可能性が高く、商用プロダクトとしてリリースが難しい</p>
+      </div>
+    </div>
+    <div class="mt-4 pt-4 border-t border-red-200/50 text-sm text-ads-muted">
+      <i data-lucide="lightbulb" class="w-4 h-4 inline text-amber-500"></i>
+      自分用なら利益を上乗せする必要がなく、自社に最適化するだけでいいのでハードルが下がる。
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 5: Step 3 MVPを定義する                               -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-ads-accent/10 flex-shrink-0">
+      <i data-lucide="scissors" class="w-5 h-5 text-ads-accent-light"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">Step 3: MVPを定義する</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    MVP（Minimum Viable Product＝必要最小限の機能のプロダクト）。何か作り出す人は夢に溢れていて、つい機能を詰め込んでしまう。本当に必要な機能だけを見極めて、価値があるかを検証しようというスタンス。
+  </p>
+
+  <!-- コードを書いたら負け -->
+  <div class="bg-gradient-to-b from-blue-50 to-white border-2 border-blue-500/20 rounded-2xl p-6 md:p-10 mb-8 text-center">
+    <div class="inline-flex items-center gap-1.5 bg-blue-500/10 text-blue-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide mb-4">
+      <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+      MVP開発の最重要マインド
+    </div>
+    <p class="text-2xl md:text-3xl font-black text-slate-900 mb-4">
+      コードを書いたら<span class="text-red-600">負け</span>
+    </p>
+    <p class="text-sm text-ads-muted max-w-lg mx-auto leading-relaxed">
+      コードを書かずに同じような体験を作れないかと考える。ツール開発の最大の悲劇は、<strong class="text-slate-800">誰も使わないものを作ってしまう</strong>こと。
+    </p>
+  </div>
+
+  <!-- 課題仮説と解決仮説 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-base font-bold text-slate-900 text-center mb-6">MVPで検証するのは2つの仮説</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <i data-lucide="help-circle" class="w-5 h-5 text-amber-600"></i>
+          <span class="font-bold text-amber-700">課題仮説</span>
+        </div>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          「会議で決まったことを後で思い出して共有するのが面倒<strong class="text-slate-800">のはずだ</strong>」
+        </p>
+      </div>
+      <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <i data-lucide="lightbulb" class="w-5 h-5 text-blue-600"></i>
+          <span class="font-bold text-blue-700">解決仮説</span>
+        </div>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          「リアルタイムにToDoが可視化されれば、会議が楽になる<strong class="text-slate-800">はずだ</strong>」
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 人力検証の例 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-blue-500 mb-8">
+    <div class="flex items-start gap-4">
+      <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="users" class="w-5 h-5 text-blue-600"></i>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-900 mb-2">コードを書かない検証の例</h3>
+        <p class="text-sm text-ads-muted leading-relaxed mb-3">
+          会議にオンラインでメンバーを1人参加させ、手打ちでリアルタイムにToDoをまとめてもらう。これだけでリアルタイムAI議事録ツールと<strong class="text-slate-800">同じ体験</strong>ができる。
+        </p>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          他のメンバーが「これはいいね、また使いたい」と言わなければ、頑張ってコードを書いてもツールを作る意味はなかった。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MVPの削り方 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+    <h3 class="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+      <i data-lucide="minus-circle" class="w-5 h-5 text-ads-accent-light"></i>
+      MVPの基準: 「恥ずかしい」と感じるレベル
+    </h3>
+    <div class="space-y-2.5 text-sm">
+      <div class="flex items-start gap-3">
+        <i data-lucide="x" class="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0"></i>
+        <span class="text-ads-muted"><span class="line-through">誰もがアクセスできるウェブアプリ</span> → 自分のパソコンだけで動く状態で十分</span>
+      </div>
+      <div class="flex items-start gap-3">
+        <i data-lucide="x" class="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0"></i>
+        <span class="text-ads-muted"><span class="line-through">ブラウザで見えるおしゃれなUI</span> → マークダウンファイルで十分</span>
+      </div>
+      <div class="flex items-start gap-3">
+        <i data-lucide="x" class="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0"></i>
+        <span class="text-ads-muted"><span class="line-through">メンバーを自由に登録できる機能</span> → 設定ファイルに書けばいい</span>
+      </div>
+    </div>
+    <div class="mt-4 pt-4 border-t border-ads-border/50 text-sm text-ads-muted">
+      <strong class="text-slate-800">「やりたいことがだいたいできた」と思ったらやりすぎ。</strong>削って削ってみすぼらしいけど、仮説を検証できるラインを見つける。
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 6: Step 4 POCで検証する                               -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-500/10 flex-shrink-0">
+      <i data-lucide="flask-conical" class="w-5 h-5 text-emerald-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">Step 4: POCで検証する</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    POC（Proof of Concept＝概念実証）。自分たちのやりたいことが、既存の技術で本当にできるのかを検証する。MVPが「使う人が価値を感じるか」の検証なら、POCは<strong class="text-slate-900">「技術的にできるのか」</strong>の検証。
+  </p>
+
+  <!-- POCの考え方 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-3">処理の流れを見て、怪しいところから検証する</h3>
+    <p class="text-sm text-ads-muted text-center mb-8">できるとわかっていることは後回し。一気に全部作らない。</p>
+
+    <div class="space-y-3">
+      <!-- マイク起動 -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="mic" class="w-5 h-5 text-red-600"></i>
+        </div>
+        <div class="flex-1 bg-red-500/5 border border-red-500/15 rounded-lg px-4 py-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-red-700">マイクを起動して一定間隔で音声を保存</span>
+            <span class="text-[10px] bg-red-500/10 text-red-600 px-2 py-0.5 rounded-full font-bold">POC必要</span>
+          </div>
+          <p class="text-xs text-ads-muted mt-1">プログラムからマイクを起動できるのか？ 一定間隔で区切れるのか？</p>
+        </div>
+      </div>
+
+      <div class="flex justify-center"><i data-lucide="arrow-down" class="w-4 h-4 text-ads-dim"></i></div>
+
+      <!-- 文字起こし -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="file-text" class="w-5 h-5 text-emerald-600"></i>
+        </div>
+        <div class="flex-1 bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-4 py-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-emerald-700">音声を文字起こし</span>
+            <span class="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-bold">できる</span>
+          </div>
+          <p class="text-xs text-ads-muted mt-1">ChatGPT / Claude / Gemini のAPIで音声を送れば文字起こしできる</p>
+        </div>
+      </div>
+
+      <div class="flex justify-center"><i data-lucide="arrow-down" class="w-4 h-4 text-ads-dim"></i></div>
+
+      <!-- ToDo抽出 -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="list-todo" class="w-5 h-5 text-emerald-600"></i>
+        </div>
+        <div class="flex-1 bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-4 py-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-emerald-700">文字起こしからToDo抽出</span>
+            <span class="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-bold">できる</span>
+          </div>
+          <p class="text-xs text-ads-muted mt-1">文章をAIに渡してToDoを出してもらうのはブラウザのAIでもできる</p>
+        </div>
+      </div>
+
+      <div class="flex justify-center"><i data-lucide="arrow-down" class="w-4 h-4 text-ads-dim"></i></div>
+
+      <!-- ファイルに反映 -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="save" class="w-5 h-5 text-emerald-600"></i>
+        </div>
+        <div class="flex-1 bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-4 py-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-emerald-700">マークダウンファイルに反映</span>
+            <span class="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-bold">できる</span>
+          </div>
+          <p class="text-xs text-ads-muted mt-1">ファイルの更新は確実にできる。検証不要。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AIとの対話で進める -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-emerald-500 mb-8">
+    <div class="flex items-start gap-4">
+      <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="message-square" class="w-5 h-5 text-emerald-600"></i>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-900 mb-2">わからないことはAIに聞いて進める</h3>
+        <p class="text-sm text-ads-muted leading-relaxed mb-3">
+          10年前ならテクノロジーリテラシーがないと詰まっていた。今はAIと対話しながら、自分で作りたいツールの処理の流れを理解できる。<strong class="text-slate-800">これは革命的なこと。</strong>
+        </p>
+        <p class="text-sm text-ads-muted leading-relaxed">
+          実際にAIと対話する中で、リアルタイム文字起こしに強い「Deepgram」というサービスの存在を知り、採用に至った。最初から全部わかる人はいない。
+        </p>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 7: まとめ                                            -->
+<!-- ============================================================ -->
+<section>
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-ads-accent/10 flex-shrink-0">
+      <i data-lucide="check-circle" class="w-5 h-5 text-ads-accent-light"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">まとめ ── 第4回講義で覚えておきたいこと</h2>
+  </div>
+
+  <div class="space-y-4 mb-10">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-purple-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-purple-500 leading-none flex-shrink-0 mt-1">01</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">AI活用の本質は「必要な情報だけを渡す」こと</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            Anthropic社のブログが伝えるメッセージを一言でまとめるなら「そのトークンはコンテキストを消費するに値するのか」。少なすぎず多すぎない、特に多すぎるのは良くない。今はわからなくても、ツールを作る中で腹落ちする瞬間が来る。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-cyan-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-cyan-500 leading-none flex-shrink-0 mt-1">02</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">AI活用は3つの観点で深まる</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            わからない時の聞き方を磨く。スキルとコンテキストを育てて仕事を楽にする。共通ルールで最初から自分を理解しているAIに育てる。日々の積み重ねが品質を変える。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-amber-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-amber-500 leading-none flex-shrink-0 mt-1">03</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">アイデアは「分解」から始まる</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            何を作ればいいかわからないのは、物事を塊として見ているから。無意識でやっていることを分解（アンラーニング）すると、課題が見えてアイデアが生まれる。AIに1つずつ質問してもらうのが効果的。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-emerald-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-emerald-500 leading-none flex-shrink-0 mt-1">04</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">コードを書く前にやるべきことがある</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            自分が作る意味を見極め、MVPは恥ずかしいレベルまで削る。POCでは怪しいところから1つずつ検証する。一気に全部作らない。このプロセスはすべてのツール開発で使える。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 月次課題 -->
+  <div class="text-center bg-gradient-to-b from-ads-accent/5 to-transparent border border-ads-accent/10 rounded-xl p-8 md:p-10">
+    <i data-lucide="rocket" class="w-8 h-8 text-ads-accent mx-auto mb-4"></i>
+    <p class="text-lg font-bold text-slate-900 mb-3">次回講義: 自分で作った報告ツールの発表会</p>
+    <p class="text-ads-muted max-w-lg mx-auto leading-relaxed mb-6">
+      MVPでいいので自動報告ツールの完成を目指そう。うまく動かなかったとしても、それも含めて貴重な学び。
+    </p>
+    <div class="inline-block bg-white border border-ads-border rounded-xl p-5 text-left max-w-md mx-auto">
+      <p class="text-sm font-bold text-slate-900 mb-3">今回の4ステップを活用して:</p>
+      <div class="space-y-2 text-sm text-ads-muted">
+        <div class="flex items-start gap-2">
+          <span class="text-xs font-mono bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">1</span>
+          <span>自分の課題を<strong class="text-slate-800">分解</strong>してみる</span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-xs font-mono bg-violet-500/10 text-violet-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">2</span>
+          <span>自分が作る<strong class="text-slate-800">意味があるか</strong>を確認する</span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-xs font-mono bg-blue-500/10 text-blue-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">3</span>
+          <span><strong class="text-slate-800">恥ずかしいレベル</strong>まで削ったMVPを定義する</span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-xs font-mono bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">4</span>
+          <span>怪しいところから<strong class="text-slate-800">1つずつ</strong>検証する</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTENT_END -->
+  </main>
+  <footer class="max-w-3xl mx-auto px-5 pb-10 pt-6 border-t border-ads-border/30">
+    <p class="text-xs text-ads-dim text-center">AI-Driven School の図解ツールで作成</p>
+  </footer>
+  <script src="assets/lucide.js"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

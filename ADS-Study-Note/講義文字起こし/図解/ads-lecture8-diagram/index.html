@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta property="og:title" content="第8回講義：自分の武器を作り上げる">
+  <meta property="og:description" content="AIで自分専用のツール（武器）を育てる。クイズ作成ツールQuiz Studioを題材に、保存先がMarkdown→JSON→データベースへ進化する流れと「AIとの距離」を図解で解説します。">
+  <meta property="og:type" content="article">
+  <title>第8回講義：自分の武器を作り上げる</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFFFFF'/><rect x='8' y='8' width='84' height='84' rx='14' fill='none' stroke='%230D6CA7' stroke-width='4'/><circle cx='32' cy='40' r='10' fill='%230D6CA7' opacity='0.8'/><circle cx='68' cy='40' r='10' fill='%233A8FCA' opacity='0.8'/><rect x='25' y='62' width='50' height='6' rx='3' fill='%238A96A5' opacity='0.6'/><rect x='30' y='74' width='40' height='6' rx='3' fill='%238A96A5' opacity='0.3'/></svg>">
+  <link href="assets/fonts/noto-sans-jp.css" rel="stylesheet">
+  <script src="assets/tailwindcss.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ads: {
+              bg: '#FFFFFF',
+              surface: '#F8FAFB',
+              hover: '#F1F5F9',
+              border: '#E2E8F0',
+              accent: '#0D6CA7',
+              'accent-dark': '#223A49',
+              'accent-light': '#3A8FCA',
+              text: '#1A2332',
+              muted: '#5A6B7D',
+              dim: '#8A96A5',
+              positive: '#1B7A5A',
+              negative: '#B91C1C',
+              warning: '#92650A',
+            },
+            blue: {
+              200: '#B3D9EF',
+              300: '#7FBCDD',
+              400: '#3A8FCA',
+              500: '#0D6CA7',
+              600: '#0B5E93',
+              700: '#094D7A',
+            }
+          },
+          fontFamily: {
+            sans: ['"Noto Sans JP"', '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Yu Gothic UI"', '"Meiryo"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { border-top: none !important; }
+      .rounded-xl { break-inside: avoid; }
+      .md\:flex-row { flex-direction: row !important; }
+      .md\:hidden { display: none !important; }
+      .hidden.md\:block { display: block !important; }
+      .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+      .md\:mb-20 { margin-bottom: 5rem !important; }
+      .md\:py-16 { padding-top: 4rem !important; padding-bottom: 4rem !important; }
+      .bg-clip-text.text-transparent {
+        -webkit-background-clip: initial !important;
+        background-clip: initial !important;
+        color: #0D6CA7 !important;
+        -webkit-text-fill-color: #0D6CA7 !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-ads-bg text-slate-600 antialiased leading-relaxed border-t-4 border-ads-accent">
+  <div class="no-print max-w-3xl mx-auto px-5 pt-2 flex justify-end">
+    <button onclick="window.print()" class="flex items-center gap-1.5 text-xs text-ads-dim hover:text-ads-accent transition-colors cursor-pointer">
+      <i data-lucide="download" class="w-3.5 h-3.5"></i>
+      PDF
+    </button>
+  </div>
+  <main class="max-w-3xl mx-auto px-5 py-10 md:py-16">
+<!-- CONTENT_START -->
+
+<!-- ============================================================ -->
+<!--  HERO                                                        -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-ads-accent/10 text-ads-accent-light px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <i data-lucide="compass" class="w-4 h-4"></i>
+    AI-Driven School 第8回講義
+  </div>
+  <h1 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight mb-6">
+    自分の<span class="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">武器</span>を作り上げる
+  </h1>
+  <p class="text-lg text-ads-muted max-w-xl mx-auto leading-relaxed">
+    クイズ作成ツールを題材に、自作ツールが育っていく流れを追う。<br>
+    保存先は Markdown → JSON → データベースへ ──
+  </p>
+</div>
+
+
+<!-- ============================================================ -->
+<!--  KEY TERMS                                                     -->
+<!-- ============================================================ -->
+<div class="mb-10 md:mb-12">
+  <div class="flex items-center gap-3 mb-6">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-slate-500/10 flex-shrink-0">
+      <i data-lucide="book-open" class="w-5 h-5 text-slate-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">今回の重要キーワード</h2>
+  </div>
+  <p class="text-sm text-ads-muted mb-6">この講義の理解の土台となる6つの用語です。前半3つは第7回でも登場した「データの形」、後半3つは「開発に使う道具」です。</p>
+
+  <div class="space-y-3">
+    <!-- Markdown -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <i data-lucide="file-text" class="w-4 h-4 text-emerald-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm mb-1">Markdown</h3>
+          <p class="text-sm text-ads-muted leading-relaxed mb-3">
+            <strong class="text-slate-800">人間が見やすく読むための自由な記述形式。</strong>AIものびのび書ける反面、書き方が揺れやすく、プログラムには扱いにくい。
+          </p>
+          <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 font-mono text-xs text-slate-700 leading-relaxed">
+            <div class="text-slate-400 text-[10px] mb-1.5">lessons/ai-basic.md</div>
+            <div># AIの基本</div>
+            <div>問題：プロンプトとは？</div>
+            <div>選択肢：AIへの指示文</div>
+            <div>正解：A</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JSON -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <i data-lucide="braces" class="w-4 h-4 text-blue-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm mb-1">JSON</h3>
+          <p class="text-sm text-ads-muted leading-relaxed mb-3">
+            <strong class="text-slate-800">カッコとキーで情報を厳密に構造化する形式。</strong>プログラムの処理はシンプルになるが、人間は読みにくく、AIにも精密さが求められる。
+          </p>
+          <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 font-mono text-xs text-slate-700 leading-relaxed">
+            <div class="text-slate-400 text-[10px] mb-1.5">ai-basic.json</div>
+            <div>{</div>
+            <div class="pl-4">"question": "プロンプトとは？",</div>
+            <div class="pl-4">"answer": "A"</div>
+            <div>}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- データベース -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <i data-lucide="database" class="w-4 h-4 text-violet-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm mb-1">データベース</h3>
+          <p class="text-sm text-ads-muted leading-relaxed mb-3">
+            <strong class="text-slate-800">たくさんの表が入った箱。</strong>列ごとに型を決めて間違いを防ぐ。何十万件でも瞬時に検索可能。
+          </p>
+          <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-x-auto">
+            <div class="text-slate-400 text-[10px] mb-1.5 font-mono">quizzes テーブル</div>
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b border-slate-200">
+                  <th class="text-left py-1 pr-3 text-slate-500 font-medium">id</th>
+                  <th class="text-left py-1 pr-3 text-slate-500 font-medium">question</th>
+                  <th class="text-left py-1 text-slate-500 font-medium">answer</th>
+                </tr>
+              </thead>
+              <tbody class="font-mono text-slate-700">
+                <tr class="border-b border-slate-100">
+                  <td class="py-1 pr-3">1</td>
+                  <td class="py-1 pr-3">プロンプトとは？</td>
+                  <td class="py-1">A</td>
+                </tr>
+                <tr>
+                  <td class="py-1 pr-3">2</td>
+                  <td class="py-1 pr-3">Markdownとは？</td>
+                  <td class="py-1">B</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Git -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <i data-lucide="git-branch" class="w-4 h-4 text-amber-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm mb-1">Git</h3>
+          <p class="text-sm text-ads-muted leading-relaxed mb-3">
+            <strong class="text-slate-800">変更履歴を記録し、いつでも前に戻せる仕組み。</strong>変更点（差分）を確認しながら保存（コミット）でき、複数人が同じ箇所を直すと衝突（コンフリクト）として教えてくれる。
+          </p>
+          <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 font-mono text-xs leading-relaxed">
+            <div class="text-slate-400 text-[10px] mb-1.5">ai-basic.json の差分</div>
+            <div class="text-emerald-600">+ "answer": "A"</div>
+            <div class="text-red-500">- "answer": "B"</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Next.js -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <i data-lucide="layout-template" class="w-4 h-4 text-cyan-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm mb-1">Next.js</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            <strong class="text-slate-800">Webアプリ作りのフレームワーク。</strong>画面を部品化する React、ミスを防ぐ TypeScript、公開用サーバーまでが一式そろう。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- shadcn/ui -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-slate-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <i data-lucide="blocks" class="w-4 h-4 text-slate-600"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm mb-1">shadcn/ui</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            <strong class="text-slate-800">プロが作ったおしゃれなUIの「部品集」。</strong>ボタンやカレンダーなど50種類以上を、選んで組み込むだけで整う。土台は見た目を手軽に指定する Tailwind CSS。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!--  ONE-PAGE SUMMARY: データの保存先の進化                         -->
+<!-- ============================================================ -->
+<div class="flex items-center gap-3 mb-6 mt-16 md:mt-20">
+  <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-ads-accent/10 flex-shrink-0">
+    <i data-lucide="map" class="w-5 h-5 text-ads-accent-light"></i>
+  </div>
+  <h2 class="text-xl md:text-2xl font-bold text-slate-900">講義の全体像</h2>
+</div>
+<div class="bg-ads-surface border border-ads-border rounded-2xl p-6 md:p-10 mb-16 md:mb-20">
+  <div class="text-center mb-8 md:mb-10">
+    <p class="text-xl md:text-2xl font-black text-slate-900 mb-2">
+      ツールは <span class="text-ads-accent-light">小さく始めて</span> 育てていく
+    </p>
+    <p class="text-sm text-ads-muted">
+      まず<strong class="text-slate-800">スキルを育てて</strong>安定して作れるようにし、そのうえで<strong class="text-slate-800">データの置き場所を変えて</strong>ツールを大きくしていく。
+    </p>
+  </div>
+
+  <!-- 前半：スキルを育てる -->
+  <div class="rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-5 md:p-6">
+    <div class="flex items-center gap-2.5 mb-5">
+      <h3 class="font-bold text-slate-900 text-base md:text-lg">スキルを育てる</h3>
+    </div>
+    <div class="flex flex-col md:flex-row items-stretch justify-center gap-2 md:gap-0">
+      <div class="flex-1 flex flex-col items-center p-4 bg-white border border-ads-border rounded-2xl">
+        <div class="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-2.5">
+          <i data-lucide="sparkles" class="w-6 h-6 text-cyan-600"></i>
+        </div>
+        <div class="font-bold text-slate-900 text-sm">小さく1問</div>
+        <div class="text-[11px] text-ads-dim mt-1 text-center">まず雑に作らせて<br>できるか確かめる</div>
+      </div>
+      <div class="flex items-center justify-center md:w-12 py-1 md:py-0">
+        <i data-lucide="arrow-right" class="w-5 h-5 text-cyan-500 hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-cyan-500 md:hidden"></i>
+      </div>
+      <div class="flex-1 flex flex-col items-center p-4 bg-white border border-ads-border rounded-2xl">
+        <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2.5">
+          <i data-lucide="bookmark-check" class="w-6 h-6 text-emerald-600"></i>
+        </div>
+        <div class="font-bold text-slate-900 text-sm">模範解答を入れる</div>
+        <div class="text-[11px] text-ads-dim mt-1 text-center">運まかせをやめ<br>品質をそろえる</div>
+      </div>
+      <div class="flex items-center justify-center md:w-12 py-1 md:py-0">
+        <i data-lucide="arrow-right" class="w-5 h-5 text-cyan-500 hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-cyan-500 md:hidden"></i>
+      </div>
+      <div class="flex-1 flex flex-col items-center p-4 bg-white border-2 border-cyan-500/25 rounded-2xl">
+        <div class="w-12 h-12 rounded-xl bg-cyan-500/15 border border-cyan-500/25 flex items-center justify-center mb-2.5">
+          <i data-lucide="file-cog" class="w-6 h-6 text-cyan-700"></i>
+        </div>
+        <div class="font-bold text-slate-900 text-sm">スキルにする</div>
+        <div class="text-[11px] text-ads-dim mt-1 text-center">手順書に固定して<br>毎回同じ品質に</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 後半：データの置き場所を変えていく -->
+  <div class="rounded-2xl border border-violet-500/25 bg-violet-500/5 p-5 md:p-6 mt-5">
+    <div class="flex items-center gap-2.5 mb-5">
+      <h3 class="font-bold text-slate-900 text-base md:text-lg">データの置き場所を変えていく</h3>
+    </div>
+    <div class="flex flex-col md:flex-row items-stretch justify-center gap-2 md:gap-0 mb-5">
+      <div class="flex-1 flex flex-col items-center p-4 bg-white border border-emerald-500/20 rounded-2xl">
+        <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2.5">
+          <i data-lucide="file-text" class="w-6 h-6 text-emerald-600"></i>
+        </div>
+        <div class="font-bold text-slate-900 text-base">Markdown</div>
+        <div class="text-[11px] text-emerald-600/80 mt-0.5">自由に書ける</div>
+        <div class="text-[11px] text-ads-dim mt-1 text-center">AIがのびのび書ける<br>机の上の資料</div>
+      </div>
+      <div class="flex items-center justify-center md:w-12 py-1 md:py-0">
+        <i data-lucide="arrow-right" class="w-5 h-5 text-violet-400 hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-violet-400 md:hidden"></i>
+      </div>
+      <div class="flex-1 flex flex-col items-center p-4 bg-white border border-blue-500/20 rounded-2xl">
+        <div class="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-2.5">
+          <i data-lucide="braces" class="w-6 h-6 text-blue-600"></i>
+        </div>
+        <div class="font-bold text-slate-900 text-base">JSON</div>
+        <div class="text-[11px] text-blue-600/80 mt-0.5">構造化される</div>
+        <div class="text-[11px] text-ads-dim mt-1 text-center">プログラムが<br>扱いやすい形</div>
+      </div>
+      <div class="flex items-center justify-center md:w-12 py-1 md:py-0">
+        <i data-lucide="arrow-right" class="w-5 h-5 text-violet-400 hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-violet-400 md:hidden"></i>
+      </div>
+      <div class="flex-1 flex flex-col items-center p-4 bg-white border-2 border-violet-500/25 rounded-2xl">
+        <div class="w-12 h-12 rounded-xl bg-violet-500/15 border border-violet-500/25 flex items-center justify-center mb-2.5">
+          <i data-lucide="database" class="w-6 h-6 text-violet-600"></i>
+        </div>
+        <div class="font-bold text-slate-900 text-base">データベース</div>
+        <div class="text-[11px] text-violet-600/80 mt-0.5">大量・複数人</div>
+        <div class="text-[11px] text-ads-dim mt-1 text-center">Gitの外、<br>キャビネットの奥</div>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="flex items-center gap-2 bg-white border border-ads-border rounded-xl px-4 py-3">
+        <i data-lucide="trending-up" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
+        <span class="text-xs text-ads-muted"><strong class="text-slate-800">できることが増える</strong> → 大量・複数人で扱える</span>
+      </div>
+      <div class="flex items-center gap-2 bg-white border border-ads-border rounded-xl px-4 py-3">
+        <i data-lucide="move-right" class="w-4 h-4 text-violet-600 flex-shrink-0"></i>
+        <span class="text-xs text-ads-muted"><strong class="text-slate-800">AIとの距離が離れる</strong> → 考えることも増える</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex items-start gap-2 mt-8 text-xs text-ads-muted bg-ads-accent/5 border border-ads-accent/15 rounded-xl px-4 py-3">
+    <i data-lucide="info" class="w-4 h-4 text-ads-accent-light flex-shrink-0 mt-0.5"></i>
+    <span>講義では、この流れを <strong class="text-slate-800">Quiz Studio</strong> を使って実演しています。</span>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 2: AIの育て方                                        -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-cyan-500/10 flex-shrink-0">
+      <i data-lucide="sprout" class="w-5 h-5 text-cyan-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">AIの育て方 ── 小さく始めて育てる</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    繰り返す仕事をAIに任せたいとき、いきなり完璧を目指してはいけません。これは<strong class="text-slate-900">スキルの育て方</strong>そのもの。スキルとは「AIをベテランにする自分専用の手順書」です。
+  </p>
+
+  <!-- Rules その7 -->
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5 mb-8">
+    <div class="flex items-center gap-2 mb-1">
+      <i data-lucide="bookmark" class="w-4 h-4 text-ads-accent-light"></i>
+      <span class="text-xs font-bold text-ads-accent-light tracking-wide">AI-Driven Rules ⑦</span>
+    </div>
+    <p class="font-bold text-slate-900">スキルを育て続けろ</p>
+  </div>
+
+  <!-- 5ステップ -->
+  <h3 class="text-base font-bold text-slate-900 mb-5 flex items-center gap-2">
+    <i data-lucide="list-checks" class="w-4 h-4 text-ads-accent-light"></i>
+    AIを育てる5つのステップ
+  </h3>
+  <div class="space-y-3 mb-8">
+    <div class="flex gap-4 bg-ads-surface border border-ads-border rounded-xl p-5 border-l-4 border-l-blue-500">
+      <div class="text-xl font-black text-blue-500 leading-none flex-shrink-0 mt-0.5">1</div>
+      <div>
+        <h4 class="font-bold text-slate-900 text-sm mb-1">ゴールを言葉にする</h4>
+        <p class="text-xs text-ads-muted leading-relaxed">ゴールが曖昧だと、AIの出したものを評価できないし、AIもどこへ向かえばいいかわからない。「読んだ人がどうなれば成功か」を最初に決める。</p>
+      </div>
+    </div>
+    <div class="flex gap-4 bg-ads-surface border border-ads-border rounded-xl p-5 border-l-4 border-l-cyan-500">
+      <div class="text-xl font-black text-cyan-500 leading-none flex-shrink-0 mt-0.5">2</div>
+      <div>
+        <h4 class="font-bold text-slate-900 text-sm mb-1">まず雑に1回投げる（ゼロショット）</h4>
+        <p class="text-xs text-ads-muted leading-relaxed">見本も指示もなしで、最小限でやらせてみる。これは<strong class="text-slate-800">偵察</strong>。雑に頼んで満足できるならそれで十分。細かい指示はかえってAIの性能を下げることもある。</p>
+      </div>
+    </div>
+    <div class="flex gap-4 bg-ads-surface border border-ads-border rounded-xl p-5 border-l-4 border-l-emerald-500">
+      <div class="text-xl font-black text-emerald-500 leading-none flex-shrink-0 mt-0.5">3</div>
+      <div>
+        <h4 class="font-bold text-slate-900 text-sm mb-1">手本を1個、自分の手で作る</h4>
+        <p class="text-xs text-ads-muted leading-relaxed">「これぞ」という模範解答を1つ書く。抽象的な指示より、正解を1つ見せる方が品質がそろう（Rules その8）。最初からたくさん用意しなくていい。</p>
+      </div>
+    </div>
+    <div class="flex gap-4 bg-ads-surface border border-ads-border rounded-xl p-5 border-l-4 border-l-amber-500">
+      <div class="text-xl font-black text-amber-500 leading-none flex-shrink-0 mt-0.5">4</div>
+      <div>
+        <h4 class="font-bold text-slate-900 text-sm mb-1">足りなければ「軽い打ち手」から改善する</h4>
+        <p class="text-xs text-ads-muted leading-relaxed">手本を渡しても100点が毎回出るわけではない。でもいきなり大手術をしない。次の「打ち手の階段」を下から登る。</p>
+      </div>
+    </div>
+    <div class="flex gap-4 bg-ads-surface border border-ads-border rounded-xl p-5 border-l-4 border-l-violet-500">
+      <div class="text-xl font-black text-violet-500 leading-none flex-shrink-0 mt-0.5">5</div>
+      <div>
+        <h4 class="font-bold text-slate-900 text-sm mb-1">磨き続ける</h4>
+        <p class="text-xs text-ads-muted leading-relaxed">「これはダメ、あれもダメ」と足し算でダメ出しすると、基礎的なことも守れなくなる。何を直したかを自分で認知しながら磨く。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 打ち手の階段 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-2">打ち手の階段</h3>
+    <p class="text-sm text-ads-muted text-center mb-8">下に行くほど軽い打ち手。<strong class="text-slate-800">必ず下から始める。</strong>ゴールに届いたら、それ以上やらなくていい</p>
+
+    <div class="space-y-2">
+      <div class="flex items-center gap-3 bg-red-500/5 border border-red-500/20 rounded-xl p-4 md:ml-24">
+        <div class="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="shield-check" class="w-5 h-5 text-red-600"></i>
+        </div>
+        <div class="flex-1">
+          <div class="font-bold text-slate-900 text-sm">4. 仕組みで守る <span class="text-red-600 font-normal text-xs">いちばん重い</span></div>
+          <div class="text-xs text-ads-muted">バリデーションなどプログラムで機械的にチェックする</div>
+        </div>
+      </div>
+      <div class="flex justify-center"><i data-lucide="chevron-up" class="w-4 h-4 text-ads-dim"></i></div>
+      <div class="flex items-center gap-3 bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 md:ml-16">
+        <div class="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="search" class="w-5 h-5 text-amber-600"></i>
+        </div>
+        <div class="flex-1">
+          <div class="font-bold text-slate-900 text-sm">3. 別の目でチェック</div>
+          <div class="text-xs text-ads-muted">サブエージェント（別のAI）にレビューしてもらう</div>
+        </div>
+      </div>
+      <div class="flex justify-center"><i data-lucide="chevron-up" class="w-4 h-4 text-ads-dim"></i></div>
+      <div class="flex items-center gap-3 bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 md:ml-8">
+        <div class="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="message-square-text" class="w-5 h-5 text-blue-600"></i>
+        </div>
+        <div class="flex-1">
+          <div class="font-bold text-slate-900 text-sm">2. 頼み方を整える</div>
+          <div class="text-xs text-ads-muted">AIへの指示の言葉を少しだけ足す（プロンプト改善）</div>
+        </div>
+      </div>
+      <div class="flex justify-center"><i data-lucide="chevron-up" class="w-4 h-4 text-ads-dim"></i></div>
+      <div class="flex items-center gap-3 bg-emerald-500/5 border-2 border-emerald-500/25 rounded-xl p-4">
+        <div class="w-9 h-9 rounded-lg bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="plus" class="w-5 h-5 text-emerald-600"></i>
+        </div>
+        <div class="flex-1">
+          <div class="font-bold text-slate-900 text-sm">1. 手本を足す <span class="text-emerald-600 font-normal text-xs">いちばん軽い・まずここから</span></div>
+          <div class="text-xs text-ads-muted">模範解答をもう1個渡す（2〜3個あればAIは十分理解する）</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- サブエージェントの注意（鮭弁当のたとえ） -->
+  <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-6">
+    <h3 class="font-bold text-amber-700 mb-4 flex items-center gap-2">
+      <i data-lucide="alert-circle" class="w-5 h-5"></i>
+      サブエージェントのレビューには「限界」がある
+    </h3>
+    <p class="text-sm text-ads-muted leading-relaxed mb-4">
+      サブエージェントとは、ここまでのやり取りを知らない<strong class="text-slate-800">別のAI</strong>に仕事を頼むこと。客観的なフィードバックがもらえる一方、<strong class="text-slate-800">根本的なやり直しは提案してくれません。</strong>
+    </p>
+    <div class="bg-white border border-amber-500/15 rounded-xl p-5">
+      <div class="flex items-center gap-2 text-sm font-bold text-slate-900 mb-3">
+        <i data-lucide="utensils" class="w-4 h-4 text-amber-600"></i>
+        お弁当のレビューで考えると
+      </div>
+      <div class="space-y-2 text-sm">
+        <div class="flex items-start gap-2.5">
+          <i data-lucide="check" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+          <span class="text-ads-muted">「野菜を増やしては」「鮭の焼き方を工夫しては」 ← <strong class="text-slate-800">改善案は出る</strong></span>
+        </div>
+        <div class="flex items-start gap-2.5">
+          <i data-lucide="x" class="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0"></i>
+          <span class="text-ads-muted">「そもそもサンドイッチでは？」 ← <strong class="text-slate-800">根本的な提案は出ない</strong></span>
+        </div>
+      </div>
+    </div>
+    <p class="text-xs text-amber-700/80 mt-4 leading-relaxed">
+      「レビューで問題なし＝完璧」ではない。レビューは“今あるものをどう良くするか”の視点になりやすい、と理解しておく。
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!--  SECTION 4: サーバーって何をしてるの                            -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-teal-500/10 flex-shrink-0">
+      <i data-lucide="server" class="w-5 h-5 text-teal-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">サーバーって何をしてるの？</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    Markdown のクイズを「ブラウザで見やすく表示する」道具がビューアー（Quiz Viewer）です。Markdown のままでは見づらいので、ブラウザで表示できるようにする ── これは立派な<strong class="text-slate-900">Webアプリケーション開発</strong>です。動かすには「サーバー」を起動する必要があります。
+  </p>
+
+  <!-- ターミナルUI: pnpm dev -->
+  <div class="bg-slate-900 rounded-xl overflow-hidden mb-4 shadow-sm">
+    <div class="flex items-center gap-1.5 px-4 py-2.5 bg-slate-800">
+      <div class="w-3 h-3 rounded-full bg-red-400"></div>
+      <div class="w-3 h-3 rounded-full bg-amber-400"></div>
+      <div class="w-3 h-3 rounded-full bg-emerald-400"></div>
+      <span class="text-[11px] text-slate-400 ml-2">ターミナル</span>
+    </div>
+    <div class="px-4 py-4 font-mono text-[12px] leading-relaxed">
+      <div class="text-slate-400">$ cd /Users/you/src/quiz-studio</div>
+      <div class="text-emerald-400">$ pnpm dev</div>
+      <div class="text-slate-300 mt-2">▲ Next.js ── ready</div>
+      <div class="text-blue-300">  ローカル: http://localhost:3000</div>
+    </div>
+  </div>
+  <div class="flex items-start gap-2.5 text-sm bg-teal-500/5 border border-teal-500/15 rounded-lg p-4 mb-8">
+    <i data-lucide="terminal" class="w-4 h-4 text-teal-600 mt-0.5 flex-shrink-0"></i>
+    <span class="text-ads-muted">
+      ターミナルでは<strong class="text-slate-800">「今どこの場所で実行するか」</strong>が重要。<code class="text-[12px] bg-slate-100 px-1 rounded">cd</code>（チェンジディレクトリ＝場所を移動するコマンド）でアプリのある場所へ。よくわからなければ「実行コマンドをフルパスで出して」とAIに頼めばOK。<code class="text-[12px] bg-slate-100 px-1 rounded">localhost</code> は「自分のパソコンの中だけに通じる住所」です。
+    </span>
+  </div>
+
+  <!-- ワーク -->
+  <div class="bg-ads-accent/5 border border-ads-accent/15 rounded-xl p-5 mb-8">
+    <div class="flex items-center gap-2 text-sm font-bold text-ads-accent-light mb-1">
+      <i data-lucide="pen-line" class="w-4 h-4"></i>
+      ワーク
+    </div>
+    <p class="text-sm text-ads-muted leading-relaxed">「<code class="text-[12px] bg-white px-1 rounded">pnpm dev</code> というサーバーは、何をやってくれているのか？」を自分なりの言葉で考えてみる。AIに聞くときは「入社したての社会人でもわかるように説明して」と添えるのがコツ。</p>
+  </div>
+
+  <!-- pnpm dev は何をしている -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-2">pnpm dev は何をしている？</h3>
+    <p class="text-sm text-ads-muted text-center mb-8">ひとことで言うと「HTML・CSS・JavaScript に変換してくれている」</p>
+
+    <div class="flex flex-col md:flex-row items-stretch justify-center gap-3 md:gap-0">
+      <div class="flex-1 bg-white border border-ads-border rounded-xl p-5 text-center">
+        <i data-lucide="file-code-2" class="w-6 h-6 text-violet-600 mx-auto mb-2"></i>
+        <div class="font-bold text-slate-900 text-sm mb-1">Next.js のコード</div>
+        <div class="text-xs text-ads-muted leading-relaxed">短く楽に書ける「フレームワーク」。HTML/CSS/JSそのものではない</div>
+      </div>
+      <div class="flex items-center justify-center md:w-16 py-2 md:py-0">
+        <div class="flex flex-col items-center gap-0.5">
+          <span class="text-[10px] text-teal-600 font-bold">pnpm dev</span>
+          <i data-lucide="arrow-right" class="w-5 h-5 text-teal-500 hidden md:block"></i>
+          <i data-lucide="arrow-down" class="w-5 h-5 text-teal-500 md:hidden"></i>
+          <span class="text-[9px] text-ads-dim">変換</span>
+        </div>
+      </div>
+      <div class="flex-1 bg-white border border-ads-border rounded-xl p-5 text-center">
+        <i data-lucide="code-xml" class="w-6 h-6 text-blue-600 mx-auto mb-2"></i>
+        <div class="font-bold text-slate-900 text-sm mb-1">HTML・CSS・JS</div>
+        <div class="text-xs text-ads-muted leading-relaxed">ブラウザが表示できる形</div>
+      </div>
+      <div class="flex items-center justify-center md:w-16 py-2 md:py-0">
+        <i data-lucide="arrow-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+      <div class="flex-1 bg-ads-accent/5 border-2 border-ads-accent/20 rounded-xl p-5 text-center">
+        <i data-lucide="monitor" class="w-6 h-6 text-ads-accent-light mx-auto mb-2"></i>
+        <div class="font-bold text-ads-accent-light text-sm mb-1">ブラウザで表示</div>
+        <div class="text-xs text-ads-muted leading-relaxed">コードを書き換えると即反映される</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- pnpm = 道具屋さん -->
+  <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-6">
+    <h3 class="font-bold text-amber-700 mb-3 flex items-center gap-2">
+      <i data-lucide="store" class="w-5 h-5"></i>
+      pnpm は「道具屋さん」
+    </h3>
+    <p class="text-sm text-ads-muted leading-relaxed mb-3">
+      Webアプリ開発では、世界中のエンジニアが作ってくれた便利な道具を借りて使います。その道具が<strong class="text-slate-800">どこにあるかを全部知っていて、集めて管理してくれる</strong>のが pnpm。暗記する必要はありません。
+    </p>
+    <div class="bg-white border border-amber-500/15 rounded-lg p-4 text-sm text-ads-muted leading-relaxed">
+      <i data-lucide="quote" class="w-4 h-4 text-amber-500 inline mr-1"></i>
+      小難しい言葉を暗記するのではなく、<strong class="text-slate-800">「要するにこういうもの」と自分が腑に落ちる言葉に直せる人</strong>が、学び上手な人。これはプログラミングに限らない。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!--  SECTION 5: Markdown → JSON                                  -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-500/10 flex-shrink-0">
+      <i data-lucide="braces" class="w-5 h-5 text-blue-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">Markdown → JSON ── データに「型」を持たせる</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    問題数が少ないうちは Markdown で十分。でも増えてくると限界が見えてきます。きっかけは、AIが起こす<strong class="text-slate-900">ちょっとした表記のブレ</strong>です。
+  </p>
+
+  <!-- 表記揺れ: 誤解→正解 -->
+  <div class="bg-white border border-ads-border rounded-xl overflow-hidden mb-4">
+    <div class="grid grid-cols-1 md:grid-cols-2">
+      <div class="p-5 border-b md:border-b-0 md:border-r border-ads-border">
+        <div class="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-700 px-2.5 py-1 rounded-full text-xs font-bold mb-3">
+          <i data-lucide="check" class="w-3.5 h-3.5"></i> 正しい書き方
+        </div>
+        <div class="font-mono text-[12px] text-slate-700 bg-emerald-500/5 rounded-lg p-3">選択肢：AIへの指示文</div>
+      </div>
+      <div class="p-5">
+        <div class="inline-flex items-center gap-1.5 bg-red-500/10 text-red-700 px-2.5 py-1 rounded-full text-xs font-bold mb-3">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i> AIがたまにやるブレ
+        </div>
+        <div class="font-mono text-[12px] text-slate-700 bg-red-500/5 rounded-lg p-3">Option：AIへの指示文</div>
+      </div>
+    </div>
+  </div>
+  <div class="flex items-start gap-2.5 text-sm bg-red-500/5 border border-red-500/15 rounded-lg p-4 mb-6">
+    <i data-lucide="info" class="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0"></i>
+    <span class="text-ads-muted">人間なら「書き方を変えただけだな」と分かる。でも<strong class="text-slate-800">Markdownを表示するプログラムにとっては大問題</strong>でエラーになる。プログラムは微妙なニュアンスを汲み取れない。</span>
+  </div>
+
+  <!-- バリデーション -->
+  <h3 class="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+    <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+    対策：バリデーション（機械的なチェック）
+  </h3>
+  <p class="text-sm text-ads-muted leading-relaxed mb-4">
+    バリデーションとは、フォームでメールアドレスの形式が間違っていたら指摘してくれる、あの仕組みと同じ。クイズを作ったあとに<strong class="text-slate-800">プログラムで自動チェック</strong>させます。
+  </p>
+  <div class="bg-slate-900 rounded-xl overflow-hidden mb-8 shadow-sm">
+    <div class="flex items-center gap-1.5 px-4 py-2.5 bg-slate-800">
+      <div class="w-3 h-3 rounded-full bg-red-400"></div>
+      <div class="w-3 h-3 rounded-full bg-amber-400"></div>
+      <div class="w-3 h-3 rounded-full bg-emerald-400"></div>
+      <span class="text-[11px] text-slate-400 ml-2">バリデーション実行</span>
+    </div>
+    <div class="px-4 py-4 font-mono text-[12px] leading-relaxed">
+      <div class="text-emerald-400">$ validate lesson-01.md</div>
+      <div class="text-red-300 mt-1">✗ エラー: 「Option：」は不正な表記です</div>
+      <div class="text-slate-400">  → 「選択肢：」を使ってください（3行目）</div>
+    </div>
+  </div>
+  <div class="flex items-start gap-2.5 text-sm bg-emerald-500/5 border border-emerald-500/15 rounded-lg p-4 mb-10">
+    <i data-lucide="repeat" class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0"></i>
+    <span class="text-ads-muted">このチェックを「クイズ作成後に必ず実行する」とスキルに書いておけば、間違った形式が作られてもAIが自分で気づいて直せる。これが打ち手の階段の「仕組みで守る」です。</span>
+  </div>
+
+  <!-- Markdown vs JSON 比較 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-2">Markdown と JSON の違い</h3>
+    <p class="text-sm text-ads-muted text-center mb-8">JSON は「ラベルと中身をいつもセットで書く」構造化されたデータ。フォルダで整理するのと同じ考え方</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <i data-lucide="file-text" class="w-5 h-5 text-emerald-600"></i>
+          <span class="font-bold text-emerald-700">Markdown</span>
+        </div>
+        <ul class="space-y-2 text-sm text-ads-muted">
+          <li class="flex items-start gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 mt-0.5 flex-shrink-0"></i><span>自由に書ける・人間が読みやすい</span></li>
+          <li class="flex items-start gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 mt-0.5 flex-shrink-0"></i><span><strong class="text-slate-800">AIがのびのび書ける</strong></span></li>
+          <li class="flex items-start gap-2"><i data-lucide="x" class="w-3.5 h-3.5 text-red-400 mt-0.5 flex-shrink-0"></i><span>箱の中身が厳密に決まらず、プログラムが扱いにくい</span></li>
+        </ul>
+      </div>
+      <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <i data-lucide="braces" class="w-5 h-5 text-blue-600"></i>
+          <span class="font-bold text-blue-700">JSON</span>
+        </div>
+        <ul class="space-y-2 text-sm text-ads-muted">
+          <li class="flex items-start gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-blue-500 mt-0.5 flex-shrink-0"></i><span><strong class="text-slate-800">構造化されていてプログラムが扱いやすい</strong></span></li>
+          <li class="flex items-start gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-blue-500 mt-0.5 flex-shrink-0"></i><span>データをきっちり定義できる</span></li>
+          <li class="flex items-start gap-2"><i data-lucide="x" class="w-3.5 h-3.5 text-red-400 mt-0.5 flex-shrink-0"></i><span>人間に読みにくく、<strong class="text-slate-800">カッコが1つ抜けるだけで壊れる</strong></span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アテンションの天秤 -->
+  <div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-6">
+    <h3 class="font-bold text-amber-700 mb-3 flex items-center gap-2">
+      <i data-lucide="scale" class="w-5 h-5"></i>
+      JSONを「AIに直接作らせる」かは設計判断
+    </h3>
+    <p class="text-sm text-ads-muted leading-relaxed mb-4">
+      AIに緻密なJSONを作らせると、カッコを閉じることに気を取られて<strong class="text-slate-800">肝心の中身の品質が下がる</strong>ことがある（アテンションの壁）。難しい仕事ほど、形式づくりに頭を使わせない方がいい。
+    </p>
+    <div class="bg-white border border-amber-500/15 rounded-lg p-4 text-sm text-ads-muted leading-relaxed">
+      <i data-lucide="arrow-right-left" class="w-4 h-4 text-amber-500 inline mr-1"></i>
+      ひとつの解：<strong class="text-slate-800">AIにはMarkdownでのびのび作らせ、プログラムでJSONに変換する。</strong>ただし1問だけなら差は出にくい。メリット・デメリットを天秤にかけて自分で決める。
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!--  SECTION 6: JSON → データベース（核心）                         -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-violet-500/10 flex-shrink-0">
+      <i data-lucide="database" class="w-5 h-5 text-violet-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">JSON → データベース ── Gitの外の世界へ</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    JSON をリポジトリで管理している間は、まだ <strong class="text-slate-900">Git の世界</strong>にいます。Git はとても頼れる相棒です。でも、データが増えていくと、その相棒が「邪魔」に感じる瞬間が来ます。
+  </p>
+
+  <!-- Gitの恩恵 -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 text-center">
+      <i data-lucide="git-compare" class="w-7 h-7 text-amber-600 mx-auto mb-2"></i>
+      <div class="font-bold text-slate-900 text-sm mb-1">差分が見える</div>
+      <div class="text-xs text-ads-muted leading-relaxed">何がどう変わったか、自分の目で確認できる</div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 text-center">
+      <i data-lucide="history" class="w-7 h-7 text-amber-600 mx-auto mb-2"></i>
+      <div class="font-bold text-slate-900 text-sm mb-1">戻せる</div>
+      <div class="text-xs text-ads-muted leading-relaxed">コミットしておけば、間違えても前の状態に戻せる</div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 text-center">
+      <i data-lucide="users" class="w-7 h-7 text-amber-600 mx-auto mb-2"></i>
+      <div class="font-bold text-slate-900 text-sm mb-1">上書き事故を防ぐ</div>
+      <div class="text-xs text-ads-muted leading-relaxed">複数人で同じ所を直すとコンフリクトで教えてくれる</div>
+    </div>
+  </div>
+
+  <!-- 命綱のたとえ -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-2 flex items-center justify-center gap-2">
+      <i data-lucide="mountain" class="w-5 h-5 text-ads-accent-light"></i>
+      Git は「断崖絶壁を登るときの命綱」
+    </h3>
+    <p class="text-sm text-ads-muted text-center mb-8">少し登っては杭を打ち、命綱をつける。だから安全。でも…</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <i data-lucide="shield" class="w-5 h-5 text-emerald-600"></i>
+          <span class="font-bold text-emerald-700">登り始めのうち</span>
+        </div>
+        <p class="text-sm text-ads-muted leading-relaxed">こまめに杭を打って命綱をつけるから安全。差分を確認しながら一歩ずつ進める。命綱が機能している状態。</p>
+      </div>
+      <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <i data-lucide="zap" class="w-5 h-5 text-red-600"></i>
+          <span class="font-bold text-red-700">登るのが速くなると</span>
+        </div>
+        <p class="text-sm text-ads-muted leading-relaxed">50cmごとに杭を打つのが面倒に。差分が大量に出て認知が追いつかず「もうGitなんて見てない」状態に。命綱が逆にペースを落とす。</p>
+      </div>
+    </div>
+    <div class="mt-5 flex items-start gap-3 text-sm bg-violet-500/5 border border-violet-500/20 rounded-xl p-4">
+      <i data-lucide="flag-triangle-right" class="w-4 h-4 text-violet-600 flex-shrink-0 mt-0.5"></i>
+      <p class="text-ads-muted leading-relaxed">「全部Gitで管理するのは限界だ」と感じたとき ── それが<strong class="text-slate-800">データの保存先をデータベースに移すタイミング</strong>。SNSの全投稿をGitに入れないのと同じで、膨大なデータはGitに向かない。</p>
+    </div>
+  </div>
+
+  <!-- AIとの距離: 机の上 vs キャビネットの奥 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-2">データベースに移ると「AIとの距離」が離れる</h3>
+    <p class="text-sm text-ads-muted text-center mb-8">AIから見たデータの「取り出しやすさ」が変わる</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-emerald-500/5 border-2 border-emerald-500/20 rounded-xl p-6 text-center">
+        <i data-lucide="clipboard-list" class="w-9 h-9 text-emerald-600 mx-auto mb-3"></i>
+        <div class="font-bold text-slate-900 mb-1">Git管理の Markdown / JSON</div>
+        <div class="text-sm font-bold text-emerald-700 mb-2">＝ 机の上の資料</div>
+        <p class="text-xs text-ads-muted leading-relaxed">AIがパッと見つけてすぐ作業できる。ドラッグ&ドロップでチャットに渡すのも簡単。</p>
+      </div>
+      <div class="bg-violet-500/5 border-2 border-violet-500/25 rounded-xl p-6 text-center">
+        <i data-lucide="archive" class="w-9 h-9 text-violet-600 mx-auto mb-3"></i>
+        <div class="font-bold text-slate-900 mb-1">データベース</div>
+        <div class="text-sm font-bold text-violet-700 mb-2">＝ キャビネットの奥の資料</div>
+        <p class="text-xs text-ads-muted leading-relaxed">鍵を持って開け、ファイルを探して取り出す必要がある。できるが、ひと手間かかる。</p>
+      </div>
+    </div>
+    <div class="mt-5 flex items-start gap-3 text-sm bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-4">
+      <i data-lucide="alert-circle" class="w-4 h-4 text-ads-accent-light flex-shrink-0 mt-0.5"></i>
+      <p class="text-ads-muted leading-relaxed">毎回キャビネットから取り出すのは、AIの<strong class="text-slate-800">アテンションを削り、アウトプットの品質を落とす</strong>。だから、AIに常に見ながら作業してほしい模範解答などは、机の上（Git管理のMarkdown）に置いておく。</p>
+    </div>
+  </div>
+
+  <!-- 核心メッセージ -->
+  <div class="bg-gradient-to-b from-ads-accent/10 to-ads-accent/5 border-2 border-ads-accent/20 rounded-2xl p-6 md:p-8 text-center">
+    <i data-lucide="key-round" class="w-8 h-8 text-ads-accent-light mx-auto mb-4"></i>
+    <p class="text-base md:text-lg font-black text-slate-900 mb-4">今日いちばん覚えてほしいこと</p>
+    <div class="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3 mb-4">
+      <span class="bg-white border border-emerald-500/30 text-emerald-700 font-bold rounded-lg px-4 py-2 text-sm">Markdown</span>
+      <i data-lucide="arrow-right" class="w-4 h-4 text-ads-accent hidden md:block"></i>
+      <i data-lucide="arrow-down" class="w-4 h-4 text-ads-accent md:hidden"></i>
+      <span class="bg-white border border-blue-500/30 text-blue-700 font-bold rounded-lg px-4 py-2 text-sm">JSON</span>
+      <i data-lucide="arrow-right" class="w-4 h-4 text-ads-accent hidden md:block"></i>
+      <i data-lucide="arrow-down" class="w-4 h-4 text-ads-accent md:hidden"></i>
+      <span class="bg-white border border-violet-500/30 text-violet-700 font-bold rounded-lg px-4 py-2 text-sm">データベース</span>
+    </div>
+    <p class="text-sm text-ads-muted max-w-lg mx-auto leading-relaxed">
+      保存先が進化するほど、<strong class="text-slate-800">どんどんAIとの距離が離れていく。</strong>絶対的な正解はない。データの管理とAIの性能は密接につながっている ── 極論、それだけ覚えておけば大丈夫。
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!--  SECTION 7: データベースを使う                                 -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-500/10 flex-shrink-0">
+      <i data-lucide="cloud" class="w-5 h-5 text-indigo-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">データベースを使う ── AIが全部やってくれる</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    いざデータベースへ。難しそうに見えますが、人間が手作業でやることは<strong class="text-slate-900">驚くほど少ない</strong>です。まず、データベースを置く場所は2つあります。
+  </p>
+
+  <!-- ローカル vs クラウド -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <i data-lucide="laptop" class="w-5 h-5 text-ads-dim"></i>
+        <span class="font-bold text-slate-900">自分のパソコン（ローカル）</span>
+      </div>
+      <p class="text-xs text-ads-muted leading-relaxed">開発者向け。今回は使わない。</p>
+    </div>
+    <div class="bg-indigo-500/5 border-2 border-indigo-500/20 rounded-xl p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <i data-lucide="cloud" class="w-5 h-5 text-indigo-600"></i>
+        <span class="font-bold text-slate-900">クラウド上</span>
+      </div>
+      <p class="text-xs text-ads-muted leading-relaxed">ネット上のどこかに保存。みんながアクセスできるWebアプリにつなげられる。<strong class="text-slate-800">今回はこちら</strong>（Neon を利用）。</p>
+    </div>
+  </div>
+
+  <!-- APIキー = 鍵 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-8">
+    <h3 class="text-lg font-bold text-slate-900 text-center mb-2">設定は「鍵」を置くだけ</h3>
+    <p class="text-sm text-ads-muted text-center mb-8">こまごました設定をブラウザの管理画面で触る必要はない</p>
+
+    <div class="flex flex-col md:flex-row items-stretch justify-center gap-3 md:gap-0">
+      <div class="flex-1 bg-white border border-ads-border rounded-xl p-5 text-center">
+        <i data-lucide="key-round" class="w-6 h-6 text-amber-600 mx-auto mb-2"></i>
+        <div class="font-bold text-slate-900 text-sm mb-1">APIキーを発行</div>
+        <div class="text-xs text-ads-muted leading-relaxed">Vercel・Neon を操作できる権限を持つ「鍵」</div>
+      </div>
+      <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+        <i data-lucide="arrow-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+      <div class="flex-1 bg-white border border-ads-border rounded-xl p-5 text-center">
+        <i data-lucide="file-lock-2" class="w-6 h-6 text-blue-600 mx-auto mb-2"></i>
+        <div class="font-bold text-slate-900 text-sm mb-1">環境変数ファイルに貼る</div>
+        <div class="text-xs text-ads-muted leading-relaxed">鍵を置いておく専用の場所</div>
+      </div>
+      <div class="flex items-center justify-center md:w-10 py-1 md:py-0">
+        <i data-lucide="arrow-right" class="w-5 h-5 text-ads-dim hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-ads-dim md:hidden"></i>
+      </div>
+      <div class="flex-1 bg-indigo-500/5 border-2 border-indigo-500/20 rounded-xl p-5 text-center">
+        <i data-lucide="sparkles" class="w-6 h-6 text-indigo-600 mx-auto mb-2"></i>
+        <div class="font-bold text-indigo-700 text-sm mb-1">あとはAIが設定</div>
+        <div class="text-xs text-ads-muted leading-relaxed">鍵を読み取って設定を全部やってくれる</div>
+      </div>
+    </div>
+
+    <div class="mt-6 bg-red-500/5 border border-red-500/20 rounded-xl p-4">
+      <div class="flex items-start gap-3">
+        <i data-lucide="alert-triangle" class="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5"></i>
+        <div class="text-sm text-ads-muted leading-relaxed">
+          <strong class="text-red-700">リスクも理解しておく:</strong> APIキーをAIに渡すと、めったに起きないが、AIが誤操作で全部消してしまう可能性もゼロではない。便利さとリスクはセット。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- データベース = テーブルの集まり -->
+  <p class="text-sm text-ads-muted leading-relaxed mb-4">
+    できあがったデータベースの中身は、<strong class="text-slate-900">たくさんの「表（テーブル）」</strong>でできています。今はクイズの表が1つあるだけ。
+  </p>
+  <div class="bg-white border border-ads-border rounded-xl overflow-hidden mb-4 shadow-sm">
+    <div class="flex items-center gap-2 px-4 py-2.5 bg-violet-500/5 border-b border-ads-border">
+      <i data-lucide="table" class="w-4 h-4 text-violet-600"></i>
+      <span class="text-xs font-bold text-slate-700">quizzes テーブル</span>
+    </div>
+    <div class="text-[12px]">
+      <div class="grid grid-cols-3 bg-ads-surface text-ads-dim font-bold border-b border-ads-border">
+        <div class="px-3 py-2">id</div>
+        <div class="px-3 py-2">問題</div>
+        <div class="px-3 py-2">正解</div>
+      </div>
+      <div class="grid grid-cols-3 border-b border-ads-border/60 text-ads-muted">
+        <div class="px-3 py-2">1</div>
+        <div class="px-3 py-2">プロンプトとは？</div>
+        <div class="px-3 py-2">A</div>
+      </div>
+      <div class="grid grid-cols-3 text-ads-muted">
+        <div class="px-3 py-2">2</div>
+        <div class="px-3 py-2">Markdownとは？</div>
+        <div class="px-3 py-2">B</div>
+      </div>
+    </div>
+  </div>
+  <div class="flex items-start gap-2.5 text-sm bg-indigo-500/5 border border-indigo-500/15 rounded-lg p-4">
+    <i data-lucide="info" class="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0"></i>
+    <span class="text-ads-muted">ローカルで <code class="text-[12px] bg-white px-1 rounded">pnpm dev</code> を動かせば、このデータベースの中身を読み込んで Quiz Studio に表示できる。手元のツールとクラウドのデータがつながった状態です。</span>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!--  SECTION 8: すべてが繋がる（まとめ）                            -->
+<!-- ============================================================ -->
+<section>
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-ads-accent/10 flex-shrink-0">
+      <i data-lucide="check-circle" class="w-5 h-5 text-ads-accent-light"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">すべてが繋がる ── 点が線になる</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    今日たどってきた流れを振り返ると、これまで1つずつ学んできた道具が、Quiz Studio という1つのツールの中で<strong class="text-slate-900">全部つながった</strong>ことがわかります。バラバラだった「点」が「線」になりました。
+  </p>
+
+  <!-- 4ステップのパイプライン -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-10">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="bg-white border border-emerald-500/20 rounded-xl p-4 text-center">
+        <i data-lucide="file-text" class="w-6 h-6 text-emerald-600 mx-auto mb-2"></i>
+        <div class="font-bold text-slate-900 text-sm">Markdownで書く</div>
+        <div class="text-[11px] text-ads-dim mt-1">AIがのびのび作る</div>
+      </div>
+      <div class="bg-white border border-blue-500/20 rounded-xl p-4 text-center">
+        <i data-lucide="braces" class="w-6 h-6 text-blue-600 mx-auto mb-2"></i>
+        <div class="font-bold text-slate-900 text-sm">JSONで整える</div>
+        <div class="text-[11px] text-ads-dim mt-1">形をきっちり定義</div>
+      </div>
+      <div class="bg-white border border-violet-500/20 rounded-xl p-4 text-center">
+        <i data-lucide="database" class="w-6 h-6 text-violet-600 mx-auto mb-2"></i>
+        <div class="font-bold text-slate-900 text-sm">DBに記憶させる</div>
+        <div class="text-[11px] text-ads-dim mt-1">大量・複数人で</div>
+      </div>
+      <div class="bg-white border border-ads-accent/20 rounded-xl p-4 text-center">
+        <i data-lucide="globe" class="w-6 h-6 text-ads-accent-light mx-auto mb-2"></i>
+        <div class="font-bold text-slate-900 text-sm">Webアプリで動かす</div>
+        <div class="text-[11px] text-ads-dim mt-1">みんなが使える</div>
+      </div>
+    </div>
+    <div class="mt-5 flex flex-wrap justify-center gap-2">
+      <span class="text-[11px] text-ads-dim">この裏で使った道具:</span>
+      <span class="text-[11px] bg-white border border-ads-border rounded-full px-2.5 py-0.5 text-slate-600">Cursor</span>
+      <span class="text-[11px] bg-white border border-ads-border rounded-full px-2.5 py-0.5 text-slate-600">Git</span>
+      <span class="text-[11px] bg-white border border-ads-border rounded-full px-2.5 py-0.5 text-slate-600">サーバー(pnpm dev)</span>
+      <span class="text-[11px] bg-white border border-ads-border rounded-full px-2.5 py-0.5 text-slate-600">データベース</span>
+    </div>
+  </div>
+
+  <!-- AIの限界を超える3つの道具 -->
+  <h3 class="text-base font-bold text-slate-900 mb-5 flex items-center gap-2">
+    <i data-lucide="wrench" class="w-4 h-4 text-ads-accent-light"></i>
+    AIの限界を超えるための3つの道具
+  </h3>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-10">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <i data-lucide="file-cog" class="w-5 h-5 text-emerald-600"></i>
+        <span class="font-bold text-slate-900 text-sm">スキル</span>
+      </div>
+      <p class="text-xs text-ads-muted leading-relaxed">AIをベテランにする自分専用の手順書。繰り返す仕事を固定する。</p>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <i data-lucide="search" class="w-5 h-5 text-blue-600"></i>
+        <span class="font-bold text-slate-900 text-sm">サブエージェント</span>
+      </div>
+      <p class="text-xs text-ads-muted leading-relaxed">別のAIに客観的なレビューを頼む。ただし根本的なやり直しは出てこない。</p>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <i data-lucide="git-merge" class="w-5 h-5 text-violet-600"></i>
+        <span class="font-bold text-slate-900 text-sm">フック</span>
+        <span class="text-[10px] bg-amber-500/10 text-amber-700 rounded px-1.5 py-0.5">最初は不要</span>
+      </div>
+      <p class="text-xs text-ads-muted leading-relaxed">AIのサボりを強制的になくす仕組み。一番ややこしく設計も難しい。「こういうものがある」と知っておくだけでOK。</p>
+    </div>
+  </div>
+
+  <!-- 覚えておきたいこと -->
+  <div class="space-y-4 mb-10">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-blue-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-blue-500 leading-none flex-shrink-0 mt-1">01</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">小さく始めて育てる</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">ゴールを言葉にし、雑に1回投げ、模範解答を1個作り、軽い打ち手から改善する。スキルもツールも、必要最小限で小さく試すのが王道（スピードを出すな、対話しろ）。</p>
+        </div>
+      </div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-violet-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-violet-500 leading-none flex-shrink-0 mt-1">02</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">保存先が進むほど、AIとの距離が離れる</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">Markdown → JSON → データベース。できることは増えるが、考えることも増え、AIから遠ざかる。データの管理とAIの性能は密接につながっている。</p>
+        </div>
+      </div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-emerald-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-emerald-500 leading-none flex-shrink-0 mt-1">03</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">自分の言葉に落とし込む</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">細かい技術は移り変わるが、本質は変わらない。中学生でもわかる言葉で「要するにこういうこと」と言い換えられることが、次につなげる一番のコツ。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 次回予告 -->
+  <div class="text-center bg-gradient-to-b from-ads-accent/5 to-transparent border border-ads-accent/10 rounded-xl p-8 md:p-10">
+    <i data-lucide="rocket" class="w-8 h-8 text-ads-accent mx-auto mb-4"></i>
+    <p class="text-lg font-bold text-slate-900 mb-3">技術的に難しいのは、今回まで</p>
+    <p class="text-ads-muted max-w-lg mx-auto leading-relaxed mb-6">
+      ここから先は新しい概念を覚える時間ではなく、ここまでで手に入れた<strong class="text-slate-800">「作る力」を使いこなしていく時間</strong>。Webアプリを作ることがゴールではなく、AIで新しい価値を生むことがゴール。作るのは、あくまで手段です。
+    </p>
+    <div class="inline-flex items-center gap-2 bg-white border border-ads-border rounded-xl px-5 py-3 text-sm">
+      <i data-lucide="calendar" class="w-4 h-4 text-ads-accent-light"></i>
+      <span class="text-ads-muted">次回・第9回は<strong class="text-slate-800">コンテンツ作成</strong>がテーマ。皆さんが開発したWebアプリの発表から始まります。</span>
+    </div>
+  </div>
+</section>
+
+<!-- CONTENT_END -->
+  </main>
+  <footer class="max-w-3xl mx-auto px-5 pb-10 pt-6 border-t border-ads-border/30">
+    <p class="text-xs text-ads-dim text-center">AI-Driven School の図解ツールで作成</p>
+  </footer>
+  <script src="assets/lucide.js"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

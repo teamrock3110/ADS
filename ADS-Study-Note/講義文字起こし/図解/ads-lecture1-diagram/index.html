@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta property="og:title" content="AI-Driven World Tour — 第1回講義">
+  <meta property="og:description" content="AI-Driven Schoolの第1回講義を図解。AI時代の武器庫・5つのルール・6ヶ月のロードマップを視覚的にまとめます。">
+  <meta property="og:type" content="article">
+  <title>第1回講義：AI-Driven World Tour</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFFFFF'/><rect x='8' y='8' width='84' height='84' rx='14' fill='none' stroke='%230D6CA7' stroke-width='4'/><circle cx='32' cy='40' r='10' fill='%230D6CA7' opacity='0.8'/><circle cx='68' cy='40' r='10' fill='%233A8FCA' opacity='0.8'/><rect x='25' y='62' width='50' height='6' rx='3' fill='%238A96A5' opacity='0.6'/><rect x='30' y='74' width='40' height='6' rx='3' fill='%238A96A5' opacity='0.3'/></svg>">
+  <link href="assets/fonts/noto-sans-jp.css" rel="stylesheet">
+  <script src="assets/tailwindcss.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ads: {
+              bg: '#FFFFFF',
+              surface: '#F8FAFB',
+              hover: '#F1F5F9',
+              border: '#E2E8F0',
+              accent: '#0D6CA7',
+              'accent-light': '#0D6CA7',
+              text: '#1A2332',
+              muted: '#5A6B7D',
+              dim: '#8A96A5',
+              positive: '#1B7A5A',
+              negative: '#B91C1C',
+              warning: '#92650A',
+            },
+            blue: {
+              200: '#B3D9EF',
+              300: '#7FBCDD',
+              400: '#3A8FCA',
+              500: '#0D6CA7',
+              600: '#0B5E93',
+              700: '#094D7A',
+            }
+          },
+          fontFamily: {
+            sans: ['"Noto Sans JP"', '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Yu Gothic UI"', '"Meiryo"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { border-top: none !important; }
+      .rounded-xl { break-inside: avoid; }
+      .md\:flex-row { flex-direction: row !important; }
+      .md\:hidden { display: none !important; }
+      .hidden.md\:block { display: block !important; }
+      .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+      .md\:mb-20 { margin-bottom: 5rem !important; }
+      .md\:py-16 { padding-top: 4rem !important; padding-bottom: 4rem !important; }
+      .bg-clip-text.text-transparent {
+        -webkit-background-clip: initial !important;
+        background-clip: initial !important;
+        color: #0D6CA7 !important;
+        -webkit-text-fill-color: #0D6CA7 !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-ads-bg text-slate-600 antialiased leading-relaxed border-t-4 border-ads-accent">
+  <div class="no-print max-w-3xl mx-auto px-5 pt-2 flex justify-end">
+    <button onclick="window.print()" class="flex items-center gap-1.5 text-xs text-ads-dim hover:text-ads-accent transition-colors cursor-pointer">
+      <i data-lucide="download" class="w-3.5 h-3.5"></i>
+      PDF
+    </button>
+  </div>
+  <main class="max-w-3xl mx-auto px-5 py-10 md:py-16">
+<!-- CONTENT_START -->
+
+<!-- ============================================================ -->
+<!--  HERO                                                        -->
+<!-- ============================================================ -->
+<div class="text-center mb-8 md:mb-10">
+  <div class="inline-flex items-center gap-2 bg-ads-accent/10 text-ads-accent-light px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+    <i data-lucide="compass" class="w-4 h-4"></i>
+    AI-Driven School 第1回講義
+  </div>
+  <h1 class="text-3xl md:text-5xl font-black text-slate-900 tracking-tight mb-6">
+    <span class="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">AI-Driven</span> World Tour
+  </h1>
+  <p class="text-lg text-ads-muted max-w-xl mx-auto leading-relaxed">
+    全体を俯瞰して土台を整える。<br>
+    AI時代の「武器の作り方」を知る旅 ──
+  </p>
+</div>
+
+
+<!-- ============================================================ -->
+<!--  ONE-PAGE SUMMARY                                            -->
+<!-- ============================================================ -->
+<div class="bg-ads-surface border border-ads-border rounded-2xl p-6 md:p-10 mb-6">
+  <div class="text-center mb-8 md:mb-10">
+    <p class="text-xl md:text-2xl font-black text-slate-900 mb-2">
+      AI-Drivenな人材 = <span class="text-ads-accent-light">自分の武器を自分で作れる人</span>
+    </p>
+    <p class="text-sm text-ads-muted">
+      技術と目的意識を持って「作る経験」を繰り返した人が、AI時代に勝つ
+    </p>
+  </div>
+
+  <!-- Core flow: 困った → 作った → 変わった -->
+  <div class="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-0 mb-8">
+    <div class="flex flex-col items-center w-40 p-3">
+      <div class="w-14 h-14 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="frown" class="w-7 h-7 text-red-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">仕事で困った</div>
+      <div class="text-[11px] text-red-600/70 mt-0.5">面倒な作業がある</div>
+    </div>
+
+    <div class="flex items-center justify-center md:w-16 py-1 md:py-0">
+      <div class="flex flex-col items-center gap-0.5">
+        <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+      </div>
+    </div>
+
+    <div class="flex flex-col items-center w-44 p-4 bg-ads-accent/5 border-2 border-ads-accent/20 rounded-2xl">
+      <div class="w-16 h-16 rounded-2xl bg-ads-accent/15 border-2 border-ads-accent/30 flex items-center justify-center mb-2.5">
+        <i data-lucide="wrench" class="w-8 h-8 text-ads-accent-light"></i>
+      </div>
+      <div class="font-bold text-ads-accent-light text-base">自分でツールを作った</div>
+      <div class="text-[11px] text-ads-muted mt-0.5">AIの力を借りて</div>
+    </div>
+
+    <div class="flex items-center justify-center md:w-16 py-1 md:py-0">
+      <div class="flex flex-col items-center gap-0.5">
+        <i data-lucide="arrow-right" class="w-5 h-5 text-ads-accent hidden md:block"></i>
+        <i data-lucide="arrow-down" class="w-5 h-5 text-ads-accent md:hidden"></i>
+      </div>
+    </div>
+
+    <div class="flex flex-col items-center w-40 p-3">
+      <div class="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2.5">
+        <i data-lucide="rocket" class="w-7 h-7 text-emerald-600"></i>
+      </div>
+      <div class="font-bold text-slate-900 text-sm">仕事が変わった</div>
+      <div class="text-[11px] text-emerald-600/70 mt-0.5">圧倒的な生産性</div>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-4 mb-6">
+    <div class="flex-1 border-t border-ads-border/50"></div>
+    <div class="text-[11px] text-ads-dim font-medium">このパターンが全てに共通する</div>
+    <div class="flex-1 border-t border-ads-border/50"></div>
+  </div>
+
+  <div class="flex flex-wrap justify-center gap-2">
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="file-image" class="w-3.5 h-3.5 text-blue-500"></i>
+      図解ツール
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="bar-chart-3" class="w-3.5 h-3.5 text-emerald-500"></i>
+      デイリーレポート
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="video" class="w-3.5 h-3.5 text-purple-500"></i>
+      動画演出ツール
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="book-open" class="w-3.5 h-3.5 text-amber-500"></i>
+      クイズ作成ツール
+    </div>
+    <div class="flex items-center gap-1.5 bg-white border border-ads-border rounded-full px-3.5 py-1.5 text-xs text-slate-700">
+      <i data-lucide="layout-dashboard" class="w-3.5 h-3.5 text-cyan-500"></i>
+      コンテンツビューアー
+    </div>
+  </div>
+</div>
+
+<p class="text-center text-ads-muted mb-16 md:mb-20">
+  ここから先で、AI-Driven Schoolの全体像をひとつずつ解説していきます。
+</p>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 1: 一般的なスクールとの4つの違い                       -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-purple-500/10 flex-shrink-0">
+      <i data-lucide="git-compare" class="w-5 h-5 text-purple-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">一般的なAIスクールとの4つの違い</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    AI Driven Schoolは「AI時代の最高の学びとは何か」という観点で、教育の形を再設計しました。従来のAIスクールとは<strong class="text-slate-900">4つの根本的な違い</strong>があります。
+  </p>
+
+  <div class="space-y-4">
+    <!-- 違い1: 教える人 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-black flex-shrink-0">1</div>
+        <h3 class="text-base font-bold text-slate-900">教える人が違う</h3>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-red-500/5 border border-red-500/15 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <i data-lucide="x-circle" class="w-4 h-4 text-red-500"></i>
+            <span class="text-sm font-bold text-red-700">一般的なAIスクール</span>
+          </div>
+          <p class="text-sm text-ads-muted leading-relaxed">マーケターやコンサルタントがAIの使い方を教える。テクノロジーの専門家ではない。</p>
+        </div>
+        <div class="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i>
+            <span class="text-sm font-bold text-emerald-700">AI-Driven School</span>
+          </div>
+          <p class="text-sm text-ads-muted leading-relaxed"><strong class="text-slate-800">現役エンジニア</strong>が毎日コードを書きながら教える。表面的な使い方ではない本質を伝えられる。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 違い2: 知識 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-black flex-shrink-0">2</div>
+        <h3 class="text-base font-bold text-slate-900">身につける知識が違う</h3>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-red-500/5 border border-red-500/15 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <i data-lucide="x-circle" class="w-4 h-4 text-red-500"></i>
+            <span class="text-sm font-bold text-red-700">一般的なAIスクール</span>
+          </div>
+          <p class="text-sm text-ads-muted leading-relaxed">「最強のプロンプト10選」のような表面的なツールの使い方。ツールが変わった瞬間に全部やり直し。</p>
+        </div>
+        <div class="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i>
+            <span class="text-sm font-bold text-emerald-700">AI-Driven School</span>
+          </div>
+          <p class="text-sm text-ads-muted leading-relaxed"><strong class="text-slate-800">テクノロジーの原理</strong>をドリルで身につける。来年も5年後も10年後も使える武器になる。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 違い3: 学び方 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-black flex-shrink-0">3</div>
+        <h3 class="text-base font-bold text-slate-900">学び方が違う</h3>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-red-500/5 border border-red-500/15 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <i data-lucide="x-circle" class="w-4 h-4 text-red-500"></i>
+            <span class="text-sm font-bold text-red-700">一般的なAIスクール</span>
+          </div>
+          <p class="text-sm text-ads-muted leading-relaxed">用意されたお題をなぞる模擬演習。使わない前提の「練習」で終わる。</p>
+        </div>
+        <div class="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i>
+            <span class="text-sm font-bold text-emerald-700">AI-Driven School</span>
+          </div>
+          <p class="text-sm text-ads-muted leading-relaxed">毎月1つ、<strong class="text-slate-800">実際に仕事で使える動くツール</strong>を完成させる。学んだことがそのまま成果になる。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 違い4: 手元に残るもの -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-black flex-shrink-0">4</div>
+        <h3 class="text-base font-bold text-slate-900">手元に残るものが違う</h3>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-red-500/5 border border-red-500/15 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <i data-lucide="x-circle" class="w-4 h-4 text-red-500"></i>
+            <span class="text-sm font-bold text-red-700">一般的なAIスクール</span>
+          </div>
+          <p class="text-sm text-ads-muted leading-relaxed">スキルを教えて終わり。手元に残るものがない。</p>
+        </div>
+        <div class="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i>
+            <span class="text-sm font-bold text-emerald-700">AI-Driven School</span>
+          </div>
+          <p class="text-sm text-ads-muted leading-relaxed">業務で使っている<strong class="text-slate-800">実用的なソースコード</strong>をひな形として提供。自分の仕事に合わせてカスタマイズできる。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 2: Surpriseの武器庫                                   -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-ads-accent/10 flex-shrink-0">
+      <i data-lucide="swords" class="w-5 h-5 text-ads-accent-light"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">Surpriseの武器庫 — 5つの実戦ツール</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    AI Driven Schoolを運営するSurprise社が実際に業務で使っている5つのツール。<strong class="text-slate-900">全て非エンジニアのメンバーが開発した。</strong>
+  </p>
+
+  <div class="space-y-4">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-blue-500">
+      <div class="flex items-center gap-2.5 mb-2">
+        <i data-lucide="file-image" class="w-5 h-5 text-blue-500"></i>
+        <h3 class="text-base font-bold text-slate-900">図解作成 & フィードバックツール</h3>
+      </div>
+      <p class="text-sm text-ads-muted leading-relaxed">
+        HTMLの見やすい図解をワンコマンドで生成し、URLで共有。図解上の文字を選択してフィードバックを投稿でき、スマホにも対応。
+      </p>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-emerald-500">
+      <div class="flex items-center gap-2.5 mb-2">
+        <i data-lucide="bar-chart-3" class="w-5 h-5 text-emerald-500"></i>
+        <h3 class="text-base font-bold text-slate-900">デイリーレポートツール</h3>
+      </div>
+      <p class="text-sm text-ads-muted leading-relaxed">
+        毎朝Slackに自動で届くビジュアル進捗レポート。信号機カラーでパッと見で進み具合がわかり、遅延にはAIの改善案が付く。
+      </p>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-purple-500">
+      <div class="flex items-center gap-2.5 mb-2">
+        <i data-lucide="video" class="w-5 h-5 text-purple-500"></i>
+        <h3 class="text-base font-bold text-slate-900">動画演出指定ツール</h3>
+      </div>
+      <p class="text-sm text-ads-muted leading-relaxed">
+        5〜6個のバラバラなツールを1画面に統合。AI音声生成・表情選択・演出指定・画像制作をブラウザで完結。工数が<strong class="text-slate-800">10分の1</strong>に。
+      </p>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-amber-500">
+      <div class="flex items-center gap-2.5 mb-2">
+        <i data-lucide="book-open" class="w-5 h-5 text-amber-500"></i>
+        <h3 class="text-base font-bold text-slate-900">クイズ作成ツール</h3>
+      </div>
+      <p class="text-sm text-ads-muted leading-relaxed">
+        単元 → コース → 問題の3階層をAIが生成し、自動レビューで品質基準を満たすまで修正を繰り返す。図や画像も自動生成。
+      </p>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-cyan-500">
+      <div class="flex items-center gap-2.5 mb-2">
+        <i data-lucide="layout-dashboard" class="w-5 h-5 text-cyan-500"></i>
+        <h3 class="text-base font-bold text-slate-900">講義作成ツール</h3>
+      </div>
+      <p class="text-sm text-ads-muted leading-relaxed">
+        設計・原稿・スライド・進捗管理を1画面に集約。文字数から講義時間を自動計算し、音声入力で原稿とメモが同時に生成される。
+      </p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 3: 自転車のたとえ — AI-Driven の3段階                  -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-500/10 flex-shrink-0">
+      <i data-lucide="bike" class="w-5 h-5 text-blue-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">AIで道具を作る人が勝つ</h2>
+  </div>
+
+  <p class="mb-6 leading-relaxed">
+    人間は道具を使うことで自らの能力を拡張してきた。その究極の道具が今、AIになった。
+  </p>
+
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8 mb-6">
+    <h3 class="text-base font-bold text-slate-900 text-center mb-8">地点Aから100km先のBに向かうとき</h3>
+
+    <div class="space-y-4">
+      <div class="flex items-center gap-4 bg-white border border-ads-border rounded-xl p-4">
+        <div class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="footprints" class="w-6 h-6 text-slate-500"></i>
+        </div>
+        <div class="flex-1">
+          <div class="text-sm font-bold text-slate-900">AIを使わない人</div>
+          <div class="text-xs text-ads-muted">走ってAからBに向かう人</div>
+        </div>
+        <div class="bg-slate-100 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-500">徒歩</div>
+      </div>
+
+      <div class="flex items-center gap-4 bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
+        <div class="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="bike" class="w-6 h-6 text-blue-600"></i>
+        </div>
+        <div class="flex-1">
+          <div class="text-sm font-bold text-blue-700">AIを「使う」人</div>
+          <div class="text-xs text-ads-muted">ChatGPT・Geminiなどを使って自転車で向かう人</div>
+        </div>
+        <div class="bg-blue-500/10 rounded-lg px-3 py-1.5 text-xs font-bold text-blue-600">自転車</div>
+      </div>
+
+      <div class="flex items-center gap-4 bg-amber-500/5 border-2 border-amber-500/30 rounded-xl p-4">
+        <div class="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+          <i data-lucide="car" class="w-6 h-6 text-amber-600"></i>
+        </div>
+        <div class="flex-1">
+          <div class="text-sm font-bold text-amber-700">AIで自分のツールを「作れる」人</div>
+          <div class="text-xs text-ads-muted">車に乗って向かう人。これがAI-Driven。</div>
+        </div>
+        <div class="bg-amber-500/15 rounded-lg px-3 py-1.5 text-xs font-bold text-amber-600">車</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-ads-accent/5 border border-ads-accent/20 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <div class="w-8 h-8 rounded-lg bg-ads-accent/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <i data-lucide="lightbulb" class="w-4 h-4 text-ads-accent-light"></i>
+      </div>
+      <div>
+        <p class="font-bold text-ads-accent-light mb-1">パラダイムの転換</p>
+        <p class="text-ads-muted leading-relaxed text-sm">
+          これまでの時代は、用意されたツール（WordやExcel）を<strong class="text-slate-800">いかに上手く使うか</strong>がスキルだった。これからは<strong class="text-slate-800">自分で道具を作って、自分の仕事に最適化する</strong>時代。料理で例えるなら、料理をしながら「こういう鍋があったらいいのに」と思ったら、その場で道具を作る。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 4: AI革命の真実                                       -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-red-500/10 flex-shrink-0">
+      <i data-lucide="trending-up" class="w-5 h-5 text-red-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">AI革命の真実 — 数字で見る今</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    AIの勢いはすさまじい。だけど過度な期待もよくない。データをもとにAI時代の現実を正しく理解しましょう。
+  </p>
+
+  <!-- 数字カード -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 text-center">
+      <div class="text-3xl md:text-4xl font-black text-ads-accent leading-tight mb-2">390兆円</div>
+      <div class="text-sm text-ads-muted">2026年の世界AI投資額<br><span class="text-[10px] text-ads-dim">（2.5兆ドル、前年比44%増）</span></div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 text-center">
+      <div class="text-3xl md:text-4xl font-black text-emerald-600 leading-tight mb-2">8倍</div>
+      <div class="text-sm text-ads-muted">NVIDIAの3年間の売上成長<br><span class="text-[10px] text-ads-dim">（4兆円 → 32兆円）</span></div>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 text-center">
+      <div class="text-3xl md:text-4xl font-black text-amber-600 leading-tight mb-2">約5兆円</div>
+      <div class="text-sm text-ads-muted">Cursorの評価額<br><span class="text-[10px] text-ads-dim">（24ヶ月でゼロから）</span></div>
+    </div>
+  </div>
+
+  <!-- AIコーディング性能 -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 mb-8">
+    <h3 class="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+      <i data-lucide="code" class="w-4 h-4 text-purple-600"></i>
+      AIコーディングの性能推移
+    </h3>
+    <div class="flex items-end gap-6 justify-center mb-4">
+      <div class="text-center">
+        <div class="w-24 bg-slate-200 rounded-t-lg flex items-end justify-center" style="height: 98px;">
+          <span class="text-lg font-black text-slate-600 pb-2">49%</span>
+        </div>
+        <div class="text-xs text-ads-muted mt-2">1年半前</div>
+      </div>
+      <div class="text-center">
+        <div class="w-24 bg-gradient-to-t from-ads-accent to-blue-400 rounded-t-lg flex items-end justify-center" style="height: 160px;">
+          <span class="text-lg font-black text-white pb-2">80%+</span>
+        </div>
+        <div class="text-xs text-ads-muted mt-2">現在</div>
+      </div>
+    </div>
+    <p class="text-xs text-center text-ads-muted">「たまに当たる」から「ほぼ当たる」に変わった</p>
+  </div>
+
+  <!-- ジェボンズのパラドックス -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6 md:p-8">
+    <div class="flex items-center gap-2 mb-6">
+      <i data-lucide="flame" class="w-5 h-5 text-amber-600"></i>
+      <h3 class="text-lg font-bold text-slate-900">ジェボンズのパラドックス</h3>
+    </div>
+
+    <!-- フロー図 -->
+    <div class="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-0 mb-6">
+      <div class="bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5 text-center">
+        <div class="text-sm font-bold text-amber-700">効率が上がる</div>
+      </div>
+      <i data-lucide="arrow-right" class="w-4 h-4 text-amber-400 hidden md:block"></i>
+      <i data-lucide="arrow-down" class="w-4 h-4 text-amber-400 md:hidden"></i>
+      <div class="bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5 text-center">
+        <div class="text-sm font-bold text-amber-700">コストが下がる</div>
+      </div>
+      <i data-lucide="arrow-right" class="w-4 h-4 text-amber-400 hidden md:block"></i>
+      <i data-lucide="arrow-down" class="w-4 h-4 text-amber-400 md:hidden"></i>
+      <div class="bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5 text-center">
+        <div class="text-sm font-bold text-amber-700">用途が爆発的に広がる</div>
+      </div>
+      <i data-lucide="arrow-right" class="w-4 h-4 text-amber-400 hidden md:block"></i>
+      <i data-lucide="arrow-down" class="w-4 h-4 text-amber-400 md:hidden"></i>
+      <div class="bg-amber-600 rounded-lg px-4 py-2.5 text-center">
+        <div class="text-sm font-bold text-white">消費が増える</div>
+      </div>
+    </div>
+
+    <p class="text-sm text-ads-muted text-center mb-8">
+      160年前の蒸気機関で実証された法則。<strong class="text-slate-800">AIでも同じことが起きている。</strong>
+    </p>
+
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 5: 面倒の正体                                        -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-orange-500/10 flex-shrink-0">
+      <i data-lucide="scan-search" class="w-5 h-5 text-orange-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">「面倒」の正体 — AIが解決するもの、しないもの</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    仕事の「面倒」は4つに分解できる。<strong class="text-slate-900">AIは「調べる」「考える」「作る」を解決してくれる。だが最後に残る「仕上げる」だけは人間が詰めるしかない。</strong>ここに90点から100点の戦場がある。
+  </p>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 text-center">
+      <div class="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-2">
+        <i data-lucide="search" class="w-5 h-5 text-emerald-600"></i>
+      </div>
+      <div class="text-xs font-bold text-emerald-700 mb-1">A. 調べる</div>
+      <div class="text-[10px] text-emerald-600 bg-emerald-500/10 rounded-full px-2 py-0.5 inline-block">AIが得意</div>
+      <div class="text-[10px] text-ads-muted mt-1.5">検索・要約・分析が一瞬</div>
+    </div>
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 text-center">
+      <div class="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-2">
+        <i data-lucide="brain" class="w-5 h-5 text-emerald-600"></i>
+      </div>
+      <div class="text-xs font-bold text-emerald-700 mb-1">B. 考える</div>
+      <div class="text-[10px] text-emerald-600 bg-emerald-500/10 rounded-full px-2 py-0.5 inline-block">AIが得意</div>
+      <div class="text-[10px] text-ads-muted mt-1.5">壁打ち・選択肢提案</div>
+    </div>
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 text-center">
+      <div class="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-2">
+        <i data-lucide="hammer" class="w-5 h-5 text-emerald-600"></i>
+      </div>
+      <div class="text-xs font-bold text-emerald-700 mb-1">C. 作る</div>
+      <div class="text-[10px] text-emerald-600 bg-emerald-500/10 rounded-full px-2 py-0.5 inline-block">AIが得意</div>
+      <div class="text-[10px] text-ads-muted mt-1.5">決まったものを一気に生成</div>
+    </div>
+    <div class="bg-red-500/5 border-2 border-red-500/30 rounded-xl p-4 text-center">
+      <div class="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-2">
+        <i data-lucide="sparkles" class="w-5 h-5 text-red-600"></i>
+      </div>
+      <div class="text-xs font-bold text-red-700 mb-1">D. 仕上げる</div>
+      <div class="text-[10px] text-red-600 bg-red-500/10 rounded-full px-2 py-0.5 inline-block">人間の領域</div>
+      <div class="text-[10px] text-ads-muted mt-1.5">ニュアンス・品質の最後の詰め</div>
+    </div>
+  </div>
+
+  <div class="mt-6 py-3 px-6 rounded-lg bg-gradient-to-r from-slate-800 to-slate-700 text-center">
+    <p class="text-sm md:text-base text-white font-bold tracking-wide">最後の10点を詰められるのは、仕組みを理解した人だけだ。</p>
+  </div>
+
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 6: AI-Driven Rules 1-5                               -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-ads-accent/10 flex-shrink-0">
+      <i data-lucide="scroll-text" class="w-5 h-5 text-ads-accent-light"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">AI-Driven Rules — AI時代の行動指針（前半5つ）</h2>
+  </div>
+
+  <p class="mb-8 leading-relaxed">
+    全部で10個あるルールのうち、第1回講義では前半5つを解説。<strong class="text-slate-900">AI-Driven Schoolにおける「憲法」</strong>のような位置づけ。
+  </p>
+
+  <div class="space-y-6">
+    <!-- Rule 1 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-black text-sm">1</div>
+          <h3 class="text-base font-bold text-white">90点 → 100点の戦いに備えよ</h3>
+        </div>
+      </div>
+      <div class="p-6">
+        <p class="text-sm text-ads-muted leading-relaxed mb-4">
+          AIを使えば90点のものは一瞬でできる。<strong class="text-slate-900">だが価値があるのは90点から100点の領域。</strong>プロの世界では「平均90点」は成り立たない。100台に1台でも事故が起きる車メーカーは存在できない。
+        </p>
+
+        <!-- 90点→100点の壁ビジュアル -->
+        <div class="bg-white border border-ads-border rounded-xl p-5 mb-4">
+          <div class="flex items-end gap-1 justify-center mb-3" style="height: 120px;">
+            <div class="flex flex-col items-center gap-1">
+              <div class="text-[10px] text-ads-dim">0点</div>
+              <div class="w-8 bg-slate-200 rounded-t" style="height: 4px;"></div>
+            </div>
+            <div class="w-8 bg-blue-200 rounded-t" style="height: 20px;"></div>
+            <div class="w-8 bg-blue-300 rounded-t" style="height: 40px;"></div>
+            <div class="w-8 bg-blue-400 rounded-t" style="height: 65px;"></div>
+            <div class="flex flex-col items-center gap-1">
+              <div class="text-[10px] text-blue-600 font-bold">90点</div>
+              <div class="w-8 bg-blue-500 rounded-t" style="height: 90px;"></div>
+            </div>
+            <div class="w-8 bg-gradient-to-t from-red-400 to-red-300 rounded-t border-2 border-dashed border-red-400" style="height: 96px;"></div>
+            <div class="w-8 bg-gradient-to-t from-red-500 to-red-400 rounded-t border-2 border-dashed border-red-400" style="height: 102px;"></div>
+            <div class="flex flex-col items-center gap-1">
+              <div class="text-[10px] text-red-600 font-bold">100点</div>
+              <div class="w-8 bg-gradient-to-t from-red-600 to-red-500 rounded-t border-2 border-dashed border-red-400" style="height: 110px;"></div>
+            </div>
+          </div>
+          <div class="flex justify-between text-[10px] text-ads-muted px-2">
+            <span class="text-blue-600">ここまでは一瞬</span>
+            <span class="text-red-600">ここが仕事の9割</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Rule 2 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="bg-gradient-to-r from-purple-600 to-purple-500 px-6 py-4">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-black text-sm">2</div>
+          <h3 class="text-base font-bold text-white">理解できないものは作るな</h3>
+        </div>
+      </div>
+      <div class="p-6">
+        <p class="text-sm text-ads-muted leading-relaxed mb-4">
+          理解しないまま作ると、最後の詰めができなくなる。<strong class="text-slate-900">「だいたい動いてるけど、あとちょっとが直せない」</strong>状態が永遠に続く。
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          <div class="bg-red-500/5 border border-red-500/15 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <i data-lucide="x-circle" class="w-4 h-4 text-red-600"></i>
+              <span class="text-xs font-bold text-red-700">一番やってはいけないこと</span>
+            </div>
+            <p class="text-xs text-ads-muted">「こんなツール作りたい」と全部文章にして「あと作って」と丸投げ → <strong class="text-red-600">敗北確定</strong></p>
+          </div>
+          <div class="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
+              <span class="text-xs font-bold text-emerald-700">正しいアプローチ</span>
+            </div>
+            <p class="text-xs text-ads-muted">一つずつAIに聞いて理解しながら進む。<strong class="text-emerald-600">作りながら学ぶ</strong>のがベスト</p>
+          </div>
+        </div>
+
+        <div class="bg-purple-500/5 border border-purple-500/15 rounded-lg p-4">
+          <div class="flex items-start gap-3">
+            <i data-lucide="message-circle" class="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5"></i>
+            <div>
+              <div class="text-xs font-bold text-purple-700 mb-1">講師がよく使うフレーズ</div>
+              <p class="text-sm text-slate-900 font-medium">「入社したての新卒社会人でも分かるように説明してほしい」</p>
+              <p class="text-xs text-ads-muted mt-1">分かったふりをしない。全て理解しながら前に進む。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rule 3 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-4">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-black text-sm">3</div>
+          <h3 class="text-base font-bold text-white">自分の武器を自分で作れ</h3>
+        </div>
+      </div>
+      <div class="p-6">
+        <p class="text-sm text-ads-muted leading-relaxed mb-4">
+          これまでの時代はWordやExcelに自分の仕事を合わせるのが当たり前だった。でもそれらは一人一人の仕様に100%フィットするようには作られていない。<strong class="text-slate-900">作れるようになった。むしろ作らなきゃ差がつかない。</strong>
+        </p>
+        <div class="bg-emerald-500/5 border border-emerald-500/15 rounded-lg p-4">
+          <p class="text-sm text-slate-900 font-bold text-center">他人の作った汎用ツールに自分の仕事を合わせるな。<br>いかに上手く使うかじゃなくて、いかに自分の武器を作るか。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rule 4 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="bg-gradient-to-r from-cyan-600 to-cyan-500 px-6 py-4">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-black text-sm">4</div>
+          <h3 class="text-base font-bold text-white">図解で認知コストを下げろ</h3>
+        </div>
+      </div>
+      <div class="p-6">
+        <p class="text-sm text-ads-muted leading-relaxed mb-4">
+          情報は爆発的に増えているが、人間の認知コストは有限。<strong class="text-slate-900">図解にして情報をわかりやすく整理する。</strong>
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div class="bg-red-500/5 border border-red-500/15 rounded-xl p-4">
+            <div class="text-xs text-red-600 font-bold mb-2 flex items-center gap-1.5">
+              <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+              テキストで伝える
+            </div>
+            <div class="bg-white rounded-lg p-3 text-xs text-ads-muted leading-relaxed">
+              「プロジェクトAは予定通り進行中で、進捗率は75%です。プロジェクトBは2週間の遅延が発生しており、原因はリソース不足です。プロジェクトCは完了間近で、来週にはクローズ予定です。」
+            </div>
+            <div class="text-[10px] text-red-500 mt-2 text-center">読むのに時間がかかる</div>
+          </div>
+          <div class="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+            <div class="text-xs text-emerald-600 font-bold mb-2 flex items-center gap-1.5">
+              <i data-lucide="layout" class="w-3.5 h-3.5"></i>
+              図解で伝える
+            </div>
+            <div class="bg-white rounded-lg p-3">
+              <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+                  <span class="text-xs text-slate-700 flex-1">Project A</span>
+                  <div class="w-20 bg-slate-100 rounded-full h-2"><div class="bg-emerald-500 h-2 rounded-full" style="width: 75%"></div></div>
+                  <span class="text-[10px] text-emerald-600 font-bold">75%</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                  <span class="text-xs text-slate-700 flex-1">Project B</span>
+                  <div class="w-20 bg-slate-100 rounded-full h-2"><div class="bg-red-500 h-2 rounded-full" style="width: 30%"></div></div>
+                  <span class="text-[10px] text-red-600 font-bold">-2w</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-blue-500"></div>
+                  <span class="text-xs text-slate-700 flex-1">Project C</span>
+                  <div class="w-20 bg-slate-100 rounded-full h-2"><div class="bg-blue-500 h-2 rounded-full" style="width: 95%"></div></div>
+                  <span class="text-[10px] text-blue-600 font-bold">95%</span>
+                </div>
+              </div>
+            </div>
+            <div class="text-[10px] text-emerald-500 mt-2 text-center">一目で全体像が頭に入る</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Rule 5 -->
+    <div class="bg-ads-surface border border-ads-border rounded-xl overflow-hidden">
+      <div class="bg-gradient-to-r from-amber-600 to-amber-500 px-6 py-4">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-black text-sm">5</div>
+          <h3 class="text-base font-bold text-white">議論する前にプロトタイプを作れ</h3>
+        </div>
+      </div>
+      <div class="p-6">
+        <p class="text-sm text-ads-muted leading-relaxed mb-4">
+          図解よりもっと強力な手段がある。<strong class="text-slate-900">動くものを見せること。</strong>人間は感情で意思決定する。長々とロジックを説明されるより、動くものを見せたほうが判断が早い。
+        </p>
+        <div class="bg-amber-500/5 border border-amber-500/15 rounded-lg p-5 text-center">
+          <div class="flex flex-col md:flex-row items-center justify-center gap-4 mb-3">
+            <div class="flex items-center gap-2">
+              <i data-lucide="x-circle" class="w-5 h-5 text-red-500"></i>
+              <span class="text-sm text-ads-muted">動かない100枚の企画書</span>
+            </div>
+            <span class="text-lg font-black text-slate-400">VS</span>
+            <div class="flex items-center gap-2">
+              <i data-lucide="check-circle" class="w-5 h-5 text-emerald-500"></i>
+              <span class="text-sm text-slate-900 font-bold">動くプロトタイプ 1つ</span>
+            </div>
+          </div>
+          <p class="text-sm font-bold text-amber-700">考えてから作るな。作ってから考えろ。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 7: 6ヶ月のロードマップ                                 -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-500/10 flex-shrink-0">
+      <i data-lucide="map" class="w-5 h-5 text-indigo-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">6ヶ月のロードマップ — 毎月ひとつ武器を作る</h2>
+  </div>
+
+  <div class="space-y-3 mb-8">
+    <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
+      <div class="text-xs font-bold text-blue-600 mb-1">1ヶ月目</div>
+      <div class="text-sm font-bold text-slate-900">図解ツール</div>
+      <div class="text-xs text-ads-muted">自分専用のHTML図解を作るツール</div>
+    </div>
+
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4">
+      <div class="text-xs font-bold text-emerald-600 mb-1">2ヶ月目</div>
+      <div class="text-sm font-bold text-slate-900">レポート・ニュースツール</div>
+      <div class="text-xs text-ads-muted">自分専用のレポートやニュースを自動生成</div>
+    </div>
+
+    <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
+      <div class="text-xs font-bold text-blue-600 mb-1">3ヶ月目</div>
+      <div class="text-sm font-bold text-slate-900">ワークスペース</div>
+      <div class="text-xs text-ads-muted">自分専用の作業場を構築</div>
+    </div>
+
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4">
+      <div class="text-xs font-bold text-emerald-600 mb-1">4ヶ月目</div>
+      <div class="text-sm font-bold text-slate-900">文書作成</div>
+      <div class="text-xs text-ads-muted">お金を払ってもらえるレベルの文書をAIで作成</div>
+    </div>
+
+    <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
+      <div class="text-xs font-bold text-blue-600 mb-1">5ヶ月目</div>
+      <div class="text-sm font-bold text-slate-900">資料作成</div>
+      <div class="text-xs text-ads-muted">社内・顧客向け資料の手作業を終わりにする</div>
+    </div>
+
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4">
+      <div class="text-xs font-bold text-emerald-600 mb-1">6ヶ月目</div>
+      <div class="text-sm font-bold text-slate-900">卒業制作</div>
+      <div class="text-xs text-ads-muted">自分で企画したオリジナルツールを完成させる</div>
+    </div>
+  </div>
+
+  <!-- 学習サイクル -->
+  <div class="bg-ads-surface border border-ads-border rounded-xl p-6">
+    <h3 class="text-sm font-bold text-slate-900 mb-4 text-center">半年間の学習サイクル</h3>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="text-center p-3 bg-white border border-ads-border rounded-lg">
+        <i data-lucide="monitor" class="w-5 h-5 text-blue-600 mx-auto mb-1.5"></i>
+        <div class="text-xs font-bold text-slate-900">講義</div>
+        <div class="text-[10px] text-ads-muted">月2回</div>
+      </div>
+      <div class="text-center p-3 bg-white border border-ads-border rounded-lg">
+        <i data-lucide="dumbbell" class="w-5 h-5 text-emerald-600 mx-auto mb-1.5"></i>
+        <div class="text-xs font-bold text-slate-900">ドリル</div>
+        <div class="text-[10px] text-ads-muted">毎日5〜10分</div>
+      </div>
+      <div class="text-center p-3 bg-white border border-ads-border rounded-lg">
+        <i data-lucide="users" class="w-5 h-5 text-purple-600 mx-auto mb-1.5"></i>
+        <div class="text-xs font-bold text-slate-900">グループセッション</div>
+        <div class="text-[10px] text-ads-muted">月1回</div>
+      </div>
+      <div class="text-center p-3 bg-white border border-ads-border rounded-lg">
+        <i data-lucide="wrench" class="w-5 h-5 text-amber-600 mx-auto mb-1.5"></i>
+        <div class="text-xs font-bold text-slate-900">月次課題</div>
+        <div class="text-[10px] text-ads-muted">動くツール1つ</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SECTION 8: AI時代の必須ツール                                  -->
+<!-- ============================================================ -->
+<section class="mb-16 md:mb-20">
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-slate-500/10 flex-shrink-0">
+      <i data-lucide="package" class="w-5 h-5 text-slate-600"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">AI時代の必須ツール</h2>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 text-center">
+      <div class="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-3">
+        <i data-lucide="code" class="w-6 h-6 text-blue-600"></i>
+      </div>
+      <h3 class="font-bold text-slate-900 text-sm mb-2">AIコーディングツール</h3>
+      <p class="text-xs text-ads-muted leading-relaxed">Cursor, Claude Code など。AIの力でコードを書き、ツールを作る。</p>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 text-center">
+      <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-3">
+        <i data-lucide="git-branch" class="w-6 h-6 text-emerald-600"></i>
+      </div>
+      <h3 class="font-bold text-slate-900 text-sm mb-2">Git & GitHub</h3>
+      <p class="text-xs text-ads-muted leading-relaxed">変更履歴を管理する道具。AIに与える前提条件（コンテキスト）の整理に必須。</p>
+    </div>
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-5 text-center">
+      <div class="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-3">
+        <i data-lucide="mic" class="w-6 h-6 text-purple-600"></i>
+      </div>
+      <h3 class="font-bold text-slate-900 text-sm mb-2">音声入力ツール</h3>
+      <p class="text-xs text-ads-muted leading-relaxed">TypeLess, AquaVoice など。講義の原稿もコーディングも全て音声入力で行える。</p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!--  SUMMARY                                                      -->
+<!-- ============================================================ -->
+<section>
+  <div class="flex items-center gap-3 mb-8">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-ads-accent/10 flex-shrink-0">
+      <i data-lucide="check-circle" class="w-5 h-5 text-ads-accent-light"></i>
+    </div>
+    <h2 class="text-xl md:text-2xl font-bold text-slate-900">まとめ — 第1回講義で伝えたかったこと</h2>
+  </div>
+
+  <div class="space-y-4 mb-10">
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-blue-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-blue-500 leading-none flex-shrink-0 mt-1">01</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">仕事で困った → 自分でツールを作った → 仕事が変わった</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            全てのツールに共通するパターン。面倒を解決するために自分で作る。これがAI-Driven。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-red-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-red-500 leading-none flex-shrink-0 mt-1">02</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">90点のものは一瞬でできる。価値は最後の10点にある</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            全自動を夢見るのではなく、最後の10点を詰めるための道具作りにAIを使う。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-emerald-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-emerald-500 leading-none flex-shrink-0 mt-1">03</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">AIで仕事はなくならない。需要が高度化する</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            ジェボンズのパラドックス。効率が上がると使える場所が爆発的に広がり、より高度な人材が求められる。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-purple-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-purple-500 leading-none flex-shrink-0 mt-1">04</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">理解しながら作る。丸投げは敗北</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            分からないことはAIに聞いて一つずつ理解する。やりたいことがあるときこそ、脳が最も記憶を定着しやすいゴールデンタイム。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-ads-surface border border-ads-border rounded-xl p-6 border-l-4 border-l-amber-500">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl font-black text-amber-500 leading-none flex-shrink-0 mt-1">05</div>
+        <div>
+          <h3 class="font-bold text-slate-900 mb-2">図解で認知コストを下げ、動くもので意思決定を加速する</h3>
+          <p class="text-sm text-ads-muted leading-relaxed">
+            テキストの時代は終わった。考えてから作るな、作ってから考えろ。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-center bg-gradient-to-b from-ads-accent/5 to-transparent border border-ads-accent/10 rounded-xl p-8 md:p-10">
+    <i data-lucide="compass" class="w-8 h-8 text-ads-accent mx-auto mb-4"></i>
+    <p class="text-lg font-bold text-slate-900 mb-3">ぼんやりと全体像を理解していただければ、今日の講義は成功です。</p>
+    <p class="text-ads-muted max-w-lg mx-auto leading-relaxed">
+      半年後には「あの時の話、こういうことだったのか」と分かる瞬間がきます。まずは毎日ドリルに取り組み、テクノロジーの基礎を積み重ねていきましょう。
+    </p>
+  </div>
+</section>
+
+<!-- CONTENT_END -->
+  </main>
+  <footer class="max-w-3xl mx-auto px-5 pb-10 pt-6 border-t border-ads-border/30">
+    <p class="text-xs text-ads-dim text-center">AI-Driven School の図解ツールで作成</p>
+  </footer>
+  <script src="assets/lucide.js"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>
