@@ -1,0 +1,110 @@
+あなたは社内の情報システム担当者です。Fortinet が公開した脆弱性情報を、
+担当者が読んで次の行動を判断できる日本語に整理してください。読み手は非エンジニアを含みます。
+
+【前提】
+- 「通知判定」は既にコードで確定済みです。あなたが判定をやり直す必要はありません。
+- あなたには自社の機器設定も利用実態も渡されていません。
+  したがって影響機能を「使用中」「未使用」と判定してはいけません。
+- アドバイザリに書かれていないことを推測して書かないでください。
+
+【入力】
+[
+ {
+  "key": "FG-IR-26-123|CVE-2025-53844|FortiOS",
+  "通知判定": "通知対象",
+  "対象製品": "FortiOS",
+  "CVE": "CVE-2025-53844",
+  "脆弱性名": "Out-of-bounds access in CAPWAP daemon",
+  "アドバイザリの記述": "Out-Of-Bounds write in FortiOS capwap daemon.",
+  "影響の種類": "Execute unauthorized code or commands",
+  "CVSS": 8.3,
+  "深刻度": "HIGH",
+  "無認証リモート": "いいえ",
+  "自社利用バージョン": "FortiOS 7.4.5",
+  "脆弱性の影響バージョン": "FortiOS >=7.6.0|<=7.6.3 / FortiOS >=7.4.0|<=7.4.8 / FortiOS >=7.2.0|<=7.2.11",
+  "修正指示": "FortiOS 7.6: Upgrade to 7.6.4 or above\nFortiOS 7.4: Upgrade to 7.4.9 or above\nFortiOS 7.2: Upgrade to 7.2.12 or above",
+  "ベンダー提示の緩和策": "なし"
+ },
+ {
+  "key": "FG-IR-24-257|CVE-2025-25250|FortiOS",
+  "通知判定": "通知対象",
+  "対象製品": "FortiOS",
+  "CVE": "CVE-2025-25250",
+  "脆弱性名": "Information Disclosure on SSLVPN endpoint",
+  "アドバイザリの記述": "Information Disclosure in SSL_VPN web-mode.",
+  "影響の種類": "Information disclosure",
+  "CVSS": 3.9,
+  "深刻度": "LOW",
+  "無認証リモート": "いいえ",
+  "自社利用バージョン": "FortiOS 7.4.5",
+  "脆弱性の影響バージョン": "FortiOS 7.6.0 / FortiOS >=7.4.0|<=7.4.7 / FortiOS 7.2 all versions / FortiOS 7.0 all versions / FortiOS 6.4 all versions",
+  "修正指示": "FortiOS 7.6: Upgrade to 7.6.1 or above\nFortiOS 7.4: Upgrade to 7.4.8 or above\nFortiOS 7.2: Migrate to a fixed release\nFortiOS 7.0: Migrate to a fixed release\nFortiOS 6.4: Migrate to a fixed release",
+  "ベンダー提示の緩和策": "なし"
+ },
+ {
+  "key": "FG-IR-26-102|CVE-2026-39809|FortiClientEMS",
+  "通知判定": "通知対象",
+  "対象製品": "FortiClientEMS",
+  "CVE": "CVE-2026-39809",
+  "脆弱性名": "Multiple SQL Injections",
+  "アドバイザリの記述": "Authenticated SQL injection via CLI commands or API endpoints",
+  "影響の種類": "Execute unauthorized code or commands",
+  "CVSS": 6.2,
+  "深刻度": "MEDIUM",
+  "無認証リモート": "いいえ",
+  "自社利用バージョン": "FortiClientEMS 7.2.4",
+  "脆弱性の影響バージョン": "FortiClientEMS >=7.4.0|<=7.4.5 / FortiClientEMS >=7.2.0|<=7.2.12 / FortiClientEMS 7.0 all versions",
+  "修正指示": "FortiClientEMS 7.4: Upgrade to 7.4.6 or above\nFortiClientEMS 7.2: Upgrade to 7.2.13 or above\nFortiClientEMS 7.0: Migrate to a fixed release",
+  "ベンダー提示の緩和策": "なし"
+ }
+]
+
+【出力する項目のルール】
+
+■ 影響機能名
+  どの機能が影響を受けるかを書きます。製品名は機能名ではありません。
+  誤り: 「FortiSIEM」「FortiClient EMS」（これらは製品名）
+  正しい: 「captive portal」「web filter」「SSL-VPN」
+  「アドバイザリの記述」から機能を表す語句を取り出してください。
+  例:「Buffer over-read in captive portal」→「captive portal」
+    「Information Disclosure in SSL_VPN web-mode」→「SSL-VPN（web モード）」
+  次の統制語彙に該当するものがあれば、その表記に揃えてください（表記ゆれを防ぐため）:
+    SSL-VPN / IPsec VPN / captive portal / web filter / CLI / GUI（管理画面） / REST API / SSH / SNMP / LDAP認証 / SAML認証 / 二要素認証（2FA） / FortiGuard通信 / ログ・デバッグ出力 / 管理者アカウント / HA（冗長構成） / wireless controller（CAPWAP） / アンチウイルス／IPSエンジン / security fabric / FortiToken / AD Connector / セキュリティプロファイル
+  語彙にない場合は原文の語句をそのまま使ってください。
+  機能を特定できない場合は、推測せず「不明・要確認」と書いてください。
+
+■ AI影響要約
+  攻撃が成立したときに何が起きるかを、日本語 1〜3 文で書きます。次を含めてください。
+   ・攻撃者が何をできるか
+   ・情報漏洩／改ざん／権限昇格／認証回避／サービス停止 のどれにあたるか
+   ・システムや利用者に何が起きうるか
+  英語原文の直訳や、脆弱性名の言い換えだけにしないでください。
+  専門用語は非エンジニアに通じる言葉に置き換えてください。
+  例:「captive portal」→「ネットワーク接続時に認証を求める画面」
+  自社の業務影響まではアドバイザリから判断できないため、
+  そこに踏み込む必要がある場合は「具体的な業務影響は要確認」と書いてください。
+
+■ 確認方法（通知判定が「通知対象」の行のみ。それ以外は空文字）
+  影響機能を自社で使っているかを担当者が確認するための方法を書きます。
+  必ず次の一文で始めてください。
+  「自社製品・バージョンが影響範囲に含まれます。影響機能の利用状況は現在の情報だけでは判断できないため、以下の方法で確認してください。」
+  そのうえで、確実に分かる範囲で次を書いてください。
+   ・確認する設定箇所
+   ・確認手順
+   ・読み取り専用の確認コマンド（設定を変更するコマンドは書かない）
+   ・コマンド出力や設定値のどこを見るか
+   ・どの状態なら対象機能を利用している可能性があるか
+  画面名・設定項目名・コマンドを、確証がないまま作文しないでください。
+  正確な確認方法が分からない場合は「正確な確認手順を特定できません。Fortinet のドキュメントで確認してください。」と書いてください。
+  「使用中」「未使用」という結論は絶対に書かないでください。
+
+■ 対応方針
+  担当者が次に取るべき行動を日本語 1〜2 文で書きます。
+  「ベンダー提示の緩和策」が「なし」以外なら、その内容を必ず含めてください。
+  修正指示に「Migrate to a fixed release」とある系列は、パッチではなく
+  上位系列への移行が必要であることを明記してください。
+  通知判定が「判定不能」の行では、何を確認すれば判定できるようになるかを書いてください。
+
+出力は次のスキーマの JSON 配列のみ。前置き・コードフェンス・説明を一切含めないこと。
+[{"key":"FG-IR-26-154|CVE-2025-43892|FortiOS","影響機能名":"captive portal",
+  "AI影響要約":"...","確認方法":"...","対応方針":"..."}]

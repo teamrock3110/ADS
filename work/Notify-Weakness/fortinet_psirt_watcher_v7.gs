@@ -4,10 +4,12 @@
  * v6 からの変更点（詳細は 設計書_MVP_8h.md）:
  *
  *   1. 資産シートを拡張（ベンダー・種別・機種・ツール対象）。
- *   2. 台帳 12 列（自社影響→製品→CVE→…→アドバイザリ）。固定5列。
+ *   2. 台帳 13 列（自社影響→製品→CVE→脆弱性名→…→アドバイザリ）。固定6列。
  *   3. Cisco PSIRT RSS → CSAF 版比較（資産シートの IOS-XE / 17.15.5 等で決め打ち判定）。
- *   4. main() = runFortinet_() + runCisco_()。Slack は対応推奨+要調査のみ。
- *   5. 自社影響3値（対応推奨/次回定期/要調査）、KEV連携、Fortinetコード判定表。
+ *   4. main() = runFortinet_() + runCisco_()。Slack は「あり」2値のみ。
+ *   5. 自社影響3値（あり（対応検討）/あり（影響調査）/なし）、社内ルールのゲート判定。
+ *   6. Cisco 入口は CSAF RSS（csaf_20.xml）。通常 RSS は CSAF 失敗時の補助。
+ *   7. Cisco 修正版の自動取得（openVuln）は GAS では使わない（id.cisco.com が UrlFetch を拒否）。
  *
  * 移行: migrateLedgerHeaders() → clearRunData() → main()
  *
@@ -62,11 +64,16 @@
 /** 'gemini' か 'claude' */
 const AI_PROVIDER = 'gemini';
 
-/** Gemini API のモデル ID。3.7 Flash は AI Studio 無料枠対象（2026-08 時点） */
+/** Gemini API のモデル ID。3.7 Flash は AI Studio 無料枠対象（2026-08 時点）。1日上限はモデル別に別枠 */
 const GEMINI_MODEL = 'gemini-3.7-flash';
+/** 3.7 の無料枠（1日20回程度）を使い切ったら、枠が残っているモデルへ順に退避する */
+const GEMINI_MODEL_FALLBACKS = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
 const CLAUDE_MODEL = 'claude-sonnet-5';
 
 const RSS_URL = 'https://filestore.fortinet.com/fortiguard/rss/ir.xml';
+/** Cisco CSAF RSS（主経路）。link/guid に CSAF JSON の URL が直接入る */
+const CISCO_CSAF_RSS_URL = 'https://sec.cloudapps.cisco.com/security/center/csaf_20.xml';
+/** Cisco 通常 RSS（補助）。CSAF 失敗時のタイトル・概要・人向け URL */
 const CISCO_RSS_URL = 'https://sec.cloudapps.cisco.com/security/center/psirtrss20/CiscoSecurityAdvisory.xml';
 const CSAF_BASE = 'https://filestore.fortinet.com/fortiguard/psirt/csaf_';
 
@@ -93,37 +100,43 @@ const SHEET_STATE = '処理済み';
 const MAX_ADVISORIES_PER_RUN = 50;
 
 /**
- * 「対象外」の行を台帳に残す期間（か月）。0 で無制限。
+ * 自社影響「なし」の行を台帳に残す期間（か月）。0 で無制限。
  *
- * 古い行が邪魔になるのは「対象外」だけである。
- * 対象と要確認は、古くても自社がまだ直していない事実を指しているので必ず残す。
+ * 古い行が邪魔になるのは「なし」だけである。
+ * 「あり」2値は、古くても自社がまだ判断していない事実を指しているので必ず残す。
  * 実データで一律カットを試したところ、まだ影響下にある対象 2 件
  * （CVE-2025-31514 / CVE-2025-54821）が消えた。年齢で切ってはいけない。
  *
- * 対象外を落としても分母は壊れない。処理済みシートには全件残る。
+ * 「なし」を落としても分母は壊れない。処理済みシートには全件残る。
  */
 const KEEP_OUT_OF_SCOPE_MONTHS = 3;
 
 /** Slack に個別表示する最大件数。超えた分は「ほか N 件」にまとめる */
 const SLACK_MAX_ITEMS = 5;
 
+/** Slack 末尾の外部一覧。URL は表示せずリンクテキストだけ出す */
+const SECURITY_NEXT_VULN_URL = 'https://www.security-next.com/category/cat177';
+
 /** 影響ありが 0 件のときも Slack に流すか。日次実行では false が静か */
 const NOTIFY_WHEN_NO_HITS = false;
 
-/** 1回の AI 呼び出しで処理する行数。AI に渡すのは通知対象と判定不能だけなので小さくてよい */
-const AI_CHUNK_SIZE = 5;
+/** 1回の AI 呼び出しで処理する行数。無料枠は回数課金なので、通知対象はできるだけ1回にまとめる */
+const AI_CHUNK_SIZE = 10;
 
 /**
- * 自社影響の3値。ベースラインは年1回の定期FW更新。
- * ツールの役割は「次回定期を待てない例外」の検出。
+ * 自社影響の3値。社内ルール（社内ルール案_OS更新基準.md）の写し。
+ *
+ * ベースラインは年1回の定期OS更新。ツールの役割は次の切り分けだけ。
+ *   V_ACT    臨時更新の条件を満たす。対応時期を検討する
+ *   V_INVEST 設定次第で影響が変わる。確認方法を実行して判断する
+ *   V_NONE   定期更新で足りる。臨時更新しない根拠がある
+ *
+ * 「影響が partial だから待てる」のような結論をツールが勝手に出さないこと。
+ * 設定を見ていない以上、確認前の正しい状態は V_INVEST である。
  */
-const V_URGENT = '対応推奨';
-const V_ROUTINE = '次回定期';
-const V_UNKNOWN = '要調査';
-
-/** @deprecated 互換用エイリアス（内部参照の移行中） */
-const V_TARGET = V_URGENT;
-const V_OUT = V_ROUTINE;
+const V_ACT = 'あり（対応検討）';
+const V_INVEST = 'あり（影響調査）';
+const V_NONE = 'なし';
 
 /** SSL-VPN を外面から除外する（無効化済みの場合は false） */
 const SSL_VPN_ENABLED = false;
@@ -142,9 +155,9 @@ const KEV_YES = 'あり';
 const KEV_NO = 'なし';
 
 /**
- * 台帳 12 列。
+ * 台帳 13 列。
  *
- * A 固定5列: 自社影響 → 製品 → CVE → CVSS → 最終更新日
+ * A 固定6列: 自社影響 → 製品 → CVE → 脆弱性名 → CVSS → 最終更新日
  * B 判定表示: 公式推奨対応 → KEV → 影響機能 → 判定根拠
  * C 人の確認: 確認方法 → ユーザ影響（AI）
  * D 参照: アドバイザリ
@@ -153,18 +166,19 @@ const KEV_NO = 'なし';
  * 外面・掌握・停止は判定の内部入力のみ。
  */
 const LEDGER_HEADERS = [
-  '自社影響',     // 1  対応推奨 / 次回定期 / 要調査
+  '自社影響',     // 1  あり（対応検討）/ あり（影響調査）/ なし
   '製品',         // 2
   'CVE',          // 3
-  'CVSS',         // 4
-  '最終更新日',   // 5
-  '公式推奨対応', // 6  ベンダー公式（日本語）
-  'KEV',          // 7  あり / なし
-  '影響機能',     // 8
-  '判定根拠',     // 9  OS=… | KEV=… | ◯◯のため「結論」
-  '確認方法',     // 10 確認ポイント／コマンド／判断
-  'ユーザ影響',   // 11 最悪ケース50字以内
-  'アドバイザリ'  // 12
+  '脆弱性名',     // 4  CSAF / RSS の文書タイトル（短い表示）
+  'CVSS',         // 5
+  '最終更新日',   // 6
+  '公式推奨対応', // 7  ベンダー公式（日本語）
+  'KEV',          // 8  あり / なし
+  '影響機能',     // 9
+  '判定根拠',     // 10 OS=… | KEV=… | ◯◯のため「結論」
+  '確認方法',     // 11 確認ポイント／コマンド／判断
+  'ユーザ影響',   // 12 最悪ケース50字以内
+  'アドバイザリ'  // 13
 ];
 
 /**
@@ -175,67 +189,77 @@ const CHECK_STEPS_FORTINET = {
   '管理GUI': [
     '確認ポイント：管理用インターフェースで HTTP/HTTPS 管理が許可されているか',
     'コマンド：show system interface',
-    '判断：allowaccess に http または https があれば対応が必要。無ければ次回定期で可'
+    '判断：allowaccess に http または https があれば対応が必要。無ければ定期更新で可'
   ].join('\n'),
   'SSH': [
     '確認ポイント：SSH 管理アクセスと管理者 trusthost の制限有無',
     'コマンド：show system interface\nshow system admin',
-    '判断：allowaccess に ssh があり trusthost が未設定なら対応が必要。SSH無効なら次回定期で可'
+    '判断：allowaccess に ssh があり trusthost が未設定なら対応が必要。SSH無効なら定期更新で可'
   ].join('\n'),
   'SSL-VPN': [
     '確認ポイント：SSL-VPN が有効か',
     'コマンド：show vpn ssl settings',
-    '判断：status が enable なら対応が必要。disable なら次回定期で可'
+    '判断：status が enable なら対応が必要。disable なら定期更新で可'
   ].join('\n'),
   'IPsec VPN': [
     '確認ポイント：IPsec phase1 が設定されているか',
     'コマンド：show vpn ipsec phase1-interface',
-    '判断：phase1 が1件以上あれば対応が必要。無ければ次回定期で可'
+    '判断：phase1 が1件以上あれば対応が必要。無ければ定期更新で可'
   ].join('\n'),
   'Webフィルタ': [
     '確認ポイント：Webフィルタプロファイルがポリシーに紐づいているか',
     'コマンド：show webfilter profile\nshow firewall policy',
-    '判断：プロファイルが有効なポリシーがあれば対応が必要。未使用なら次回定期で可'
+    '判断：プロファイルが有効なポリシーがあれば対応が必要。未使用なら定期更新で可'
   ].join('\n'),
   'SSLインスペクション': [
     '確認ポイント：SSL/SSH 検査プロファイルが使われているか',
     'コマンド：show firewall ssl-ssh-profile',
-    '判断：検査が有効なプロファイルがあれば対応が必要。未使用なら次回定期で可'
+    '判断：検査が有効なプロファイルがあれば対応が必要。未使用なら定期更新で可'
   ].join('\n'),
   'IPSエンジン': [
     '確認ポイント：IPS センサがポリシーに適用されているか',
     'コマンド：show ips sensor',
-    '判断：センサが有効なら対応が必要。未使用なら次回定期で可'
+    '判断：センサが有効なら対応が必要。未使用なら定期更新で可'
   ].join('\n'),
   'アンチウイルスエンジン': [
     '確認ポイント：アンチウイルスプロファイルが使われているか',
     'コマンド：show antivirus profile',
-    '判断：プロファイルが有効なら対応が必要。未使用なら次回定期で可'
+    '判断：プロファイルが有効なら対応が必要。未使用なら定期更新で可'
   ].join('\n'),
   'データプレーン': [
-    '確認ポイント：版が影響範囲内か（機能設定に依存しない）',
-    'コマンド：get system status',
-    '判断：自社版が影響範囲内なら定期更新で対応。範囲外なら対応不要'
+    '確認ポイント：版は対象済み（追加の版確認は不要）',
+    'アクション：アドバイザリの更新先を確認し、定期更新枠に載せる',
+    '判断：臨時対応は不要。次回メンテで更新すれば足りる'
   ].join('\n'),
   'その他': [
-    '確認ポイント：版が影響範囲内か（機能設定に依存しない）',
-    'コマンド：get system status',
-    '判断：自社版が影響範囲内なら定期更新で対応。範囲外なら対応不要'
+    '確認ポイント：タイトルと Affected Products から影響機能を特定する',
+    'アクション：該当機能の有効可否を実機で確認し、使っていなければなし／使っていれば対応検討へ振り分ける',
+    '判断：機能が特定できたら設定確認コマンドを打つ。特定できなければ室で共有'
   ].join('\n'),
   '不明': [
-    '確認ポイント：版が影響範囲内か（機能設定に依存しない）',
-    'コマンド：get system status',
-    '判断：自社版が影響範囲内なら定期更新で対応。範囲外なら対応不要'
+    '確認ポイント：タイトルと Affected Products から影響機能を特定する',
+    'アクション：該当機能の有効可否を実機で確認し、使っていなければなし／使っていれば対応検討へ振り分ける',
+    '判断：機能が特定できたら設定確認コマンドを打つ。特定できなければ室で共有'
   ].join('\n')
 };
 
+/**
+ * Cisco の確認手順。**フォールバック専用**。
+ *
+ * Cisco のアドバイザリは Vulnerable Products / Determine 節に
+ * 正確な確認コマンドと、悪用不可になる除外条件（`ip http active-session-modules none` など）
+ * まで書いている。手書きのこの表より必ず詳しいので、AI にはその節を優先させる
+ * （ciscoConfigHints_ で渡し、buildEnrichPrompt_ で優先を指示）。
+ *
+ * ここを使うのは、AI が失敗したか、行動できない文言を返したときだけ。
+ */
 const CHECK_STEPS_CISCO = [
   {
     re: /http|webui|web-based|web based|management/i,
     text: [
       '確認ポイント：HTTP/HTTPS 管理サーバが有効か',
       'コマンド：show running-config | include ip http server|ip http secure-server',
-      '判断：ip http server / secure-server が出れば対応が必要。無ければ次回定期で可'
+      '判断：ip http server / secure-server が出れば対応が必要。無ければ定期更新で可'
     ].join('\n')
   },
   {
@@ -243,7 +267,7 @@ const CHECK_STEPS_CISCO = [
     text: [
       '確認ポイント：BEEP リスナーが有効か',
       'コマンド：show running-config | include beep',
-      '判断：beep 設定が出れば対応が必要。無ければ次回定期で可'
+      '判断：beep 設定が出れば対応が必要。無ければ定期更新で可'
     ].join('\n')
   },
   {
@@ -251,7 +275,7 @@ const CHECK_STEPS_CISCO = [
     text: [
       '確認ポイント：XMCP Server が有効か',
       'コマンド：show running-config | include service-routing xmcp',
-      '判断：xmcp listen が出れば対応が必要。無ければ次回定期で可'
+      '判断：xmcp listen が出れば対応が必要。無ければ定期更新で可'
     ].join('\n')
   },
   {
@@ -259,7 +283,7 @@ const CHECK_STEPS_CISCO = [
     text: [
       '確認ポイント：SNMP サーバが有効か',
       'コマンド：show running-config | include snmp-server',
-      '判断：snmp-server 設定が出れば対応が必要。無ければ次回定期で可'
+      '判断：snmp-server 設定が出れば対応が必要。無ければ定期更新で可'
     ].join('\n')
   },
   {
@@ -267,7 +291,7 @@ const CHECK_STEPS_CISCO = [
     text: [
       '確認ポイント：SSH / VTY アクセスが有効か',
       'コマンド：show running-config | include ip ssh|line vty',
-      '判断：SSH または VTY が有効なら対応が必要。無効なら次回定期で可'
+      '判断：SSH または VTY が有効なら対応が必要。無効なら定期更新で可'
     ].join('\n')
   },
   {
@@ -275,15 +299,22 @@ const CHECK_STEPS_CISCO = [
     text: [
       '確認ポイント：SD-WAN 機能が設定されているか',
       'コマンド：show running-config | include sdwan|sd-wan',
-      '判断：SD-WAN 設定が出れば対応が必要。無ければ次回定期で可'
+      '判断：SD-WAN 設定が出れば対応が必要。無ければ定期更新で可'
     ].join('\n')
   }
 ];
 
 const CHECK_STEPS_CISCO_DEFAULT = [
-  '確認ポイント：稼働バージョンが影響範囲内か',
-  'コマンド：show version',
-  '判断：自社版が影響範囲内なら定期更新で対応。範囲外なら対応不要'
+  '確認ポイント：版は対象済み（追加の版確認は不要）',
+  'アクション：アドバイザリで更新先を確認し、定期更新枠に載せる',
+  '判断：臨時対応は不要。次回メンテで更新すれば足りる'
+].join('\n');
+
+/** あり（影響調査）向け。定期更新定型は使わない */
+const CHECK_STEPS_CISCO_INVEST = [
+  '確認ポイント：アドバイザリの Affected Products / Determine 節で影響条件を特定する',
+  'アクション：該当機能の有効可否を実機で確認し、使っていなければなし／使っていれば対応検討へ振り分ける',
+  '判断：条件が分かれば設定確認コマンドを打つ。分からなければ室で共有して判断'
 ].join('\n');
 
 /** 資産シート v7。「製品」はベンダー公式表記（FortiOS / IOS-XE）。ツール対象=いいえ は台帳に出さない */
@@ -302,7 +333,10 @@ const DEFAULT_ASSET_ROWS = [
 ];
 
 /** 処理済みシート。分母（今月の公表件数）はここから数える。 */
-const STATE_HEADERS = ['ベンダー', '最終更新日', '初回公表日', 'アドバイザリID', 'タイトル', '台帳の行数', '対象製品', 'CSAF版'];
+const STATE_HEADERS = ['ベンダー', '最終更新日', '初回公表日', 'アドバイザリID', 'タイトル', '対象製品', 'CSAF版'];
+
+/** 過去の構成にあって今は使わない列。migrateLedgerHeaders() が名前で削除する。 */
+const REMOVED_STATE_COLUMNS = ['台帳の行数'];
 
 /**
  * 影響機能名の統制語彙。表記ゆれを抑えるため AI にこの中から選ばせる。
@@ -325,6 +359,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('脆弱性ウォッチャー')
     .addItem('データ削除（台帳・処理済み）', 'clearRunData')
+    .addItem('Ciscoだけ再取得', 'reprocessCisco')
     .addToUi();
 }
 
@@ -363,9 +398,8 @@ function setup() {
     state.setColumnWidth(3, 100);
     state.setColumnWidth(4, 180);
     state.setColumnWidth(5, 400);
-    state.setColumnWidth(6, 90);
-    state.setColumnWidth(7, 280);
-    state.setColumnWidth(8, 70);
+    state.setColumnWidth(6, 280);
+    state.setColumnWidth(7, 70);
     Logger.log('「処理済み」シートを作成しました。分母（今月の公表件数）はここから数えます。');
   } else {
     Logger.log('「処理済み」シートは既にあります。');
@@ -400,12 +434,22 @@ function migrateLedgerHeaders() {
     const same = cur.length === STATE_HEADERS.length &&
                  STATE_HEADERS.every(function (h, i) { return cur[i] === h; });
     if (!same) {
+      // 廃止した列は末尾からではなく名前で消す。末尾を落とすと右隣の列が
+      // 1つずれて残り、既読判定が「CSAF版」の位置で対象製品を読むようになる。
+      REMOVED_STATE_COLUMNS.forEach(function (name) {
+        const at = cur.indexOf(name);
+        if (at >= 0) {
+          state.deleteColumn(at + 1);
+          cur.splice(at, 1);
+          Logger.log('処理済みシートから「' + name + '」列を削除しました。');
+        }
+      });
       if (state.getLastColumn() > STATE_HEADERS.length) {
         state.deleteColumns(STATE_HEADERS.length + 1, state.getLastColumn() - STATE_HEADERS.length);
       }
       state.getRange(1, 1, 1, STATE_HEADERS.length).setValues([STATE_HEADERS]);
       state.setFrozenRows(1);
-      Logger.log('処理済みシートの見出しを更新しました（列の意味が変わったため、2行目以降も削除してください）。');
+      Logger.log('処理済みシートの見出しを ' + STATE_HEADERS.length + ' 列に更新しました。');
     }
   } else {
     Logger.log('※「処理済み」シートがありません。setup() を実行してください。');
@@ -470,13 +514,130 @@ function clearRunData() {
   Logger.log('clearRunData: ' + msg);
 }
 
+/**
+ * Cisco の処理済み・台帳だけ消して再取得する。
+ * 処理済みに残っていると main() は Cisco を再取得しない。
+ */
+function reprocessCisco() {
+  clearCiscoEmptyRetryMark_();
+  const removedState = deleteVendorStateRows_(VENDOR_CISCO);
+  const removedLedger = deleteVendorLedgerRows_(VENDOR_CISCO);
+  Logger.log('Cisco 再取得の準備: 処理済み ' + removedState + ' 行 / 台帳 ' + removedLedger + ' 行を削除');
+
+  const rows = runCisco_();
+  Logger.log('reprocessCisco 完了: 台帳へ ' + rows.length + ' 行');
+  if (rows.length) notifySlack_(rows);
+  else Logger.log('Cisco 台帳 0 行。ログの「資産対象外」「情報通知」を確認してください。');
+  return rows;
+}
+
+function deleteVendorStateRows_(vendor) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_STATE);
+  if (!sh || sh.getLastRow() < 2) return 0;
+  const n = sh.getLastRow() - 1;
+  const cVendor = STATE_HEADERS.indexOf('ベンダー') + 1;
+  const cId = STATE_HEADERS.indexOf('アドバイザリID') + 1;
+  const vendors = sh.getRange(2, cVendor, n, 1).getDisplayValues();
+  const ids = sh.getRange(2, cId, n, 1).getDisplayValues();
+  let removed = 0;
+  for (let i = n - 1; i >= 0; i--) {
+    const rowVendor = String(vendors[i][0] || '').trim();
+    const id = String(ids[i][0] || '').trim();
+    if (rowVendor !== vendor && vendorFromAdvisoryId_(id) !== vendor) continue;
+    deleteSheetRowSafe_(sh, i + 2);
+    removed++;
+  }
+  return removed;
+}
+
+function deleteVendorLedgerRows_(vendor) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LEDGER);
+  if (!sh || sh.getLastRow() < 2) return 0;
+  const n = sh.getLastRow() - 1;
+  const col = COL['アドバイザリ'];
+  const ids = sh.getRange(2, col, n, 1).getDisplayValues();
+  let removed = 0;
+  for (let i = n - 1; i >= 0; i--) {
+    if (vendorFromAdvisoryId_(ids[i][0]) !== vendor) continue;
+    deleteSheetRowSafe_(sh, i + 2);
+    removed++;
+  }
+  return removed;
+}
+
+const PROP_CISCO_EMPTY_RETRY = 'ciscoEmptyLedgerRetryAt';
+
+function clearCiscoEmptyRetryMark_() {
+  PropertiesService.getScriptProperties().deleteProperty(PROP_CISCO_EMPTY_RETRY);
+}
+
+function countLedgerVendorRows_(vendor) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LEDGER);
+  if (!sh || sh.getLastRow() < 2) return 0;
+  const n = sh.getLastRow() - 1;
+  const col = COL['アドバイザリ'];
+  const ids = sh.getRange(2, col, n, 1).getDisplayValues();
+  let count = 0;
+  for (let i = 0; i < ids.length; i++) {
+    if (vendorFromAdvisoryId_(ids[i][0]) === vendor) count++;
+  }
+  return count;
+}
+
+/**
+ * 処理済みに Cisco があるのに台帳が空なら、処理済みを消して再取得する。
+ * 突合を直したあとに、古い「対象外」記録で永久スキップされるのを防ぐ。
+ * 再取得しても空なら、同じ実行を毎日繰り返さない。
+ */
+function recoverCiscoIfLedgerEmpty_() {
+  const knownCount = Object.keys(getKnownState_(VENDOR_CISCO).dates).length;
+  const ledgerCount = countLedgerVendorRows_(VENDOR_CISCO);
+  const props = PropertiesService.getScriptProperties();
+
+  if (ledgerCount > 0) {
+    props.deleteProperty(PROP_CISCO_EMPTY_RETRY);
+    return;
+  }
+  if (!knownCount) return;
+  if (props.getProperty(PROP_CISCO_EMPTY_RETRY)) {
+    Logger.log('Cisco: 処理済みはあるが台帳が空です。再取得は実施済みのためスキップ。必要なら reprocessCisco() を実行してください。');
+    return;
+  }
+
+  props.setProperty(PROP_CISCO_EMPTY_RETRY, new Date().toISOString());
+  const n = deleteVendorStateRows_(VENDOR_CISCO);
+  Logger.log('Cisco: 処理済み ' + n + ' 行を消して再取得します（台帳が空のため）');
+}
+
 /** 指定シートの 2 行目以降を削除する。削除した行数を返す。 */
 function deleteSheetDataRows_(sheetName) {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (!sh || sh.getLastRow() < 2) return 0;
   const count = sh.getLastRow() - 1;
-  sh.deleteRows(2, count);
+  clearSheetDataRows_(sh);
   return count;
+}
+
+/**
+ * 見出し固定のシートは、非固定行をすべて delete できない
+ * （「固定されていない行をすべて削除することはできません」）。
+ * 中身を消して、余った空行だけ詰める。2行目は必ず残す。
+ */
+function clearSheetDataRows_(sh) {
+  const last = sh.getLastRow();
+  if (last < 2) return;
+  const cols = Math.max(sh.getLastColumn(), 1);
+  sh.getRange(2, 1, last - 1, cols).clearContent();
+  if (last > 2) sh.deleteRows(3, last - 2);
+}
+
+function deleteSheetRowSafe_(sh, row) {
+  const frozen = sh.getFrozenRows() || 0;
+  if (sh.getMaxRows() - 1 <= frozen) {
+    sh.getRange(row, 1, 1, Math.max(sh.getLastColumn(), 1)).clearContent();
+    return;
+  }
+  sh.deleteRow(row);
 }
 
 /** 資産シートを v7 列構成に更新する（既存データは消える）。 */
@@ -487,7 +648,7 @@ function migrateAssetHeaders() {
     setup();
     return;
   }
-  if (sh.getLastRow() > 1) sh.deleteRows(2, sh.getLastRow() - 1);
+  if (sh.getLastRow() > 1) clearSheetDataRows_(sh);
   sh.getRange(1, 1, 1, ASSET_HEADERS.length).setValues([ASSET_HEADERS]);
   DEFAULT_ASSET_ROWS.forEach(function (r) { sh.appendRow(r); });
   sh.setFrozenRows(1);
@@ -503,12 +664,49 @@ function createDailyTrigger() {
 }
 
 function main() {
-  const fortinetRows = runFortinet_();
-  const ciscoRows = runCisco_();
-  const notifyRows = fortinetRows.concat(ciscoRows);
-  if (notifyRows.length) notifySlack_(notifyRows);
-  else backfillAiColumns_();
-  Logger.log('main() 完了（Fortinet 台帳 ' + fortinetRows.length + ' 行 / Cisco 台帳 ' + ciscoRows.length + ' 行）');
+  try {
+    const fortinetRows = runFortinet_();
+    const ciscoRows = runCisco_();
+    const notifyRows = fortinetRows.concat(ciscoRows);
+    if (notifyRows.length) notifySlack_(notifyRows);
+    else backfillAiColumns_();
+    Logger.log('main() 完了（Fortinet 台帳 ' + fortinetRows.length +
+               ' 行 / Cisco 台帳 ' + ciscoRows.length + ' 行）');
+  } catch (e) {
+    Logger.log('main() 失敗: ' + e);
+    notifyMainFailure_(e);
+    throw e;
+  }
+}
+
+/**
+ * main() が落ちたとき、実行アカウントへメールする。
+ * 日次トリガーはログを見ないと気づかないので、失敗だけは能動的に届ける。
+ */
+function notifyMainFailure_(err) {
+  try {
+    const to = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail();
+    if (!to) {
+      Logger.log('失敗通知メール: 宛先メールが取得できませんでした。');
+      return;
+    }
+    const sheetUrl = SpreadsheetApp.getActiveSpreadsheet().getUrl();
+    MailApp.sendEmail({
+      to: to,
+      subject: '[脆弱性ウォッチャー] main() 失敗',
+      body: [
+        '日次の脆弱性チェック（main）が失敗しました。',
+        '',
+        'エラー: ' + err,
+        'スプレッドシート: ' + sheetUrl,
+        '',
+        'Apps Script の実行ログを確認してください。'
+      ].join('\n')
+    });
+    Logger.log('失敗通知メールを送信しました: ' + to);
+  } catch (mailErr) {
+    Logger.log('失敗通知メールの送信にも失敗: ' + mailErr);
+  }
 }
 
 function runFortinet_() {
@@ -573,8 +771,8 @@ function runFortinet_() {
     rows.forEach(function (r) { decideNotification_(r, assets); });
 
     const counts = countVerdicts_(rows);
-    Logger.log('全 ' + rows.length + ' 行: 対応推奨 ' + counts[V_URGENT] +
-               ' / 要調査 ' + counts[V_UNKNOWN] + ' / 次回定期 ' + counts[V_ROUTINE]);
+    Logger.log('全 ' + rows.length + ' 行: ' + V_ACT + ' ' + counts[V_ACT] +
+               ' / ' + V_INVEST + ' ' + counts[V_INVEST] + ' / ' + V_NONE + ' ' + counts[V_NONE]);
     if (batchNum === 1) logUnownedProducts_(rows);
 
     writeState_(VENDOR_FORTINET, todo, rows);
@@ -582,24 +780,7 @@ function runFortinet_() {
     const ledgerRows = rows.filter(function (r) { return isLedgerRow_(r, assets); });
     Logger.log('Fortinet 台帳: ' + ledgerRows.length + ' / ' + rows.length + ' 行');
 
-    const needAi = ledgerRows.filter(function (r) {
-      return r.needsFortinetAi || r.needsDisplayAi;
-    });
-    if (needAi.length) {
-      try {
-        enrichWithAI_(needAi);
-      } catch (e) {
-        Logger.log('AI 生成に失敗しました。フォールバックで表示列を埋めます: ' + e);
-      }
-      needAi.forEach(function (r) {
-        applyFallbackDisplayFields_(r);
-        if (r.needsFortinetAi && !r._lockedVerdict) finalizeFortinetVerdict_(r);
-        else if (r.feature && r.feature !== '—') r.reason = buildDecisionReason_(r);
-        // finalize で機能が変わった場合に確認方法を合わせ直す
-        r.howToCheck = normalizeHowToCheck_(r);
-        r.impactJa = truncateJa_(r.impactJa || fallbackImpactJa_(r), 50);
-      });
-    }
+    fillLedgerDisplay_(ledgerRows);
 
     writeLedger_(ledgerRows);
     allLedgerRows = allLedgerRows.concat(ledgerRows);
@@ -616,15 +797,80 @@ function runFortinet_() {
  *
  * 載せるのは、自社が保有している製品で OS 該当が「対象」または「不明」の行。
  * 製品不明・非保有・OS対象外は台帳に出さない（処理済みシートには残る）。
+ *
+ * 自社影響が「なし」でも、版が影響範囲内なら台帳に残す。
+ * 社内ルールで臨時更新しないと判断した記録そのものが監査で必要になる。
+ * 通知から外れるだけで、台帳から消えるわけではない。
+ *
+ * ただし古い「なし」は落とす。定期更新で解消済みの行が積み上がると、
+ * 判断が必要な行が埋もれて台帳を開かなくなる（KEEP_OUT_OF_SCOPE_MONTHS）。
+ * 落としても処理済みシートには全件残るので、取得した事実は消えない。
  */
 function isLedgerRow_(row, assets) {
   if (!row.product) return false;
   if (!assetsForProduct_(assets, row.product).length) return false;
   if (row.osStatus === '対象外') return false;
+  if (row.verdict === V_NONE && isStaleOutOfScope_(row.pubDate)) return false;
   return true;
 }
 
-/** 「対象外」を台帳から落としてよいほど古いか。 */
+/**
+ * 台帳の表示列（影響機能・確認方法・ユーザ影響）を埋め、保留中の判定を確定させる。
+ *
+ * ルールゲートで「なし」に落ちた行は AI を呼ばず、コードのフォールバックだけで埋める。
+ * 影響機能を分類しても結論が変わらない行に API を使う理由がない。
+ * ただし列を空にはしない。空欄だと「AI が失敗した行」と区別できなくなる。
+ */
+function fillLedgerDisplay_(rows) {
+  const needAi = rows.filter(function (r) { return r.needsVerdict || r.needsDisplayAi; });
+  const codeOnly = rows.filter(function (r) { return r.needsCodeDisplay; });
+  if (!needAi.length && !codeOnly.length) return;
+
+  if (needAi.length) {
+    try {
+      enrichWithAI_(needAi);
+    } catch (e) {
+      Logger.log('AI 生成に失敗しました。フォールバックで表示列を埋めます: ' + e);
+    }
+  }
+  if (codeOnly.length) {
+    Logger.log('ルールゲートで「なし」に確定した ' + codeOnly.length + ' 行は AI を呼びません。');
+  }
+
+  needAi.concat(codeOnly).forEach(function (r) {
+    applyFallbackDisplayFields_(r);
+    if (r.needsVerdict && !r._lockedVerdict) finalizeVerdict_(r);
+    else if (r.feature && r.feature !== '—') r.reason = buildDecisionReason_(r);
+    // finalize で影響機能が変わった場合に確認方法を合わせ直す
+    r.howToCheck = normalizeHowToCheck_(r);
+    r.cveSummaryJa = slackContentsJa_(r);
+    r.impactJa = preferImpactJa_(r);
+  });
+}
+
+/**
+ * AI のユーザ影響を採用しつつ、CVSS と明らかに矛盾する文はフォールバックへ戻す。
+ */
+function preferImpactJa_(row) {
+  const ai = truncateJa_(row.impactJa || '', 50);
+  const fb = truncateJa_(fallbackImpactJa_(row), 50);
+  if (!ai) return fb;
+
+  const parts = parseCvssCia_(row.vector);
+  if (parts) {
+    const takeoverWords = /掌握|乗っ取|改ざん|傍受/;
+    const dosOnly = parts.C === 'N' && parts.I === 'N' && parts.A === 'H';
+    if (dosOnly && takeoverWords.test(ai)) return fb;
+    const fullCia = parts.C === 'H' && parts.I === 'H';
+    if (fullCia && /停止|全断/.test(ai) && !takeoverWords.test(ai)) return fb;
+    if (parts.A !== 'H' && /拠点の通信/.test(ai)) return fb;
+  }
+  if (isReloadDos_(row) && /応答停止/.test(ai) && !/再起動/.test(ai)) return fb;
+  if (isMgmtPlaneDos_(row) && /拠点の通信/.test(ai)) return fb;
+  return ai;
+}
+
+/** 「なし」を台帳から落としてよいほど古いか。 */
 function isStaleOutOfScope_(pubDate) {
   if (!KEEP_OUT_OF_SCOPE_MONTHS) return false;
   if (!(pubDate instanceof Date) || isNaN(pubDate.getTime())) return false;
@@ -635,9 +881,10 @@ function isStaleOutOfScope_(pubDate) {
 }
 
 // ============================================================
-// 0b. Cisco PSIRT RSS → CSAF 版比較
+// 0b. Cisco CSAF RSS（主）→ CSAF JSON / 通常RSS（補助）
 // ============================================================
 
+/** CSAF JSON の URL 組み立て保険。主経路は CSAF RSS の guid/link を使う */
 const CISCO_CSAF_BASE = 'https://tools.cisco.com/security/center/contentjson/CiscoSecurityAdvisory/';
 
 function runCisco_() {
@@ -647,13 +894,15 @@ function runCisco_() {
     return [];
   }
 
-  const allItems = fetchCiscoRssItems_();
+  recoverCiscoIfLedgerEmpty_();
+
+  const allItems = fetchCiscoCsafRssItems_();
   const known0 = getKnownState_(VENDOR_CISCO);
   warnIfFeedOverflowed_(allItems, known0.dates, function (it) { return it.id; });
 
   const candidates = selectRssCsafCandidates_(allItems, known0, function (it) { return it.id; },
     function (it) { return it.pubDate; });
-  Logger.log('Cisco RSS: 全 ' + allItems.length + ' 件 → CSAF 候補 ' + candidates.length +
+  Logger.log('Cisco CSAF RSS: 全 ' + allItems.length + ' 件 → CSAF 候補 ' + candidates.length +
              ' 件（資産シートの製品で判定）');
 
   const fetched = fetchCiscoCsafBatch_(candidates);
@@ -682,11 +931,22 @@ function runCisco_() {
       removeRowsFor_(VENDOR_CISCO, revised.map(function (f) { return f.item.id; }));
     }
 
+    let humanIndex = null;
     let rows = [];
     todo.forEach(function (f) {
       if (f.error) {
         Logger.log('Cisco CSAF 取得失敗: ' + f.item.id + ' / ' + f.error);
-        rows.push(extractCiscoRowFallback_(f.item));
+        if (!humanIndex) humanIndex = fetchCiscoHumanRssIndex_();
+        const human = humanIndex[f.item.id] || {};
+        const fallbackItem = {
+          id: f.item.id,
+          title: human.title || f.item.title,
+          link: human.link || f.item.link || ciscoHumanAdvisoryUrl_(f.item.id),
+          description: human.description || '',
+          pubDate: human.pubDate || f.item.pubDate
+        };
+        const fb = extractCiscoRowFallback_(fallbackItem);
+        if (fb) rows.push(fb);
         return;
       }
       const extracted = extractCiscoRowsFromCsaf_(f.csaf, f.item, assets);
@@ -699,26 +959,15 @@ function runCisco_() {
     rows.forEach(function (r) { decideNotification_(r, assets); });
 
     const counts = countVerdicts_(rows);
-    Logger.log('Cisco 全 ' + rows.length + ' 行: 対応推奨 ' + counts[V_URGENT] +
-               ' / 要調査 ' + counts[V_UNKNOWN] + ' / 次回定期 ' + counts[V_ROUTINE]);
+    Logger.log('Cisco 全 ' + rows.length + ' 行: ' + V_ACT + ' ' + counts[V_ACT] +
+               ' / ' + V_INVEST + ' ' + counts[V_INVEST] + ' / ' + V_NONE + ' ' + counts[V_NONE]);
 
     writeState_(VENDOR_CISCO, todo, rows);
 
     const ledgerRows = rows.filter(function (r) { return isLedgerRow_(r, assets); });
     Logger.log('Cisco 台帳: ' + ledgerRows.length + ' / ' + rows.length + ' 行');
 
-    const needAi = ledgerRows.filter(function (r) { return r.needsDisplayAi; });
-    if (needAi.length) {
-      try {
-        enrichWithAI_(needAi);
-      } catch (e) {
-        Logger.log('Cisco AI 生成に失敗しました。フォールバックで表示列を埋めます: ' + e);
-      }
-      needAi.forEach(function (r) {
-        applyFallbackDisplayFields_(r);
-        r.reason = buildDecisionReason_(r);
-      });
-    }
+    fillLedgerDisplay_(ledgerRows);
 
     writeLedger_(ledgerRows);
     allLedgerRows = allLedgerRows.concat(ledgerRows);
@@ -726,16 +975,31 @@ function runCisco_() {
     if (todo.length >= pending.length) break;
   }
 
-  if (allLedgerRows.length) sortLedger_();
+  if (allLedgerRows.length) {
+    sortLedger_();
+    clearCiscoEmptyRetryMark_();
+  }
   return allLedgerRows;
 }
 
-function fetchCiscoCsaf_(advisoryId) {
-  const id = String(advisoryId || '').trim();
-  const url = CISCO_CSAF_BASE + id + '/csaf/' + id + '_csaf.json';
-  const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+function fetchCiscoCsaf_(itemOrId) {
+  // CSAF RSS の guid/link があればそれを使う。無ければ旧来の URL 組み立てに落とす。
+  let url = '';
+  let id = '';
+  if (itemOrId && typeof itemOrId === 'object') {
+    id = String(itemOrId.id || '').trim();
+    url = String(itemOrId.csafUrl || '').trim();
+  } else {
+    id = String(itemOrId || '').trim();
+  }
+  if (!url && id) {
+    url = CISCO_CSAF_BASE + id + '/csaf/' + id + '_csaf.json';
+  }
+  if (!url) throw new Error('CSAF URL が空です');
+
+  const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
   if (res.getResponseCode() !== 200) {
-    throw new Error('HTTP ' + res.getResponseCode());
+    throw new Error('HTTP ' + res.getResponseCode() + ' / ' + url);
   }
   return JSON.parse(res.getContentText());
 }
@@ -757,13 +1021,32 @@ function ciscoProductMap_(csaf) {
 function ciscoAffectedVersions_(vuln, idMap) {
   const versions = [];
   ((vuln.product_status || {}).known_affected || []).forEach(function (id) {
-    const v = idMap[id];
-    if (v && /^\d+\.\d+/.test(v)) pushUnique_(versions, v);
+    const v = ciscoVersionFromName_(idMap[id]);
+    if (v) pushUnique_(versions, v);
   });
   return versions;
 }
 
-/** CSAF の fixed / first_fixed から版番号を抜き出す */
+/** "17.15.5" または "Cisco IOS XE Software 17.15.5" から版番号を取る。 */
+function ciscoVersionFromName_(name) {
+  const s = String(name || '').trim();
+  if (!s) return '';
+  if (/^\d+\.\d+/.test(s)) return s;
+  const m = /(\d+\.\d+(?:\.\d+)?[a-z]?)\s*$/i.exec(s);
+  return m ? m[1] : '';
+}
+
+/**
+ * CSAF の product_status から修正版の版番号を抜き出す。
+ *
+ * Cisco の CSAF に修正版が入っていることは稀で、多くは空配列が返る。
+ * remediations の details から数字を拾う実装にしていたが、あの文面は
+ * "Cisco has released software updates that address this vulnerability"
+ * のような定型文で、拾えた数字はたまたま含まれた別の値でしかなかった。
+ * 更新先として読まれる列に推測値を出すのは誤誘導なので、そこは見ない。
+ * 版番号は CSAF に稀に入っている場合だけ。通常は人が Software Checker で確認する。
+ * （openVuln は Key 自体は有効だが、GAS の UrlFetch が id.cisco.com で Access Denied になるため使わない）
+ */
 function ciscoFixedVersions_(vuln, idMap) {
   const versions = [];
   const status = vuln.product_status || {};
@@ -774,16 +1057,120 @@ function ciscoFixedVersions_(vuln, idMap) {
       if (m) pushUnique_(versions, m[1]);
     });
   });
-  (vuln.remediations || []).forEach(function (r) {
-    if (r.category !== 'vendor_fix') return;
-    const m = /(\d+\.\d+(?:\.\d+)?)/.exec(String(r.details || ''));
-    if (m && !/has released software updates/i.test(r.details || '')) {
-      pushUnique_(versions, m[1]);
-    }
-  });
-  return versions.sort(function (a, b) {
+  return sortVersionsAsc_(versions);
+}
+
+function sortVersionsAsc_(versions) {
+  return versions.slice().sort(function (a, b) {
     return compareVersion_(parseVersion_(a) || [0], parseVersion_(b) || [0]);
   });
+}
+
+// ------------------------------------------------------------
+// Cisco openVuln API（GAS では未使用）
+//
+// 手元の curl ではトークン取得できるが、GAS UrlFetchApp は
+// id.cisco.com で Akamai Access Denied（HTTP 403）になる。
+// 中継サーバー無しでは使えないため、呼び出しは行わない。
+// 修正版の版番号は担当者がアドバイザリの Fixed Software /
+// Software Checker を見る。parseFirstFixedMap_ / pickFirstFixed_
+// は単体テスト用に残す。
+// ------------------------------------------------------------
+
+/** @deprecated GAS では呼ばない。常に空を返す */
+function ciscoFirstFixedMap_(version) {
+  return {};
+}
+
+/** @deprecated GAS では呼ばない。常に空を返す */
+function ciscoFirstFixedFor_(advisoryId, selfVersions) {
+  return [];
+}
+
+/**
+ * openVuln の応答を アドバイザリID → firstFixed[] にする（単体テスト用）。
+ */
+function parseFirstFixedMap_(body) {
+  const list = (body && body.advisories) ? body.advisories : [];
+  const map = {};
+  list.forEach(function (a) {
+    const id = String((a && a.advisoryId) || '').trim();
+    if (!id) return;
+    const ff = a.firstFixed;
+    const items = Array.isArray(ff) ? ff : String(ff || '').split(',');
+    const versions = [];
+    items.forEach(function (s) {
+      const m = /(\d+\.\d+(?:\.\d+)?[a-z]?)/i.exec(String(s).trim());
+      if (m) pushUnique_(versions, m[1]);
+    });
+    if (versions.length) map[id] = sortVersionsAsc_(versions);
+  });
+  return map;
+}
+
+/**
+ * firstFixed の候補から、自社版と同じ系列の更新先を選ぶ（単体テスト用）。
+ */
+function pickFirstFixed_(fixed, selfVersion) {
+  const list = sortVersionsAsc_((fixed || []).filter(Boolean));
+  if (!list.length) return '';
+
+  const sv = parseVersion_(selfVersion);
+  if (!sv) return list[0];
+
+  const branch = sv.slice(0, 2).join('.') + '.';
+  const sameBranch = list.filter(function (f) { return f.indexOf(branch) === 0; });
+  return (sameBranch.length ? sameBranch : list)[0];
+}
+
+/**
+ * Workarounds note を、設定コマンドと説明文に分けて取り出す。
+ *
+ * 「回避策あり」と書くだけでは何をすればよいか分からない。逆に note 全文を
+ * 台帳に載せると英語の長文になって読まれない。そこで役割を分ける。
+ *   コマンド行 … コードで抽出してそのまま台帳に載せる（訳す必要がない）
+ *   説明文     … AI に渡して日本語の要点にする
+ *
+ * 免責文（"While this mitigation has been deployed..." 以降）は落とす。
+ * あれは運用上の注意で、何をするかの情報を含まない。
+ *
+ * @return {{cmds: string[], text: string, none: boolean}}
+ */
+function ciscoWorkaround_(csaf) {
+  const notes = ((csaf.document || {}).notes) || [];
+  const raw = notes.filter(function (n) {
+    return String(n.title || '').toLowerCase().indexOf('workaround') !== -1;
+  }).map(function (n) { return String(n.text || ''); }).join('\n');
+
+  if (!raw) return { cmds: [], text: '', none: false };
+
+  // 「There are no workarounds」の直後に mitigation（緩和策コマンド）が続くことがある。
+  // 先に none で return すると緩和策を落とすので、コマンド抽出を先に行う。
+  const body = raw.split(/While this mitigation/i)[0];
+  const cmds = [];
+  const prose = [];
+  body.split(/\r?\n/).forEach(function (line) {
+    const t = line.trim();
+    if (!t) return;
+    if (t.length <= 80 && isCiscoConfigCommand_(t)) pushUnique_(cmds, t);
+    else prose.push(t);
+  });
+
+  if (/there are no workarounds/i.test(raw) && !cmds.length) {
+    return { cmds: [], text: '', none: true };
+  }
+
+  return {
+    cmds: cmds.slice(0, 4),
+    text: prose.join(' ').slice(0, 600),
+    none: false
+  };
+}
+
+/** 行頭が IOS の設定構文か。訳さずそのまま載せてよい行の判別に使う。 */
+function isCiscoConfigCommand_(line) {
+  return /^(no\s|ip\s|ipv6\s|interface\s|line\s|snmp-server\s|service\s|access-list\s|transport\s|shutdown\b|config-|router\s|control-plane\b|class-map\s|policy-map\s)/i
+    .test(line);
 }
 
 function ciscoConfigHints_(csaf) {
@@ -801,6 +1188,8 @@ function ciscoProductTreeNames_(csaf) {
   const names = [];
   function walk(branch) {
     if (!branch) return;
+    // 葉の product.name は版番号が多い。親の Cisco IOS XE Software も拾う。
+    if (branch.name) pushUnique_(names, branch.name);
     if (branch.product && branch.product.name) pushUnique_(names, branch.product.name);
     (branch.branches || []).forEach(walk);
   }
@@ -881,8 +1270,15 @@ function ciscoTargetProducts_(csaf, assets) {
 /**
  * Cisco CSAF → 台帳行（CVE × 資産製品）。
  * 資産シートの製品・版に関係ないアドバイザリは行を作らない。
+ * 事前告知（notice / informational）は脆弱性ではないので行を作らない
+ * （処理済みシートには書くので再取得しない）。
  */
 function extractCiscoRowsFromCsaf_(csaf, item, assets) {
+  if (isCiscoInformationalAdvisory_(csaf, item)) {
+    Logger.log('Cisco 情報通知（脆弱性ではない）のため台帳対象外: ' +
+               ((item && item.id) || ''));
+    return [];
+  }
   assets = assets || [];
   if (!ciscoAdvisoryTargetsAssets_(csaf, assets)) {
     return [];
@@ -905,9 +1301,14 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
   const vulns = csaf.vulnerabilities || [];
   const product = targetProducts[0];
 
+  // 修正版の自動取得（openVuln）は GAS では使わない。CSAF に版があれば使い、無ければ空。
+  // 回避策コマンドは CSAF Workarounds から取る。
+  const workaround = ciscoWorkaround_(csaf);
+
   if (!vulns.length) {
-    Logger.log('Cisco vulnerabilities なし: ' + advisoryId);
-    return [extractCiscoRowFallback_(item)];
+    // informational 以外で vulns が空は稀。フォールバック行は誤検知を増やすので作らない。
+    Logger.log('Cisco vulnerabilities なし（台帳行なし）: ' + advisoryId);
+    return [];
   }
 
   return vulns.map(function (v) {
@@ -922,6 +1323,7 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
     });
 
     const affectedVersions = ciscoAffectedVersions_(v, idMap);
+    // CSAF に fixed が入っている稀な場合だけ拾う。
     const fixedVersions = ciscoFixedVersions_(v, idMap);
     const fixes = [];
     (v.remediations || []).forEach(function (r) {
@@ -948,21 +1350,27 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
       unauthRemote: isUnauthRemote_(vector) ? 'はい' : 'いいえ',
       affected: affectedVersions,
       fixedVersions: fixedVersions,
+      workaroundCmds: workaround.cmds,
+      workaroundNone: workaround.none,
       summary: summary,
       impact: (v.threats || [])
         .filter(function (t) { return t.category === 'impact'; })
         .map(function (t) { return t.details; })
         .join(', '),
       fixesRaw: fixes.join('\n'),
-      workaround: '',
+      workaround: workaround.text,
       verdict: '', reason: '', selfVersion: '', fixVersion: '',
       feature: '', impactJa: '', howToCheck: '', plan: ''
     };
   });
 }
 
-/** CSAF が取れないときの保険（RSS だけ）。 */
+/** CSAF 失敗時の保険（通常 RSS）。情報通知 ID は行にしない。 */
 function extractCiscoRowFallback_(item) {
+  if (isCiscoInformationalAdvisory_(null, item)) {
+    Logger.log('Cisco 情報通知のためフォールバック行も作らない: ' + (item && item.id));
+    return null;
+  }
   const meta = parseCiscoRssMeta_(item.description);
   return {
     vendor: VENDOR_CISCO,
@@ -981,11 +1389,34 @@ function extractCiscoRowFallback_(item) {
     impact: '',
     fixesRaw: '',
     workaround: '',
-    verdict: V_UNKNOWN,
+    verdict: V_INVEST,
     reason: 'CSAF を取得できず版比較できないため',
     selfVersion: '', fixVersion: '',
     feature: '', impactJa: '', howToCheck: '', plan: ''
   };
+}
+
+/**
+ * Cisco の事前告知・情報通知か。
+ * 例: cisco-sa-notice-* / category=csaf_informational_advisory
+ * 「8/5 に公開予定のアドバイザリ一覧」であり、CVE の脆弱性情報ではない。
+ */
+function isCiscoInformationalAdvisory_(csaf, item) {
+  const id = String(
+    (csaf && csaf.document && csaf.document.tracking && csaf.document.tracking.id) ||
+    (item && item.id) || ''
+  ).trim();
+  if (/^cisco-sa-notice-/i.test(id)) return true;
+
+  const cat = String((csaf && csaf.document && csaf.document.category) || '').toLowerCase();
+  if (cat.indexOf('informational') !== -1) return true;
+
+  const title = String(
+    (csaf && csaf.document && csaf.document.title) ||
+    (item && item.title) || ''
+  );
+  if (/advance\s+notification/i.test(title)) return true;
+  return false;
 }
 
 function parseCiscoRssMeta_(description) {
@@ -1006,25 +1437,89 @@ function decodeCiscoHtml_(s) {
     .replace(/&#039;/g, "'").replace(/&quot;/g, '"').replace(/<[^>]+>/g, ' ');
 }
 
-function fetchCiscoRssItems_() {
-  const res = UrlFetchApp.fetch(CISCO_RSS_URL, { muteHttpExceptions: true });
+/**
+ * Cisco CSAF RSS（主経路）。
+ *
+ * 通常 RSS と違い、guid/link に CSAF JSON の URL が直接入っている。
+ * ID 抽出 → URL 組み立てをやめて、取得先の推測ミスをなくす。
+ *
+ * 通常 RSS はタイトル・概要・人向けページ URL の保険として別関数で読む。
+ */
+function fetchCiscoCsafRssItems_() {
+  const res = UrlFetchApp.fetch(CISCO_CSAF_RSS_URL, { muteHttpExceptions: true });
   if (res.getResponseCode() !== 200) {
-    throw new Error('Cisco RSS 取得失敗 HTTP ' + res.getResponseCode());
+    throw new Error('Cisco CSAF RSS 取得失敗 HTTP ' + res.getResponseCode());
   }
 
   const root = XmlService.parse(res.getContentText()).getRootElement();
   const items = root.getChild('channel').getChildren('item');
 
   return items.map(function (item) {
-    const link = item.getChildText('link') || '';
+    const title = String(item.getChildText('title') || '').trim();
+    const guid = String(item.getChildText('guid') || '').trim();
+    const link = String(item.getChildText('link') || '').trim();
+    const csafUrl = normalizeCiscoCsafUrl_(guid || link);
+    const id = parseCiscoAdvisoryId_(title || csafUrl || link);
     return {
-      id: parseCiscoAdvisoryId_(link),
-      title: item.getChildText('title') || '',
-      link: link,
-      description: item.getChildText('description') || '',
+      id: id,
+      title: title || id,
+      link: ciscoHumanAdvisoryUrl_(id),
+      csafUrl: csafUrl,
+      description: '',
       pubDate: parsePubDate_(item.getChildText('pubDate'))
     };
-  });
+  }).filter(function (it) { return it.id && it.csafUrl; });
+}
+
+/** guid/link からクエリを落とし、https にそろえる */
+function normalizeCiscoCsafUrl_(raw) {
+  let u = String(raw || '').trim();
+  if (!u) return '';
+  u = u.replace(/^http:\/\//i, 'https://').replace(/:80\//, '/');
+  const q = u.indexOf('?');
+  if (q !== -1) u = u.slice(0, q);
+  return /\.json$/i.test(u) ? u : '';
+}
+
+/** 人向けアドバイザリページ。台帳のハイパーリンク用 */
+function ciscoHumanAdvisoryUrl_(advisoryId) {
+  const id = String(advisoryId || '').trim();
+  if (!id) return '';
+  return 'https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/' + id;
+}
+
+/**
+ * 通常 RSS（補助）。CSAF 取得失敗時にタイトル・概要を補う。
+ * 主経路ではないので失敗しても空オブジェクトを返す。
+ */
+function fetchCiscoHumanRssIndex_() {
+  try {
+    const res = UrlFetchApp.fetch(CISCO_RSS_URL, { muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) return {};
+    const root = XmlService.parse(res.getContentText()).getRootElement();
+    const items = root.getChild('channel').getChildren('item');
+    const map = {};
+    items.forEach(function (item) {
+      const link = item.getChildText('link') || '';
+      const id = parseCiscoAdvisoryId_(link);
+      if (!id) return;
+      map[id] = {
+        title: item.getChildText('title') || '',
+        link: link,
+        description: item.getChildText('description') || '',
+        pubDate: parsePubDate_(item.getChildText('pubDate'))
+      };
+    });
+    return map;
+  } catch (e) {
+    Logger.log('Cisco 通常 RSS（補助）取得失敗: ' + e);
+    return {};
+  }
+}
+
+/** @deprecated 互換用。主経路は fetchCiscoCsafRssItems_ */
+function fetchCiscoRssItems_() {
+  return fetchCiscoCsafRssItems_();
 }
 
 function parseCiscoAdvisoryId_(link) {
@@ -1059,10 +1554,13 @@ function judgeCiscoVersions_(assetVersions, affectedVersions) {
 }
 
 function testCiscoRss() {
-  const items = fetchCiscoRssItems_();
+  const items = fetchCiscoCsafRssItems_();
   const assets = ciscoAssets_(readAssets_());
   const known = getKnownState_(VENDOR_CISCO);
-  Logger.log('Cisco RSS 件数: ' + items.length + ' / 資産: ' + assets.length + ' 件');
+  Logger.log('Cisco CSAF RSS 件数: ' + items.length + ' / 資産: ' + assets.length + ' 件');
+  if (items[0]) {
+    Logger.log('先頭例: ' + items[0].id + ' / csafUrl=' + items[0].csafUrl);
+  }
   const candidates = selectRssCsafCandidates_(items, known, function (it) { return it.id; },
     function (it) { return it.pubDate; });
   Logger.log('CSAF 候補: ' + candidates.length + ' 件');
@@ -1082,20 +1580,30 @@ function testCiscoRss() {
         Logger.log('  ' + [r.verdict, r.cve, r.cvss, r.reason].join(' | '));
       });
     } catch (e) {
-      Logger.log('  処理失敗 ' + f.item.id + ': ' + e);
+      Logger.log('  展開失敗 ' + f.item.id + ': ' + e);
     }
   });
-  Logger.log('資産対象アドバイザリ（候補先頭10件中）: ' + hit + ' 件');
+  Logger.log('資産にヒットした候補（先頭10件中）: ' + hit + ' 件');
 }
 
 // ============================================================
 // 1. RSS 取得と CSAF の URL 導出
 // ============================================================
 
-/** "Tue, 14 Jul 2026 00:00:00 -0700" を Date にする。失敗したら元の文字列を返す。 */
+/**
+ * "Tue, 14 Jul 2026 00:00:00 -0700" や CSAF RSS の "2026-08-21 16:54:40.0" を Date にする。
+ * 失敗したら元の文字列を返す。
+ */
 function parsePubDate_(s) {
   if (!s) return '';
-  const d = new Date(s);
+  const raw = String(s).trim();
+  // CSAF RSS: "2026-08-21 16:54:40.0"
+  const cisco = /^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/.exec(raw);
+  if (cisco) {
+    const d = new Date(cisco[1] + 'T' + cisco[2] + 'Z');
+    if (!isNaN(d.getTime())) return d;
+  }
+  const d = new Date(raw);
   return isNaN(d.getTime()) ? s : d;
 }
 
@@ -1244,7 +1752,7 @@ function fetchCiscoCsafBatch_(items) {
   return items.map(function (it, i) {
     if (i > 0) Utilities.sleep(300);
     try {
-      const csaf = fetchCiscoCsaf_(it.id);
+      const csaf = fetchCiscoCsaf_(it);
       return {
         item: it,
         csaf: csaf,
@@ -1440,7 +1948,7 @@ function noVulnRow_(item, advisoryId, pubDate, initialAt, vulnName) {
     product: '',
     cvss: '', severity: '', vector: '', unauthRemote: '',
     affected: [], summary: vulnName, impact: '', fixesRaw: '', workaround: '',
-    verdict: V_UNKNOWN,
+    verdict: V_INVEST,
     reason: 'この情報元だけでは自社への影響を自動判定できません。アドバイザリを人が読んで判定してください。',
     selfVersion: '', fixVersion: '',
     feature: '', impactJa: '', howToCheck: '', plan: ''
@@ -1461,7 +1969,7 @@ function errorRow_(item, msg) {
     pubDate: item.pubDate, initialDate: item.pubDate,
     title: item.title, cve: '', product: '', cvss: '', severity: '', vector: '',
     unauthRemote: '', affected: [], summary: '', impact: '', fixesRaw: '',
-    workaround: '',     verdict: V_UNKNOWN,
+    workaround: '',     verdict: V_INVEST,
     reason: 'アドバイザリ情報を取得できませんでした（' + msg + '）。手動で確認してください。',
     osStatus: '不明', kev: '', externalSurface: '—', takeover: '—', serviceStop: '—',
     _lockedVerdict: true,
@@ -1726,7 +2234,9 @@ function initDecisionFields_(row) {
   row.aiServiceStop = row.aiServiceStop || '';
   row.aiConfidence = row.aiConfidence || '';
   row.needsFortinetAi = false;
+  row.needsVerdict = false;
   row.needsDisplayAi = false;
+  row.needsCodeDisplay = false;
 }
 
 function kevLabel_(cve) {
@@ -1740,7 +2250,7 @@ function isFortinetFeatureVocab_(feature) {
 
 /**
  * タイトル・要約・impact から Fortinet 統制語彙へ寄せる。
- * 当てはまらなければ「その他」（外面なし → 判定表では次回定期）。
+ * 当てはまらなければ「その他」（機能を特定できないので影響調査に回る）。
  */
 function guessFortinetFeature_(row) {
   const text = [row.feature, row.title, row.summary, row.impact].join(' ').toLowerCase();
@@ -1753,7 +2263,8 @@ function guessFortinetFeature_(row) {
     [/\bips\b|intrusion\s*prevention/, 'IPSエンジン'],
     [/anti[- ]?virus|\bav\b|fortiguard/, 'アンチウイルスエンジン'],
     [/\bssh\b/, 'SSH'],
-    [/\bgui\b|management\s*(interface|console)|admin\s*portal/, '管理GUI'],
+    [/web.?ui|fortigate ui|\bgui\b|management\s*(interface|console)|admin\s*portal/, '管理GUI'],
+    [/resource\s*exhaust/, '管理GUI'],
     [/data\s*plane|dataplane|\bwad\b|kernel|buffer\s*over/, 'データプレーン'],
     [/captive\s*portal/, 'その他']
   ];
@@ -1765,15 +2276,25 @@ function guessFortinetFeature_(row) {
 
 function applyFallbackDisplayFields_(row) {
   if (row.vendor === VENDOR_FORTINET) {
-    if (!isFortinetFeatureVocab_(row.feature)) {
-      row.feature = guessFortinetFeature_(row);
+    if (!isFortinetFeatureVocab_(row.feature) || row.feature === 'その他' || row.feature === '不明') {
+      const guessed = guessFortinetFeature_(row);
+      if (guessed && guessed !== 'その他') row.feature = guessed;
+      else if (!isFortinetFeatureVocab_(row.feature)) row.feature = guessed;
     }
   } else {
-    row.feature = normalizeCiscoFeature_(row.feature || row.title || '');
+    const fromTitle = normalizeCiscoFeature_(row.title || '');
+    if (isJunkCiscoFeature_(row.feature)) {
+      row.feature = fromTitle;
+    } else {
+      row.feature = normalizeCiscoFeature_(row.feature || row.title || '');
+    }
   }
 
   row.howToCheck = normalizeHowToCheck_(row);
-  row.impactJa = truncateJa_(row.impactJa || fallbackImpactJa_(row), 50);
+  if (!isUsableCveSummary_(row.cveSummaryJa)) {
+    row.cveSummaryJa = '';
+  }
+  row.impactJa = preferImpactJa_(row);
 }
 
 function truncateJa_(s, max) {
@@ -1782,12 +2303,31 @@ function truncateJa_(s, max) {
   return t.length > max ? t.slice(0, max) : t;
 }
 
-/** 英語タイトルコピーをやめ、impact から日本語の最悪ケースを引く */
+/** 英語タイトルコピーをやめ、アドバイザリ本文と CVSS から業務結果を引く */
 function fallbackImpactJa_(row) {
-  const text = [row.impact, row.title, row.summary].join(' ').toLowerCase();
-  if (/denial of service|\bdos\b|service stop|hang|crash|reboot/.test(text)) {
-    return '機器が停止し拠点の社内通信が全断する恐れ';
+  const parts = parseCvssCia_(row.vector);
+  if (parts) {
+    if (parts.C === 'H' && parts.I === 'H') {
+      return '機器を乗っ取られ設定改ざんや通信傍受をされる恐れ';
+    }
+    if (parts.C === 'H' && parts.I !== 'H') {
+      return '機微な管理情報や通信内容が外部に漏れる恐れ';
+    }
+    if (parts.I === 'H' && parts.C !== 'H') {
+      return '設定を改ざんされ意図しない通信経路を作られる恐れ';
+    }
   }
+
+  if (isReloadDos_(row) || (parts && parts.A === 'H')) {
+    return isReloadDos_(row)
+      ? '機器が再起動し、拠点の通信が途切れる恐れ'
+      : '機器が停止し、拠点の通信が途切れる恐れ';
+  }
+  if (isMgmtPlaneDos_(row) || (parts && parts.A === 'L')) {
+    return '管理画面が応答しなくなり、運用に支障が出る恐れ';
+  }
+
+  const text = advisoryCorpus_(row).toLowerCase();
   if (/remote code|code execution|rce|arbitrary code|command injection/.test(text)) {
     return '機器を乗っ取られ設定改ざんや通信傍受をされる恐れ';
   }
@@ -1806,6 +2346,40 @@ function fallbackImpactJa_(row) {
   return '機器や接続端末が侵害され業務通信に支障が出る恐れ';
 }
 
+function advisoryCorpus_(r) {
+  return [r.title, r.summary, r.impact, r.feature].join('\n');
+}
+
+function isReloadDos_(r) {
+  return /reload|reboot|unexpected(ly)? (reload|reboot)/i.test(advisoryCorpus_(r));
+}
+
+function isResourceExhaustion_(r) {
+  return /resource exhaustion|without limits or throttling|allocation of resources/i.test(advisoryCorpus_(r));
+}
+
+function isMgmtPlaneDos_(r) {
+  const f = String(r.feature || '');
+  if (f === '管理GUI' || f === 'WebUI') return true;
+  return /web ui|webui|fortigate ui|\bgui\b|management (interface|plane)/i.test(advisoryCorpus_(r))
+    || isResourceExhaustion_(r);
+}
+
+/** CVSS ベクターから C/I/A を取る。無ければ null */
+function parseCvssCia_(vector) {
+  const s = String(vector || '');
+  if (!s) return null;
+  const C = (/\/C:([NHAL])/i.exec(s) || [])[1];
+  const I = (/\/I:([NHAL])/i.exec(s) || [])[1];
+  const A = (/\/A:([NHAL])/i.exec(s) || [])[1];
+  if (!C && !I && !A) return null;
+  return {
+    C: (C || 'N').toUpperCase(),
+    I: (I || 'N').toUpperCase(),
+    A: (A || 'N').toUpperCase()
+  };
+}
+
 function normalizeCiscoFeature_(raw) {
   let s = String(raw || '').trim().replace(/\s+/g, ' ');
   if (!s) return 'IOS XE 基盤';
@@ -1813,15 +2387,31 @@ function normalizeCiscoFeature_(raw) {
   s = s.replace(/^Cisco\s+IOS\s*XE\s*/i, '');
   s = s.replace(/^IOS\s*XE\s+Software\s*/i, '');
   if (/security hardening/i.test(s) || !s) return 'IOS XE 基盤';
-  if (/web-based|webui|http server|web.?ui/i.test(s)) return 'WebUI';
-  if (/beep/i.test(s)) return 'BEEP';
-  if (/xmcp/i.test(s)) return 'XMCP Server';
+  if (/web-based|webui|http server|web.?ui|management interface/i.test(s)) return 'WebUI';
+  if (/blocks extensible|beep/i.test(s)) return 'BEEP';
+  if (/extensible messaging|xmcp/i.test(s)) return 'XMCP Server';
   if (/sd-?wan/i.test(s)) return 'SD-WAN';
   if (/snmp/i.test(s)) return 'SNMP';
   if (/\bssh\b/i.test(s)) return 'SSH';
   if (/core/i.test(s)) return 'IOS XE 基盤';
   if (s.length > 20) s = s.slice(0, 20);
   return s || 'IOS XE 基盤';
+}
+
+/** AI が返した英語切れ端・ID っぽい影響機能か */
+function isJunkCiscoFeature_(feature) {
+  const s = String(feature || '').trim();
+  if (!s || s === '不明') return true;
+  if (/^cisco-sa-/i.test(s)) return true;
+  const known = {
+    'WebUI': 1, 'BEEP': 1, 'XMCP Server': 1, 'SD-WAN': 1,
+    'SNMP': 1, 'SSH': 1, 'IOS XE 基盤': 1
+  };
+  if (known[s]) return false;
+  // タイトル断片（英単語の切れ端）は統制語彙ではない
+  if (/^[A-Za-z]/.test(s) && /\s/.test(s)) return true;
+  if (/^[A-Za-z].{0,3}$/.test(s)) return true;
+  return false;
 }
 
 function lookupCheckSteps_(row) {
@@ -1833,17 +2423,64 @@ function lookupCheckSteps_(row) {
   for (let i = 0; i < CHECK_STEPS_CISCO.length; i++) {
     if (CHECK_STEPS_CISCO[i].re.test(text)) return CHECK_STEPS_CISCO[i].text;
   }
+  // 影響調査中に「臨時対応不要・定期更新枠」を出すと手がかりにならない
+  if (row.verdict === V_INVEST) return CHECK_STEPS_CISCO_INVEST;
   return CHECK_STEPS_CISCO_DEFAULT;
 }
 
 /** 確認方法が行動可能か検証し、不合格なら機能別テーブルで差し替える */
 function normalizeHowToCheck_(row) {
   const raw = String(row.howToCheck || '').trim();
-  const hasCmd = /コマンド[：:]/.test(raw) && /(show|get|diagnose)\b/i.test(raw);
+  // 版該否は decideNotification_ 済み。対象行に「show version」を出さない。
+  if (row.osStatus === '対象' && isVersionRecheckHowTo_(raw)) {
+    return lookupCheckSteps_(row);
+  }
+  // 影響調査なのに定期更新定型だけ、は差し替え
+  if (row.verdict === V_INVEST && isRegularUpdateHowTo_(raw)) {
+    return lookupCheckSteps_(row);
+  }
+  return isActionableHowTo_(raw) ? raw : lookupCheckSteps_(row);
+}
+
+/** 「なし」向けの定期更新定型か */
+function isRegularUpdateHowTo_(text) {
+  return /定期更新枠|臨時対応は不要|次回メンテで更新すれば足りる/i.test(String(text || ''));
+}
+
+/** 版の再確認を求める確認方法か */
+function isVersionRecheckHowTo_(text) {
+  return /影響範囲内|稼働バージョン|show\s+version|get\s+system\s+status/i.test(String(text || ''));
+}
+
+/** 人が次の行動を取れる確認方法か（設定確認 or アクション提示） */
+function isActionableHowTo_(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return false;
+  if (/アドバイザリの\s*(Affected|Fixed|Solution)|個別アドバイザリ|公開情報と対象バージョン/i.test(raw)) {
+    return false;
+  }
   const hasJudge = /判断[：:]/.test(raw);
-  const useless = /アドバイザリの\s*(Affected|Fixed|Solution)|個別アドバイザリ|公開情報と対象バージョン/i.test(raw);
-  if (raw && hasCmd && hasJudge && !useless) return raw;
-  return lookupCheckSteps_(row);
+  const hasCmd = /コマンド[：:]/.test(raw) && /(show|get|diagnose)\b/i.test(raw);
+  const hasAction = /アクション[：:]/.test(raw);
+  return hasJudge && (hasCmd || hasAction);
+}
+
+/**
+ * 台帳に出す直前にラベルを外す。
+ *
+ * ラベルは AI 出力の検証に必要なので生成側では残す。ただしセルに並べると
+ * 全行の同じ位置に同じ4文字が3回ずつ出て、読みたい中身より先に目に入る。
+ * 3行の位置そのものが「どこを見る／何を打つ／どう判断する」を示すので、
+ * 表示では見出しを落として中身だけ残す。
+ */
+function stripCheckLabels_(text) {
+  return String(text || '')
+    .split('\n')
+    .map(function (line) {
+      return line.replace(/^\s*(?:確認ポイント|コマンド|アクション|判断)\s*[：:]\s*/, '').trim();
+    })
+    .filter(function (line) { return line; })
+    .join('\n');
 }
 
 // ============================================================
@@ -1939,66 +2576,164 @@ function normalizeServiceStop_(v) {
   return '不明';
 }
 
+/**
+ * 判定根拠は2行にする。
+ * 1行目は構造化された値、2行目は理由と結論。
+ * 同じ区切り文字で並べると、文章もフィールドとして読まれて頭に入らない。
+ */
 function buildDecisionReason_(row) {
-  const os = row.osStatus || '不明';
-  const kev = row.kev || KEV_NO;
-  const phrase = row.reasonPhrase || '判定材料が不足しているため';
-  const verdict = row.verdict || V_UNKNOWN;
-  return 'OS=' + os + ' | KEV=' + kev + ' | ' + phrase + '「' + verdict + '」';
+  const head = 'OS=' + (row.osStatus || '不明') + ' | KEV=' + (row.kev || KEV_NO);
+  const tail = (row.reasonPhrase || '判定材料が不足しているため')
+             + '「' + (row.verdict || V_INVEST) + '」';
+  return head + '\n' + tail;
 }
 
-function applyCiscoVerdict_(row) {
-  row.vendorPath = 'Cisco固定';
-  row.osStatus = row.osStatus || '対象';
-  row.kev = kevLabel_(row.cve);
-  row.verdict = (row.kev === KEV_YES) ? V_URGENT : V_ROUTINE;
-  row.reasonPhrase = (row.kev === KEV_YES)
-    ? '悪用が確認されているため'
-    : '定期更新で解消見込みのため';
-  row.needsDisplayAi = true;
-  row.reason = buildDecisionReason_(row);
+/**
+ * 社内ルールの「定期更新まで待つ根拠」のうち、CVSS ベクターだけで判定できる分。
+ *
+ * 深刻度では切らない。切るのは到達性と前提条件である。
+ * 9.8 でも管理者権限が前提なら、悪用できる者は既に機器を掌握している。
+ *
+ * @return {{pass: boolean, phrase: string}} pass=false なら定期更新で足りる
+ */
+function ruleGate_(row) {
+  const v = String(row.vector || '');
+  if (!v) {
+    return { pass: true, phrase: '' };   // ベクター無しは断定できないので調査へ回す
+  }
+  if (/PR:H/.test(v)) return { pass: false, phrase: '悪用に管理者権限が必要なため' };
+  if (/PR:L/.test(v)) return { pass: false, phrase: '悪用に認証済みアカウントが必要なため' };
+  if (/AV:P/.test(v)) return { pass: false, phrase: '悪用に機器への物理アクセスが必要なため' };
+  if (/AV:L/.test(v)) return { pass: false, phrase: '悪用に機器へのローカルアクセスが必要なため' };
+  if (/AV:A/.test(v)) return { pass: false, phrase: '悪用に隣接ネットワークからのアクセスが必要なため' };
+  if (/UI:R/.test(v)) return { pass: false, phrase: '悪用に利用者の操作が必要なため' };
+  return { pass: true, phrase: '' };
 }
 
-function finalizeFortinetVerdict_(row, opts) {
-  row.vendorPath = 'Fortinet';
+/** ベクターが無認証リモートを満たすか（ゲート通過と同義） */
+function passesRuleGate_(row) {
+  return ruleGate_(row).pass;
+}
+
+/**
+ * 影響機能が設定に依存するか。
+ *
+ *   disabled 自社で無効と断定できる       → なし
+ *   config   有効かどうかが設定次第       → 影響調査（人がコマンドで確認）
+ *   always   設定に関係なく常に有効       → 影響の重さで判定
+ *   unknown  機能を特定できていない       → 影響調査
+ *
+ * CHECK_STEPS_FORTINET / CHECK_STEPS_CISCO のキーと対応させる。
+ * 確認方法に「出力があれば対応が必要」と書くなら、判定は config でなければ嘘になる。
+ */
+const FEATURE_CONFIG_DEPENDENT = {
+  '管理GUI': true, 'SSH': true, 'IPsec VPN': true, 'SSL-VPN': true,
+  'Webフィルタ': true, 'SSLインスペクション': true,
+  'IPSエンジン': true, 'アンチウイルスエンジン': true,
+  'WebUI': true, 'BEEP': true, 'XMCP Server': true, 'SNMP': true, 'SD-WAN': true
+};
+
+const FEATURE_ALWAYS_ON = {
+  'データプレーン': true, 'IOS XE 基盤': true
+};
+
+function featureExposure_(row) {
+  const f = String(row.feature || '').trim();
+  if (f === 'SSL-VPN' && !SSL_VPN_ENABLED) return 'disabled';
+  if (FEATURE_ALWAYS_ON[f]) return 'always';
+  if (FEATURE_CONFIG_DEPENDENT[f]) return 'config';
+  return 'unknown';
+}
+
+/** 悪用されたとき機器掌握または業務停止に至るか（臨時更新条件4） */
+function isSevereImpact_(row) {
+  if (row.takeover === 'total') return true;
+  if (row.serviceStop === 'はい') return true;
+  const text = [row.impact, row.title].join(' ').toLowerCase();
+  return /remote code|code execution|\brce\b|arbitrary code|command injection|denial of service|\bdos\b/.test(text);
+}
+
+/**
+ * 自社影響の確定。ベンダー差は featureExposure_ の語彙だけに閉じ込める。
+ * AI の後に呼ぶこと（影響機能が決まっていないと判定できない）。
+ *
+ * ルールゲートは decideNotification_ で先に当たっており、通常ここへ来る行は通過済み。
+ * それでも同じ ruleGate_ を呼ぶのは、この関数単体で社内ルール全体を表現しておくため。
+ * 判定の入口が2つあると、片方だけ直して食い違う。
+ */
+function finalizeVerdict_(row, opts) {
+  row.vendorPath = row.vendor === VENDOR_CISCO ? 'Cisco' : 'Fortinet';
   if (!opts || !opts.skipKev) {
     row.kev = kevLabel_(row.cve);
   }
   row.osStatus = row.osStatus || '対象';
 
-  if (row.kev === KEV_YES) {
-    row.verdict = V_URGENT;
-    row.reasonPhrase = '悪用が確認されているため';
-    row.reason = buildDecisionReason_(row);
-    return;
-  }
-
-  // AI 失敗・低confidence・統制外語彙でも、OS=対象なら要調査に倒さない。
-  if (!row.aiOk || !isFortinetFeatureVocab_(row.feature) || row.aiConfidence === 'low') {
+  if (row.vendor === VENDOR_FORTINET &&
+      (!row.aiOk || !isFortinetFeatureVocab_(row.feature) || row.aiConfidence === 'low')) {
     row.feature = guessFortinetFeature_(row);
     if (!row.aiTechImpact) row.aiTechImpact = '不明';
   }
 
-  row.externalSurface = isOnExternalSurface_(row.feature) ? 'はい' : 'いいえ';
   row.takeover = row.aiTechImpact || '不明';
   row.serviceStop = normalizeServiceStop_(row.aiServiceStop);
+  row.externalSurface = isOnExternalSurface_(row.feature) ? 'はい' : 'いいえ';
 
-  if (row.externalSurface === 'いいえ') {
-    row.verdict = V_ROUTINE;
-    row.reasonPhrase = '影響機能が外部から到達しないため';
-  } else if (row.takeover === 'total' || row.serviceStop === 'はい') {
-    row.verdict = V_URGENT;
-    row.reasonPhrase = '外部到達面の' + row.feature + 'を悪用され重大な影響が出るため';
+  const gate = ruleGate_(row);
+  const exposure = featureExposure_(row);
+
+  // KEV は件数が稀すぎて主軸にならないが、悪用実績があるものを
+  // 「使っていないはず」で流すとルール全体の信頼性が崩れる。最低ラインを調査に固定する。
+  if (row.kev === KEV_YES) {
+    if (exposure === 'always' && gate.pass && isSevereImpact_(row)) {
+      row.verdict = V_ACT;
+      row.reasonPhrase = '悪用が確認されており外部から到達するため';
+    } else {
+      row.verdict = V_INVEST;
+      row.reasonPhrase = '悪用が確認されているため';
+    }
+    row.reason = buildDecisionReason_(row);
+    return;
+  }
+
+  if (!gate.pass) {
+    row.verdict = V_NONE;
+    row.reasonPhrase = gate.phrase;
+    row.reason = buildDecisionReason_(row);
+    return;
+  }
+
+  if (exposure === 'disabled') {
+    row.verdict = V_NONE;
+    row.reasonPhrase = row.feature + ' を自社で無効にしているため';
+  } else if (exposure === 'config') {
+    row.verdict = V_INVEST;
+    row.reasonPhrase = row.feature + ' の利用有無が設定次第のため';
+  } else if (exposure === 'unknown') {
+    row.verdict = V_INVEST;
+    row.reasonPhrase = '影響機能を特定できないため';
+  } else if (isSevereImpact_(row)) {
+    row.verdict = V_ACT;
+    row.reasonPhrase = '外部から無認証で' + row.feature + 'を悪用され機器掌握または業務停止に至るため';
   } else {
-    row.verdict = V_ROUTINE;
-    row.reasonPhrase = '外部到達面だが影響が部分的で定期更新で解消できるため';
+    row.verdict = V_NONE;
+    row.reasonPhrase = '掌握にも業務停止にも至らないため';
   }
   row.reason = buildDecisionReason_(row);
 }
 
 /**
- * 通知判定（第0段階 OS + ベンダー別）。
- * Fortinet 版該当行は AI 後に finalizeFortinetVerdict_ で確定する。
+ * AI を呼ばずに結論が出る分をここで確定させる。
+ *
+ * 確定できるのは3種類。
+ *   非保有・製品不明   資産シートだけで決まる
+ *   版が影響範囲外     CSAF と資産シートの版比較だけで決まる
+ *   ルールゲート落ち   CVSS ベクターだけで決まる（§3 の待てる根拠）
+ *
+ * ゲート落ちを AI の前に置くのは、影響機能を知る必要が無いから。
+ * `PR:H` の行の影響機能を分類しても結論は変わらないので、その分の API を使わない。
+ * 残った行（外部から無認証で悪用できる行）だけ AI へ回し、finalizeVerdict_ で確定する。
+ *
+ * ベンダーで分岐しない（Cisco も設定次第の機能を持つので同じ扱いにする）。
  */
 function decideNotification_(row, assets) {
   if (row._lockedVerdict) return;
@@ -2007,7 +2742,7 @@ function decideNotification_(row, assets) {
   row.fixVersion = pickFixVersion_(row);
 
   if (!row.product) {
-    row.verdict = V_UNKNOWN;
+    row.verdict = V_INVEST;
     row.osStatus = '不明';
     row.kev = kevLabel_(row.cve);
     row.reasonPhrase = '製品を特定できないため';
@@ -2019,7 +2754,7 @@ function decideNotification_(row, assets) {
 
   const mine = assetsForProduct_(assets, row.product);
   if (!mine.length) {
-    row.verdict = V_ROUTINE;
+    row.verdict = V_NONE;
     row.osStatus = '対象外';
     row.kev = kevLabel_(row.cve);
     row.reasonPhrase = row.product + ' を自社で使用していないため';
@@ -2030,11 +2765,11 @@ function decideNotification_(row, assets) {
 
   const os = judgeOsApplicability_(row, assets);
   row.osStatus = os.label;
+  row.vendorPath = (row.vendor === VENDOR_CISCO) ? 'Cisco' : 'Fortinet';
 
   if (os.os === 'out') {
-    row.verdict = V_ROUTINE;
+    row.verdict = V_NONE;
     row.kev = kevLabel_(row.cve);
-    row.vendorPath = (row.vendor === VENDOR_CISCO) ? 'Cisco固定' : 'Fortinet';
     if (os.detail && /ため$/.test(os.detail)) {
       row.reasonPhrase = os.detail;
     } else {
@@ -2046,9 +2781,8 @@ function decideNotification_(row, assets) {
   }
 
   if (os.os === 'unknown') {
-    row.verdict = V_UNKNOWN;
+    row.verdict = V_INVEST;
     row.kev = kevLabel_(row.cve);
-    row.vendorPath = (row.vendor === VENDOR_CISCO) ? 'Cisco固定' : 'Fortinet';
     row.reasonPhrase = '自社利用バージョンを判定できないため';
     row.needsDisplayAi = true;
     row.reason = buildDecisionReason_(row);
@@ -2056,21 +2790,34 @@ function decideNotification_(row, assets) {
     return;
   }
 
-  if (row.vendor === VENDOR_CISCO) {
-    applyCiscoVerdict_(row);
+  // 版が影響範囲内。ここから社内ルールを当てる。
+  row.kev = kevLabel_(row.cve);
+
+  const gate = ruleGate_(row);
+  if (!gate.pass) {
+    // KEV 掲載は最低ラインを調査に固定する例外。ゲートで落とさない。
+    if (row.kev === KEV_YES) {
+      row.verdict = V_INVEST;
+      row.reasonPhrase = '悪用が確認されているため';
+      row.needsDisplayAi = true;
+    } else {
+      row.verdict = V_NONE;
+      row.reasonPhrase = gate.phrase;
+      // 表示列はコードのフォールバックで埋める。AI は呼ばない。
+      row.needsCodeDisplay = true;
+    }
+    row.reason = buildDecisionReason_(row);
     row._lockedVerdict = true;
     return;
   }
 
-  row.needsFortinetAi = true;
+  // 影響機能が決まらないと判定できないので AI へ回す。
+  row.needsFortinetAi = (row.vendor === VENDOR_FORTINET);
+  row.needsVerdict = true;
   row.needsDisplayAi = true;
-  row.kev = kevLabel_(row.cve);
-  if (row.kev === KEV_YES) {
-    row.vendorPath = 'Fortinet';
-    row.verdict = V_URGENT;
-    row.reasonPhrase = '悪用が確認されているため';
-    row.reason = buildDecisionReason_(row);
-  }
+  row.verdict = V_INVEST;
+  row.reasonPhrase = '影響機能を確認中のため';
+  row.reason = buildDecisionReason_(row);
 }
 
 /**
@@ -2121,7 +2868,7 @@ function narrowFixVersion_(row, assets) {
 function logUnownedProducts_(rows) {
   const c = {};
   rows.forEach(function (r) {
-    if (r.verdict === V_ROUTINE && r.reason.indexOf('使用していない') !== -1) {
+    if (r.verdict === V_NONE && r.reason.indexOf('使用していない') !== -1) {
       c[r.product] = (c[r.product] || 0) + 1;
     }
   });
@@ -2204,21 +2951,39 @@ function migrateTarget_(row, branchLabel) {
   return best ? best.s : '';
 }
 
-/** 台帳の公式推奨対応列用。英語を残さない。 */
+/**
+ * 台帳の公式推奨対応列用。英語を残さない。プレーンテキストのみ（リンクは付けない）。
+ *
+ * Cisco:
+ *   - 修正版（稀に CSAF にある）または回避策コマンドがあればそれを出す
+ *   - どちらも無いとき（GAS では openVuln 不可）は「更新先はアドバイザリで確認」
+ *   - 「回避策なし」は CSAF Workarounds の公式文 "There are no workarounds..." の訳
+ */
 function formatOfficialAction_(row) {
-  if (row.vendor === VENDOR_CISCO) {
-    const vers = row.fixedVersions || [];
-    if (vers.length) return vers[0] + ' 以上に更新が必要';
-    const raw = String(row.fixesRaw || '');
-    if (/has released software updates/i.test(raw)) {
-      return '修正済みソフトウェアが公開済み。アドバイザリの Fixed Software を確認して更新';
-    }
-    if (/no workarounds/i.test(raw)) return '回避策なし。修正版へ更新';
-    return '修正版はアドバイザリの Fixed Software を参照';
+  if (row.vendor !== VENDOR_CISCO) {
+    const fix = jpFix_(row);
+    return fix ? jpFixEnglishFallback_(fix) : '';
   }
-  const fix = jpFix_(row);
-  if (!fix) return '';
-  return jpFixEnglishFallback_(fix);
+
+  const lines = [];
+  const vers = row.fixedVersions || [];
+  if (vers.length) lines.push(vers[0] + ' 以上に更新が必要');
+
+  const cmds = row.workaroundCmds || [];
+  const hint = truncateJa_(row.workaroundJa || '', 40);
+  if (cmds.length) {
+    lines.push('更新できない場合の回避策: ' + cmds.join(' / ')
+             + (hint ? '（' + hint + '）' : ''));
+  } else if (hint) {
+    lines.push('更新できない場合の回避策: ' + hint);
+  }
+
+  if (lines.length) return lines.join('\n');
+
+  if (row.workaroundNone) {
+    return '回避策なし。更新先はアドバイザリで確認';
+  }
+  return '更新先はアドバイザリで確認';
 }
 
 /** 残った英語の修正指示を日本語の定型へ */
@@ -2239,7 +3004,7 @@ function jpFixEnglishFallback_(text) {
 
 function countVerdicts_(rows) {
   const c = {};
-  c[V_URGENT] = 0; c[V_ROUTINE] = 0; c[V_UNKNOWN] = 0;
+  c[V_ACT] = 0; c[V_INVEST] = 0; c[V_NONE] = 0;
   rows.forEach(function (r) { if (c[r.verdict] !== undefined) c[r.verdict]++; });
   return c;
 }
@@ -2250,7 +3015,7 @@ function countVerdicts_(rows) {
 
 function enrichWithAI_(rows) {
   const targets = rows.filter(function (r) {
-    return r.needsFortinetAi || r.needsDisplayAi;
+    return r.needsVerdict || r.needsDisplayAi;
   });
   if (!targets.length) {
     Logger.log('AI 対象の行がありません。');
@@ -2285,8 +3050,13 @@ function enrichWithAI_(rows) {
         r.aiTechImpact = v.technical_impact || '不明';
         r.aiServiceStop = v.service_stop;
         r.aiConfidence = v.confidence || '';
-        r.impactJa = truncateJa_(v['ユーザ影響'] || '', 50);
+        r.impactJa = truncateJa_(pickAiField_(v, ['ユーザ影響', 'user_impact', 'impact_ja']) || '', 50);
+        r.cveSummaryJa = truncateJa_(pickAiField_(v, ['内容要約', '脆弱性名和訳', 'cve_summary', 'summary_ja']) || '', 30);
+        if (!r.cveSummaryJa) {
+          Logger.log('AI 内容要約なし: ' + rowKey_(r));
+        }
         r.howToCheck = v['確認方法'] || '';
+        r.workaroundJa = truncateJa_(v['回避策'] || '', 40);
         if (r.vendor === VENDOR_CISCO) {
           r.feature = normalizeCiscoFeature_(r.feature);
           r.aiOk = true;
@@ -2302,14 +3072,26 @@ function enrichWithAI_(rows) {
       Logger.log('AI 生成 ' + label + ' 失敗: ' + err);
       chunk.forEach(function (r) { r.aiOk = false; });
     }
-    Utilities.sleep(1000);
+    if (i + AI_CHUNK_SIZE < targets.length) Utilities.sleep(1000);
   }
 
   Logger.log('AI 生成: ' + AI_PROVIDER + ' / 成功 ' + ok + ' / 対象 ' + targets.length + ' 行');
+  if (!ok) {
+    Logger.log('AI が0件のため、Slackの内容は公式タイトルの日本語訳、影響・確認方法はコード側の文面になります。');
+  }
 }
 
 function rowKey_(r) {
   return r.advisoryId + '|' + r.cve + '|' + r.product;
+}
+
+function pickAiField_(obj, names) {
+  if (!obj) return '';
+  for (let i = 0; i < names.length; i++) {
+    const v = obj[names[i]];
+    if (v !== undefined && v !== null && String(v).trim()) return String(v).trim();
+  }
+  return '';
 }
 
 function buildEnrichPrompt_(rows) {
@@ -2322,10 +3104,13 @@ function buildEnrichPrompt_(rows) {
       脆弱性名: r.title,
       アドバイザリの記述: r.summary,
       影響の種類: r.impact,
+      CVSSスコア: r.cvss === '' || r.cvss === undefined ? '' : r.cvss,
       CVSSベクター: r.vector || '',
+      OS該否: r.osStatus || '',
       自社利用バージョン: r.selfVersion,
       脆弱性の影響バージョン: (r.affected || []).join(' / '),
-      ベンダー提示の緩和策: r.workaround || 'なし'
+      ベンダー提示の緩和策: r.workaround || 'なし',
+      ベンダー提示の回避コマンド: (r.workaroundCmds || []).join(' / ') || 'なし'
     };
   });
 
@@ -2334,11 +3119,15 @@ function buildEnrichPrompt_(rows) {
     '人が読んで行動できる確認方法・最悪ケースの影響・機能分類を JSON で返してください。',
     '',
     '【禁止】',
-    '- 最終判定（対応推奨 / 次回定期 / 要調査）を書かない',
+    '- 最終判定（あり（対応検討）/ あり（影響調査）/ なし）を書かない',
     '- 自然文の判定根拠を書かない',
     '- set / execute / configure など変更系 CLI',
     '- 「アドバイザリを確認」だけなど、操作しても判断できない文言',
     '- アドバイザリに無い推測',
+    '- OS該否が「対象」の行で、稼働バージョンや影響範囲の再確認（show version 等）を書かない',
+    '- 複数行で同じ「内容要約」を使い回さない',
+    '- 「あり（影響調査）」の行に「臨時対応は不要」「定期更新枠に載せる」だけを書かない',
+    '  （調査の手掛かりになる設定確認か、影響条件の特定手順を書く）',
     '',
     '【入力】',
     JSON.stringify(payload, null, 1),
@@ -2353,27 +3142,64 @@ function buildEnrichPrompt_(rows) {
     'auth_required: none / low / high / 不明',
     'evidence: アドバイザリの根拠を20字以内',
     'confidence: high / medium / low',
-    '確認方法: 必ず次の3行。読んだ人がその通り操作して対応要否を判断できること',
-    '  確認ポイント：〈何が有効なら影響を受けるか〉',
-    '  コマンド：〈読み取り専用。Fortinet は show/get/diagnose。Cisco は show 系〉',
-    '  判断：〈この出力なら対応が必要／この出力なら次回定期で可〉',
-    'ユーザ影響: 悪用された場合の最悪ケースを、業務影響が想像できる日本語で50字以内。抽象語のみ禁止',
+    '確認方法: 必ず次のいずれか。読んだ人が次の行動を決められること',
+    '  (A) 設定次第の機能 → 3行「確認ポイント／コマンド／判断」',
+    '      確認ポイント：〈何が有効なら影響を受けるか〉',
+    '      コマンド：〈読み取り専用。Fortinet は show/get/diagnose。Cisco は show 系〉',
+    '      判断：〈この出力なら対応が必要／この出力なら定期更新で可〉',
+    '  (B) 版は対象済みで設定確認が無い行 → 3行「確認ポイント／アクション／判断」',
+    '      確認ポイント：版は対象済み（追加の版確認は不要）',
+    '      アクション：〈更新先の確認・定期更新枠への追加など、次にやること〉',
+    '      判断：〈臨時対応が要る／定期更新で足りる〉',
+    '  アドバイザリの記述に確認手順（Vulnerable Products / Determine 節）があれば、',
+    '  設定確認はそのコマンドを優先。版の再確認だけは書かない。',
+    '内容要約: Slack「内容」。アドバイザリの記述を読んで30字以内。CVEごとに必ず違う文。',
+    '  「認証なし○で機器が応答停止」のような型は禁止。拠点全断などの業務影響は書かない（それはユーザ影響）。',
+    'ユーザ影響: 悪用時の業務結果を50字以内。主語は機器または通信。機能名（BEEP等）は書かない。',
+    '  CVSSベクターの C/I/A を反映する（C:N I:N A:H なら機器停止・通信途絶。掌握と書かない）。',
+    '  同じ型なら同じ文でよい。差は内容要約で出す。',
+    '回避策: 「ベンダー提示の緩和策」が「なし」以外なら、何をすると影響を止められるかを日本語40字以内。',
+    '  コマンド自体は別に台帳へ載せるので繰り返さない。緩和策が「なし」なら空文字にすること',
     '',
     '出力は次の JSON 配列のみ。前置き・コードフェンスを含めないこと。',
     '[{"key":"FG-IR-26-154|CVE-2025-43892|FortiOS","affected_feature":"Webフィルタ",',
     '  "technical_impact":"partial","service_stop":false,"attack_position":"network",',
     '  "auth_required":"none","evidence":"CSAF記載","confidence":"high",',
-    '  "確認方法":"確認ポイント：Webフィルタプロファイルがポリシーに紐づいているか\\nコマンド：show webfilter profile\\n判断：有効なポリシーがあれば対応が必要。未使用なら次回定期で可",',
-    '  "ユーザ影響":"警告画面経由で端末が操作され社内認証情報が盗まれる恐れ"}]'
+    '  "確認方法":"確認ポイント：Webフィルタプロファイルがポリシーに紐づいているか\\nコマンド：show webfilter profile\\n判断：有効なポリシーがあれば対応が必要。未使用なら定期更新で可",',
+    '  "内容要約":"認証なしでWebフィルタ警告画面を操作",',
+    '  "ユーザ影響":"端末が操作され社内認証情報が盗まれる恐れ",',
+    '  "回避策":"該当OIDをSNMPビューから除外して参照を止める"}]'
   ].join('\n');
 }
 
 function callGemini_(prompt) {
+  const models = [GEMINI_MODEL].concat(GEMINI_MODEL_FALLBACKS || []);
+  let lastErr = null;
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
+    try {
+      const text = callGeminiModel_(model, prompt);
+      if (i > 0) Logger.log('AI はフォールバックモデル ' + model + ' で生成しました');
+      return text;
+    } catch (e) {
+      lastErr = e;
+      if (!isGeminiDailyQuotaError_(e) || i === models.length - 1) throw e;
+      Logger.log(model + ' の無料枠（1日上限）を使い切ったため ' + models[i + 1] + ' に切り替えます');
+    }
+  }
+  throw lastErr;
+}
+
+function isGeminiDailyQuotaError_(err) {
+  return /PerDay/i.test(String(err && err.message ? err.message : err));
+}
+
+function callGeminiModel_(model, prompt) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) throw new Error('GEMINI_API_KEY がスクリプト プロパティに未設定です。');
 
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
-              GEMINI_MODEL + ':generateContent';
+              model + ':generateContent';
 
   const options = {
     method: 'post',
@@ -2392,13 +3218,15 @@ function callGemini_(prompt) {
     const code = res.getResponseCode();
     if (code === 200) break;
 
-    if ((code === 503 || code === 429) && attempt < 3) {
-      const wait = attempt * 5000;
-      Logger.log('HTTP ' + code + ' のため ' + (wait / 1000) + '秒待って再試行します（' + attempt + '回目）');
-      Utilities.sleep(wait);
+    const bodyText = res.getContentText();
+    const waitMs = geminiRetryWaitMs_(code, bodyText, attempt);
+    if (waitMs > 0 && attempt < 3) {
+      Logger.log('HTTP ' + code + ' (' + model + ') のため ' +
+                 Math.round(waitMs / 1000) + '秒待って再試行します（' + attempt + '回目）');
+      Utilities.sleep(waitMs);
       continue;
     }
-    throw new Error('Gemini API エラー HTTP ' + code + ': ' + res.getContentText());
+    throw new Error('Gemini API エラー HTTP ' + code + ': ' + bodyText);
   }
 
   const body = JSON.parse(res.getContentText());
@@ -2410,6 +3238,23 @@ function callGemini_(prompt) {
 
   const parts = (cand && cand.content && cand.content.parts) || [];
   return parts.map(function (p) { return p.text || ''; }).join('');
+}
+
+/** 429 の日次上限はリトライしない（同じ枠を消費するだけ）。分次制限は Retry-After を待つ。 */
+function geminiRetryWaitMs_(code, bodyText, attempt) {
+  if (code !== 429 && code !== 503) return 0;
+  if (code === 429 && /PerDay/i.test(bodyText || '')) return 0;
+  let delaySec = attempt * 5;
+  try {
+    const details = (JSON.parse(bodyText).error || {}).details || [];
+    for (let i = 0; i < details.length; i++) {
+      const raw = details[i] && details[i].retryDelay;
+      if (!raw) continue;
+      const n = parseInt(String(raw), 10);
+      if (n > 0) delaySec = Math.max(delaySec, n);
+    }
+  } catch (e) {}
+  return Math.min(delaySec, 90) * 1000;
 }
 
 function callClaude_(prompt) {
@@ -2516,7 +3361,7 @@ function removeRowsFor_(vendor, advisoryIds) {
         const rowVendor = String(vendors[i][0] || VENDOR_FORTINET).trim();
         if (rowVendor !== vendor) continue;
       }
-      if (targets[String(ids[i][0]).trim()]) { sh.deleteRow(i + 2); removed++; }
+      if (targets[String(ids[i][0]).trim()]) { deleteSheetRowSafe_(sh, i + 2); removed++; }
     }
     if (removed) Logger.log(sh.getName() + ' から古い ' + removed + ' 行を削除しました（改訂のため入れ直します）。');
   });
@@ -2535,26 +3380,23 @@ function writeState_(vendor, todo, rows) {
     sh.setFrozenRows(1);
   }
 
-  const assets = vendor === VENDOR_FORTINET ? fortinetAssets_(readAssets_()) : ciscoAssets_(readAssets_());
   const byAdvisory = {};
   rows.forEach(function (r) {
     const a = byAdvisory[r.advisoryId] ||
-      (byAdvisory[r.advisoryId] = { products: [], ledger: 0, initial: r.initialDate });
+      (byAdvisory[r.advisoryId] = { products: [], initial: r.initialDate });
     pushUnique_(a.products, r.product);
-    if (isLedgerRow_(r, assets)) a.ledger++;
   });
 
   const values = todo.map(function (f) {
     const item = f.item || f;
     const id = item.ir || item.id;
-    const a = byAdvisory[id] || { products: [], ledger: 0, initial: f.updatedAt || item.pubDate };
+    const a = byAdvisory[id] || { products: [], initial: f.updatedAt || item.pubDate };
     return [
       vendor,
       f.updatedAt || item.pubDate || '',
       a.initial || f.updatedAt || item.pubDate || '',
       id,
       item.title,
-      a.ledger,
       a.products.join(', '),
       f.version || ''
     ];
@@ -2566,27 +3408,30 @@ function writeState_(vendor, todo, rows) {
   Logger.log('処理済みシートに ' + values.length + ' 件のアドバイザリを記録しました。');
 }
 
-/** 月ごとの公表件数と、台帳に載った行数を数える。月次サマリの分母。 */
+/**
+ * 月ごとの公表件数を数える。月次サマリの分母。
+ *
+ * 台帳の行数は数えない。同じアドバイザリでも実行タイミングで行数が変わり、
+ * 集計の意味が定まらないうえ、台帳を数えれば同じ数字が出る。
+ */
 function countByMonth() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_STATE);
   if (!sh || sh.getLastRow() < 2) { Logger.log('処理済みシートが空です。'); return; }
 
   const values = sh.getRange(2, 1, sh.getLastRow() - 1, STATE_HEADERS.length).getValues();
-  const cLedger = STATE_HEADERS.indexOf('台帳の行数');
+  const cUpd = STATE_HEADERS.indexOf('最終更新日');
   const m = {};
   values.forEach(function (r) {
-    const d = r[0];   // 最終更新日。改訂された月に計上する
+    const d = r[cUpd];   // 改訂された月に計上する
     const key = (d instanceof Date)
       ? d.getFullYear() + '/' + ('0' + (d.getMonth() + 1)).slice(-2)
       : '(公開日不明)';
-    const s = m[key] || (m[key] = { adv: 0, ledger: 0 });
-    s.adv++;
-    s.ledger += Number(r[cLedger]) || 0;
+    m[key] = (m[key] || 0) + 1;
   });
 
   Logger.log('--- 月別（最終更新日で集計）---');
   Object.keys(m).sort().reverse().forEach(function (k) {
-    Logger.log(k + '  公表 ' + m[k].adv + ' 件 / 台帳に記録 ' + m[k].ledger + ' 行');
+    Logger.log(k + '  公表 ' + m[k] + ' 件');
   });
 }
 
@@ -2596,25 +3441,22 @@ function countByMonthVendor() {
 
   const values = sh.getRange(2, 1, sh.getLastRow() - 1, STATE_HEADERS.length).getValues();
   const cVendor = STATE_HEADERS.indexOf('ベンダー');
-  const cLedger = STATE_HEADERS.indexOf('台帳の行数');
+  const cUpd = STATE_HEADERS.indexOf('最終更新日');
   const m = {};
   values.forEach(function (r) {
-    const d = r[STATE_HEADERS.indexOf('最終更新日')];
+    const d = r[cUpd];
     const key = (d instanceof Date)
       ? d.getFullYear() + '/' + ('0' + (d.getMonth() + 1)).slice(-2)
       : '(公開日不明)';
     const vendor = cVendor >= 0 ? String(r[cVendor]).trim() : VENDOR_FORTINET;
     const bucket = m[key] || (m[key] = {});
-    const s = bucket[vendor] || (bucket[vendor] = { adv: 0, ledger: 0 });
-    s.adv++;
-    s.ledger += Number(r[cLedger]) || 0;
+    bucket[vendor] = (bucket[vendor] || 0) + 1;
   });
 
   Logger.log('--- 月別・ベンダー別 ---');
   Object.keys(m).sort().reverse().forEach(function (month) {
     Object.keys(m[month]).sort().forEach(function (vendor) {
-      const s = m[month][vendor];
-      Logger.log(month + '  ' + vendor + ': 公表 ' + s.adv + ' 件 / 台帳 ' + s.ledger + ' 行');
+      Logger.log(month + '  ' + vendor + ': 公表 ' + m[month][vendor] + ' 件');
     });
   });
 }
@@ -2631,16 +3473,24 @@ function toRowArray_(r) {
     r.verdict || '',                  // 1  自社影響
     r.product || '不明',              // 2  製品
     r.cve || '',                      // 3  CVE
-    cvss,                             // 4  CVSS
-    r.pubDate || '',                  // 5  最終更新日
-    action,                           // 6  公式推奨対応
-    r.kev || '',                      // 7  KEV
-    r.feature || '',                  // 8  影響機能
-    r.reason || '',                   // 9  判定根拠
-    r.howToCheck || '',               // 10 確認方法
-    r.impactJa || '',                 // 11 ユーザ影響
-    advisoryCell                      // 12 アドバイザリ
+    shortTitle_(r.title),             // 4  脆弱性名
+    cvss,                             // 5  CVSS
+    r.pubDate || '',                  // 6  最終更新日
+    action,                           // 7  公式推奨対応
+    r.kev || '',                      // 8  KEV
+    r.feature || '',                  // 9  影響機能
+    r.reason || '',                   // 10 判定根拠
+    stripCheckLabels_(r.howToCheck),  // 11 確認方法
+    r.impactJa || '',                 // 12 ユーザ影響
+    advisoryCell                      // 13 アドバイザリ
   ];
+}
+
+/** 台帳向けにタイトルを短くする（英語の長い文書名を切る） */
+function shortTitle_(s) {
+  const t = String(s || '').trim().replace(/\s+/g, ' ');
+  if (!t) return '';
+  return t.length > 60 ? t.slice(0, 60) + '…' : t;
 }
 
 function writeLedger_(rows) {
@@ -2655,7 +3505,7 @@ function writeLedger_(rows) {
   Logger.log('台帳に ' + values.length + ' 行を追記しました。');
 }
 
-/** 対応推奨 → 要調査 → 次回定期 の順、同じ判定なら公開日の新しい順に並べ替える。 */
+/** あり（対応検討）→ あり（影響調査）→ なし の順、同じ判定なら公開日の新しい順に並べ替える。 */
 function sortLedger_() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LEDGER);
   if (!sh || sh.getLastRow() < 3) return;
@@ -2663,7 +3513,7 @@ function sortLedger_() {
   const n = sh.getLastRow() - 1;
   const range = sh.getRange(2, 1, n, LEDGER_HEADERS.length);
   const rank = {};
-  rank[V_URGENT] = 0; rank[V_UNKNOWN] = 1; rank[V_ROUTINE] = 2;
+  rank[V_ACT] = 0; rank[V_INVEST] = 1; rank[V_NONE] = 2;
 
   const formulas = range.getFormulas();
   const values = range.getValues();
@@ -2689,10 +3539,10 @@ function formatLedger_(sh) {
     .setFontWeight('bold')
     .setBackground('#f0f0f0');
 
-  const widths = [90, 100, 140, 70, 100, 220, 55, 120, 280, 320, 220, 150];
+  const widths = [90, 100, 140, 220, 70, 100, 220, 55, 120, 280, 320, 220, 150];
   widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
 
-  sh.setFrozenColumns(5);
+  sh.setFrozenColumns(6);
 
   const all = sh.getRange(1, 1, sh.getMaxRows(), LEDGER_HEADERS.length);
   all.setVerticalAlignment('top');
@@ -2718,7 +3568,7 @@ function backfillAiColumns_() {
     const verdict = values[i][COL['自社影響'] - 1];
     const advisoryId = display[i][COL['アドバイザリ'] - 1];
     const vendor = vendorFromAdvisoryId_(advisoryId) || VENDOR_FORTINET;
-    if (verdict !== V_URGENT && verdict !== V_UNKNOWN && verdict !== V_ROUTINE) continue;
+    if (verdict !== V_ACT && verdict !== V_INVEST && verdict !== V_NONE) continue;
     if (String(values[i][COL['ユーザ影響'] - 1]).trim() &&
         String(values[i][COL['影響機能'] - 1]).trim() &&
         String(values[i][COL['確認方法'] - 1]).trim()) continue;
@@ -2769,7 +3619,7 @@ function backfillAiColumns_() {
       }
       rows.forEach(function (r) {
         const w = wanted[rowKey_(r)];
-        if (w && (r.needsFortinetAi || r.needsDisplayAi)) {
+        if (w && (r.needsVerdict || r.needsDisplayAi || r.needsCodeDisplay)) {
           r.rowIndex = w.rowIndex;
           targets.push(r);
         }
@@ -2782,19 +3632,7 @@ function backfillAiColumns_() {
 
   if (!targets.length) { Logger.log('再取得できた対象がありませんでした。'); return; }
 
-  try {
-    enrichWithAI_(targets);
-  } catch (e) {
-    Logger.log('AI 補完に失敗しました（フォールバック継続）: ' + e);
-  }
-
-  targets.forEach(function (r) {
-    applyFallbackDisplayFields_(r);
-    if (r.needsFortinetAi && !r._lockedVerdict) finalizeFortinetVerdict_(r);
-    else r.reason = buildDecisionReason_(r);
-    r.howToCheck = normalizeHowToCheck_(r);
-    r.impactJa = truncateJa_(r.impactJa || fallbackImpactJa_(r), 50);
-  });
+  fillLedgerDisplay_(targets);
 
   let written = 0;
   targets.forEach(function (t) {
@@ -2802,7 +3640,7 @@ function backfillAiColumns_() {
     sh.getRange(t.rowIndex, COL['影響機能']).setValue(t.feature || '');
     sh.getRange(t.rowIndex, COL['判定根拠']).setValue(t.reason || '');
     sh.getRange(t.rowIndex, COL['ユーザ影響']).setValue(t.impactJa || '');
-    sh.getRange(t.rowIndex, COL['確認方法']).setValue(t.howToCheck || '');
+    sh.getRange(t.rowIndex, COL['確認方法']).setValue(stripCheckLabels_(t.howToCheck));
     if (t.verdict) sh.getRange(t.rowIndex, COL['自社影響']).setValue(t.verdict);
     if (t.kev) sh.getRange(t.rowIndex, COL['KEV']).setValue(t.kev);
     written++;
@@ -2811,97 +3649,344 @@ function backfillAiColumns_() {
 }
 
 // ============================================================
-// 7. Slack 通知
+// 7. Slack 通知（日次1通ダイジェスト）
 // ============================================================
 
 /**
- * Slack 通知。
+ * Slack 通知。その日の該当分を 1 通にまとめる。
  *
- * 通知の仕事は「何件あるか・どれが一番まずいか・どこを見るか」の 3 つだけ。
- * 確認コマンドや判定根拠は台帳の仕事なので載せない。
- * 初版は 1 件あたり 7 行を平文で流しており、要素がすべて同じ太さで並ぶため目が滑った。
+ * 目的:
+ *   1. 自社該当の公開に気づく
+ *   2. RSS+AI の既知情報を短く掴む
+ *   3. 公式アドバイザリで妥当性と対応を決める（主アクション）
+ *   4. 必要なら台帳で詳細（任意）
  *
- * Block Kit を使い、1 件を「太字の被害 → 小さい灰色のメタ情報 → 対応」の 3 層にする。
- * 太字だけ追えば全体が掴めて、詳しく見たい行だけメタ情報を読む形にした。
+ * 「なし」は件数のみ。コミ猫風の画像添付はしない（Webhook のみ）。
  */
 function notifySlack_(rows) {
   const url = PropertiesService.getScriptProperties().getProperty('SLACK_WEBHOOK_URL');
   if (!url) { Logger.log('SLACK_WEBHOOK_URL 未設定のため通知をスキップします。'); return; }
 
-  const c = countVerdicts_(rows);
   const hits = rows
-    .filter(function (r) { return r.verdict === V_URGENT || r.verdict === V_UNKNOWN; })
-    .sort(function (a, b) {
-      if (a.verdict !== b.verdict) return a.verdict === V_URGENT ? -1 : 1;
-      return (Number(b.cvss) || 0) - (Number(a.cvss) || 0);
-    });
+    .filter(function (r) { return r.verdict === V_ACT || r.verdict === V_INVEST; })
+    .sort(slackHitSort_);
 
   if (!hits.length && !NOTIFY_WHEN_NO_HITS) {
-    Logger.log('対応推奨・要調査の新着なし。Slack 通知はスキップします。');
+    Logger.log('OS 更新の可能性がある新着なし。Slack 通知はスキップします。');
     return;
   }
 
   const sheetUrl = SpreadsheetApp.getActiveSpreadsheet().getUrl();
-  const worst = hits.length ? Math.max.apply(null, hits.map(function (r) { return Number(r.cvss) || 0; })) : 0;
-  const icon = !hits.length ? ':white_check_mark:' : (worst >= 7 ? ':rotating_light:' : ':warning:');
-
-  const headline = hits.length
-    ? '対応推奨 ' + c[V_URGENT] + '件 ／ 要調査 ' + c[V_UNKNOWN] + '件'
-    : '対応推奨なし（新着 ' + rows.length + ' 件）';
-
-  const blocks = [{
-    type: 'header',
-    text: { type: 'plain_text', text: icon + ' NW機器 ' + headline, emoji: true }
-  }];
-
-  // 1 件 = 3 ブロック。「何が起きるか → 何の件か → どうするか」の順に読ませる
-  hits.slice(0, SLACK_MAX_ITEMS).forEach(function (r, i) {
-    if (i > 0) blocks.push({ type: 'divider' });
-
-    // (1) 太字 ＝ 何が起きるか。ここだけ追えば全体が掴める
-    blocks.push({
-      type: 'section',
-      text: { type: 'mrkdwn', text: '*' + (r.impactJa || r.title || r.cve) + '*' }
-    });
-
-    // (2) 小さい灰色 ＝ 何の件か。識別に必要な最小限
-    const meta = [
-      r.vendor || VENDOR_FORTINET,
-      r.verdict,
-      r.cve ? '<' + r.advisoryUrl + '|' + r.cve + '>' : r.advisoryId,
-      r.cvss !== '' && r.cvss !== undefined ? 'CVSS ' + r.cvss : null,
-      r.feature || null
-    ].filter(function (x) { return x; }).join('  ·  ');
-    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: meta }] });
-
-    // (3) どうするか。結論なので通常の太さで置く
-    const action = formatOfficialAction_(r);
-    if (action) {
-      blocks.push({
-        type: 'section',
-        text: { type: 'mrkdwn', text: ':hammer_and_wrench:  ' + action }
-      });
-    }
-  });
-
+  const shown = hits.slice(0, SLACK_MAX_ITEMS);
   const rest = hits.length - SLACK_MAX_ITEMS;
-  const footer = [];
-  if (rest > 0) footer.push('ほか ' + rest + ' 件');
-  if (c[V_ROUTINE]) footer.push('次回定期 ' + c[V_ROUTINE] + '件は台帳のみ');
-  footer.push('<' + sheetUrl + '|台帳を開く>（確認方法・判定根拠はこちら）');
-
-  blocks.push({ type: 'divider' });
-  blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: footer.join('  ·  ') }] });
+  const payload = buildSlackPayload_(shown, sheetUrl, rest);
 
   UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
     muteHttpExceptions: true,
-    payload: JSON.stringify({
-      text: 'NW機器 ' + headline,   // 通知プレビューとモバイル用のフォールバック
-      blocks: blocks
-    })
+    payload: JSON.stringify(payload)
   });
+}
+
+function slackHitSort_(a, b) {
+  const da = slackDeviceLabel_(a);
+  const db = slackDeviceLabel_(b);
+  if (da !== db) return da === 'FortiGate' ? -1 : 1;
+  return (Number(b.cvss) || 0) - (Number(a.cvss) || 0);
+}
+
+/**
+ * ADS Manager 型:
+ *   1行目: 新しい脆弱性が発表されました🔍
+ *   2行目: FortiGate:1件 Cisco:2件
+ */
+function buildSlackPayload_(hits, sheetUrl, rest) {
+  const summary = slackDeviceSummary_(hits);
+  const title = '新しい脆弱性が発表されました:mag:';
+  const blocks = [{
+    type: 'header',
+    text: { type: 'plain_text', text: title, emoji: true }
+  }];
+  if (summary) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: summary }
+    });
+  }
+
+  hits.forEach(function (r) {
+    blocks.push({ type: 'divider' });
+    formatSlackItemBlocks_(r).forEach(function (b) { blocks.push(b); });
+  });
+
+  const foot = [];
+  if (rest > 0) foot.push('ほか ' + rest + ' 件は台帳');
+  const links = ['<' + SECURITY_NEXT_VULN_URL + '|Security NEXTで確認>'];
+  if (sheetUrl) links.push('<' + sheetUrl + '|判定台帳を確認>');
+  foot.push(links.join('  /  '));
+  if (foot.length) {
+    blocks.push({ type: 'divider' });
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: foot.join('\n') }
+    });
+  }
+
+  return {
+    text: title,
+    blocks: blocks
+  };
+}
+
+function slackDeviceSummary_(rows) {
+  const order = ['FortiGate', 'Cisco'];
+  const m = {};
+  rows.forEach(function (r) {
+    const k = slackDeviceLabel_(r);
+    m[k] = (m[k] || 0) + 1;
+  });
+  const keys = order.filter(function (k) { return m[k]; }).concat(
+    Object.keys(m).filter(function (k) { return order.indexOf(k) === -1; }).sort()
+  );
+  return keys.map(function (k) { return k + ':' + m[k] + '件'; }).join(' ');
+}
+
+function slackDeviceLabel_(r) {
+  if ((r.vendor || '') === VENDOR_CISCO) return 'Cisco';
+  return 'FortiGate';
+}
+
+/**
+ * 1件。
+ *   🟡 CVE-…  /  CVSS 5 [中]  /  08/12更新
+ *   機器：FortiGate
+ *   内容：CVEの日本語要約（無ければタイトルの日本語訳）
+ *   影響：業務結果（主語は機器）
+ *   推奨対応：…
+ */
+function formatSlackItemBlocks_(r) {
+  const band = slackCvssBand_(r.cvss);
+  const cve = slackCveLink_(r) || '（CVEなし）';
+  const cvss = (r.cvss === '' || r.cvss === undefined || r.cvss === null)
+    ? 'CVSS — [' + band.label + ']'
+    : 'CVSS ' + r.cvss + ' [' + band.label + ']';
+  const head = [band.emoji + ' *' + cve + '*', cvss];
+  const upd = slackUpdatedLabel_(r);
+  if (upd) head.push(upd);
+  const lines = [
+    head.join('  /  '),
+    '機器：' + slackDeviceLabel_(r),
+    '内容：' + slackContentsJa_(r),
+    '影響：' + slackImpactJa_(r),
+    '推奨対応：' + slackActionLine_(r)
+  ];
+
+  return [{
+    type: 'section',
+    text: { type: 'mrkdwn', text: lines.join('\n') }
+  }];
+}
+
+/** アドバイザリの最終更新日。CVE 行の mm/dd更新 */
+function slackUpdatedLabel_(r) {
+  const d = r.pubDate instanceof Date ? r.pubDate : (r.pubDate ? new Date(r.pubDate) : null);
+  if (!d || isNaN(d.getTime())) return '';
+  return Utilities.formatDate(d, 'Asia/Tokyo', 'MM/dd') + '更新';
+}
+
+function slackActionLine_(r) {
+  const first = String(formatOfficialAction_(r) || '').split(/\n/)[0].trim();
+  if (!first) return 'アドバイザリを確認';
+  return first.length > 40 ? first.slice(0, 40) + '…' : first;
+}
+
+/** Slack の「内容」。AI の日本語要約。無ければ公式タイトルの日本語訳。 */
+function slackContentsJa_(r) {
+  const ai = String(r.cveSummaryJa || r.titleJa || '').trim();
+  const text = isUsableCveSummary_(ai) ? ai : titleJaFromAdvisory_(r);
+  return text.length > 30 ? text.slice(0, 30) + '…' : text;
+}
+
+function isUsableCveSummary_(s) {
+  if (!s) return false;
+  if (/認証なし.*機器が(応答停止|再起動)/.test(s)) return false;
+  if (/^(サービス停止|遠隔コード実行|権限昇格|情報漏えい|脆弱性)$/.test(s)) return false;
+  const letters = (s.match(/[A-Za-z]/g) || []).length;
+  const ja = (s.match(/[\u3040-\u30ff\u4e00-\u9faf]/g) || []).length;
+  if (ja === 0) return false;
+  if (letters >= 8 && ja < 4) return false;
+  return true;
+}
+
+/** 製品名と Vulnerability を落とした公式タイトルを日本語にする。定型の「機器が応答停止」は使わない。 */
+function titleJaFromAdvisory_(r) {
+  const feat = contentFeatureJa_(r);
+  const kind = vulnKindJa_(r);
+  if (feat && kind) return feat + 'の' + kind;
+
+  const translated = translateTitlePhrases_(stripAdvisoryTitle_(r));
+  if (feat && translated && translated.indexOf(feat) === -1) return feat + 'の' + translated;
+  if (translated) return translated;
+  if (feat) return feat + 'の脆弱性';
+  if (kind) return kind;
+  return '（タイトルなし）';
+}
+
+function contentFeatureJa_(r) {
+  if ((r.vendor || '') === VENDOR_CISCO) {
+    const f = normalizeCiscoFeature_(r.feature || r.title || '');
+    if (f && f !== 'IOS XE 基盤') return f.replace(/\s+Server$/, '');
+    return '';
+  }
+  const f = String(r.feature || '').trim();
+  if (f === '管理GUI' || f === 'WebUI') return '管理画面';
+  if (f && f !== '不明' && f !== 'その他' && f !== '—') return f;
+  const guessed = guessFortinetFeature_(r);
+  if (guessed === '管理GUI') return '管理画面';
+  if (guessed && guessed !== 'その他') return guessed;
+  return '';
+}
+
+function vulnKindJa_(r) {
+  const low = advisoryCorpus_(r).toLowerCase() + ' ' + String(r.title || '').toLowerCase();
+  if (/remote code|code execution|arbitrary code|command injection|\brce\b/.test(low)) return '遠隔コード実行';
+  if (/privilege.?escalat|elevation of privilege/.test(low)) return '権限昇格';
+  if (/information disclosure|information leak|sensitive.*expos/.test(low)) return '情報漏えい';
+  if (/auth(entication)? bypass|improper authentication/.test(low)) return '認証回避';
+  if (/path.?traversal|directory.?traversal/.test(low)) return 'パストラバーサル';
+  if (/cross.?site.?script|\bxss\b/.test(low)) return 'クロスサイトスクリプティング';
+  if (/sql.?inject/.test(low)) return 'SQLインジェクション';
+  if (/buffer overflow|heap overflow|stack overflow/.test(low)) return 'バッファオーバーフロー';
+  if (/resource exhaust|\bdos\b|denial of service/.test(low)) return 'サービス停止';
+  return '';
+}
+
+function stripAdvisoryTitle_(r) {
+  let t = String(r.title || '').replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  return t
+    .replace(/^Cisco IOS(?: Software)? and IOS XE Software\s+/i, '')
+    .replace(/^Cisco IOS XE Software\s+/i, '')
+    .replace(/^Cisco IOS Software\s+/i, '')
+    .replace(/\s+in Fortinet FortiOS$/i, '')
+    .replace(/^Fortinet\s+/i, '')
+    .replace(/\s+Vulnerabilit(?:y|ies)$/i, '')
+    .trim();
+}
+
+/** 英語タイトルの定型句だけ日本語にする。プロトコル名（BEEP 等）は残す。 */
+function translateTitlePhrases_(en) {
+  let s = String(en || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  const pairs = [
+    [/UI DoS attack/gi, '管理画面のサービス停止'],
+    [/DoS attack/gi, 'サービス停止'],
+    [/Resource Exhaustion Allowing Denial of Service/gi, 'リソース枯渇によるサービス停止'],
+    [/Denial of Service/gi, 'サービス停止'],
+    [/Remote Code Execution/gi, '遠隔コード実行'],
+    [/Arbitrary Code Execution/gi, '遠隔コード実行'],
+    [/Privilege Escalation/gi, '権限昇格'],
+    [/Information Disclosure/gi, '情報漏えい'],
+    [/Authentication Bypass/gi, '認証回避'],
+    [/Command Injection/gi, 'コマンドインジェクション'],
+    [/Buffer Over-?read/gi, 'バッファ過剰読み取り'],
+    [/Buffer Overflow/gi, 'バッファオーバーフロー'],
+    [/Resource Exhaustion/gi, 'リソース枯渇'],
+    [/\bDoS\b/gi, 'サービス停止'],
+    [/\bRCE\b/gi, '遠隔コード実行'],
+    [/\bXSS\b/gi, 'クロスサイトスクリプティング'],
+    [/\bWebUI\b/gi, '管理画面'],
+    [/\bGUI\b/g, '管理画面'],
+    [/\bUI\b/g, '管理画面'],
+    [/\battack\b/gi, '攻撃'],
+    [/\ballowing\b/gi, 'による'],
+    [/\bvulnerabilit(?:y|ies)\b/gi, '']
+  ];
+  for (let i = 0; i < pairs.length; i++) {
+    s = s.replace(pairs[i][0], ' ' + pairs[i][1] + ' ');
+  }
+  s = s.replace(/\s+/g, ' ').trim();
+  s = s.replace(/([^\s])\s+(?=[\u3040-\u30ff\u4e00-\u9faf])/g, '$1の');
+  s = s.replace(/の+/g, 'の').replace(/^の+|の+$/g, '');
+  s = s.replace(/サービス停止の攻撃/g, 'サービス停止');
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+/** Slack の「影響」。主語は機器。機能名は足さない。 */
+function slackImpactJa_(r) {
+  const ja = String(r.impactJa || '').trim();
+  const text = ja || fallbackImpactJa_(r);
+  return text.length > 40 ? text.slice(0, 40) + '…' : text;
+}
+
+/** CVE 文字列を公式アドバイザリへリンク。無ければ ID だけ。 */
+function slackCveLink_(r) {
+  const cve = String(r.cve || '').trim();
+  const url = String(r.advisoryUrl || '').trim();
+  const label = cve || String(r.advisoryId || '').trim();
+  if (!label) return '';
+  return url ? '<' + url + '|' + label + '>' : label;
+}
+
+/**
+ * CVSS 定性区分。
+ *   緊急 9.0–10.0 / 高 7.0–8.9 / 中 4.0–6.9 / 低 0.1–3.9
+ */
+function slackCvssBand_(score) {
+  const n = Number(score);
+  if (score === '' || score === undefined || score === null || isNaN(n)) {
+    return { label: '不明', emoji: ':white_circle:' };
+  }
+  if (n >= 9) return { label: '緊急', emoji: ':red_circle:' };
+  if (n >= 7) return { label: '高', emoji: ':large_orange_circle:' };
+  if (n >= 4) return { label: '中', emoji: ':large_yellow_circle:' };
+  if (n > 0) return { label: '低', emoji: ':white_circle:' };
+  return { label: '不明', emoji: ':white_circle:' };
+}
+
+/**
+ * Webhook に送らず、組み立てた payload をログに出す（表示確認用）。
+ */
+function testSlackBlocks() {
+  const sheetUrl = 'https://example.com/ledger';
+  const rows = [
+    {
+      vendor: VENDOR_FORTINET, verdict: V_ACT, product: 'FortiOS',
+      selfVersion: 'FortiOS 7.4.11', cve: 'CVE-2026-0001', cvss: 9.8,
+      advisoryUrl: 'https://fortiguard.fortinet.com/psirt/FG-IR-26-001',
+      advisoryId: 'FG-IR-26-001',
+      title: 'Resource Exhaustion Allowing Denial of Service in Fortinet FortiOS',
+      cveSummaryJa: '管理画面への負荷で機器が応答停止',
+      impactJa: '機器が停止し、拠点の通信が途切れる恐れ',
+      vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L',
+      fixVersion: '7.4.12 以上に更新が必要',
+      pubDate: new Date('2026-08-12')
+    },
+    {
+      vendor: VENDOR_CISCO, verdict: V_INVEST, product: 'IOS-XE',
+      selfVersion: 'IOS-XE 17.15.5', cve: 'CVE-2026-0002', cvss: 7.5,
+      advisoryUrl: 'https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-example',
+      advisoryId: 'cisco-sa-example',
+      title: 'Cisco IOS XE Software Blocks Extensible Exchange Protocol Denial of Service Vulnerability',
+      cveSummaryJa: '不正なBEEP通信で機器が再起動',
+      impactJa: '機器が停止し、拠点の通信が途切れる恐れ',
+      vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:N/A:H',
+      workaroundNone: true,
+      pubDate: new Date('2026-08-05')
+    },
+    {
+      vendor: VENDOR_FORTINET, verdict: V_INVEST, product: 'FortiOS',
+      selfVersion: '7.4.11', cve: 'CVE-2026-0003', cvss: 6.5,
+      advisoryUrl: 'https://fortiguard.fortinet.com/psirt/FG-IR-26-003',
+      advisoryId: 'FG-IR-26-003', title: 'Information disclosure',
+      impactJa: '管理情報や認証情報が外部に漏れる恐れ',
+      pubDate: new Date('2026-08-20')
+    }
+  ];
+  const payload = buildSlackPayload_(rows, sheetUrl, 0);
+  Logger.log(JSON.stringify(payload, null, 2));
+  Logger.log('testSlackBlocks: 1行タイトル＋件数の payload を出力しました。');
 }
 
 // ============================================================
@@ -2978,54 +4063,250 @@ function testVersion() {
   Logger.log('バージョン比較: ' + pass + ' / ' + cases.length + ' 件が期待どおり');
 }
 
-/** Fortinet 判定表の単体テスト（ネットワーク不要） */
+/** 自社影響3値の単体テスト（ネットワーク不要） */
 function testJudge() {
-  let pass = 0;
+  const NET = 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H';
   const cases = [
-    { kev: KEV_YES, feature: 'Webフィルタ', aiOk: true, tech: 'partial', stop: 'いいえ', expect: V_URGENT },
-    { kev: KEV_NO, feature: '不明', aiOk: false, tech: '不明', stop: '不明', expect: V_ROUTINE },
-    { kev: KEV_NO, feature: 'その他', aiOk: true, tech: 'partial', stop: 'いいえ', expect: V_ROUTINE },
-    { kev: KEV_NO, feature: 'Webフィルタ', aiOk: true, tech: 'partial', stop: 'いいえ', expect: V_ROUTINE },
-    { kev: KEV_NO, feature: 'Webフィルタ', aiOk: true, tech: 'total', stop: 'いいえ', expect: V_URGENT },
-    { kev: KEV_NO, feature: 'IPsec VPN', aiOk: true, tech: 'partial', stop: 'はい', expect: V_URGENT },
-    { kev: KEV_NO, feature: 'データプレーン', aiOk: true, tech: 'partial', stop: 'いいえ', expect: V_ROUTINE },
-    { kev: KEV_NO, feature: '', aiOk: false, tech: '', stop: '', title: 'SSL-VPN Reflected XSS', expect: V_ROUTINE }
+    // ルールゲートで落ちる側。深刻度が高くても前提条件があれば臨時更新しない
+    { name: '管理者権限が前提', vector: 'CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:H',
+      feature: 'IPsec VPN', tech: 'total', expect: V_NONE },
+    { name: '認証済みが前提', vector: 'CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H',
+      feature: '管理GUI', tech: 'total', expect: V_NONE },
+    { name: 'ローカルアクセスが前提', vector: 'CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H',
+      feature: 'データプレーン', tech: 'total', expect: V_NONE },
+    { name: '利用者の操作が前提', vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H',
+      feature: '管理GUI', tech: 'total', expect: V_NONE },
+
+    // 設定次第の機能は、設定を見ていないので断定しない
+    { name: '設定次第の機能', vector: NET, feature: 'Webフィルタ', tech: 'total', expect: V_INVEST },
+    { name: '無効にしている機能', vector: NET, feature: 'SSL-VPN', tech: 'total', expect: V_NONE },
+    { name: '機能を特定できない', vector: NET, feature: 'その他', tech: '不明', aiOk: false, expect: V_INVEST },
+    { name: 'ベクター不明', vector: '', feature: 'その他', tech: '不明', aiOk: false, expect: V_INVEST },
+
+    // 常時有効な機能だけ、影響の重さで臨時更新まで判定する
+    { name: '常時有効かつ掌握', vector: NET, feature: 'データプレーン', tech: 'total', expect: V_ACT },
+    { name: '常時有効だが軽微', vector: NET, feature: 'データプレーン', tech: 'partial',
+      title: 'Information disclosure', impact: 'Information disclosure', expect: V_NONE },
+
+    // KEV は最低ライン。使っていない前提で流さない
+    { name: 'KEVあり・設定次第', kev: KEV_YES, vector: NET, feature: 'Webフィルタ',
+      tech: 'partial', expect: V_INVEST },
+    { name: 'KEVあり・前提条件つき', kev: KEV_YES, vector: 'CVSS:3.1/AV:L/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:H',
+      feature: 'データプレーン', tech: 'total', expect: V_INVEST },
+    { name: 'KEVあり・常時有効かつ掌握', kev: KEV_YES, vector: NET, feature: 'データプレーン',
+      tech: 'total', expect: V_ACT }
   ];
 
+  let pass = 0;
   cases.forEach(function (c, i) {
     const row = {
       vendor: VENDOR_FORTINET, cve: 'CVE-TEST-' + i, osStatus: '対象',
-      kev: c.kev, feature: c.feature, aiOk: c.aiOk, title: c.title || '',
-      aiTechImpact: c.tech, aiServiceStop: c.stop, aiConfidence: c.aiOk ? 'high' : 'low'
+      kev: c.kev || KEV_NO, vector: c.vector,
+      feature: c.feature, aiOk: (c.aiOk === undefined) ? true : c.aiOk,
+      title: c.title || '', impact: c.impact || '',
+      aiTechImpact: c.tech, aiServiceStop: c.stop || 'いいえ',
+      aiConfidence: (c.aiOk === false) ? 'low' : 'high'
     };
-    finalizeFortinetVerdict_(row, { skipKev: true });
-    const fmtOk = /^OS=対象 \| KEV=(あり|なし) \| .+「.+」$/.test(row.reason)
-      && row.reason.indexOf('パス=') === -1;
-    const ok = row.verdict === c.expect && fmtOk;
+    finalizeVerdict_(row, { skipKev: true });
+    const ok = row.verdict === c.expect && isTwoLineReason_(row.reason);
     if (ok) pass++;
-    Logger.log((ok ? 'OK  ' : 'NG  ') + JSON.stringify(c) + ' → ' + row.verdict + ' / ' + row.reason);
+    Logger.log((ok ? 'OK  ' : 'NG  ') + c.name + ' → ' + row.verdict +
+               '（期待 ' + c.expect + '） / ' + row.reason.replace('\n', ' ⏎ '));
   });
-  Logger.log('Fortinet 判定表: ' + pass + ' / ' + cases.length + ' 件が期待どおり');
+  Logger.log('自社影響3値: ' + pass + ' / ' + cases.length + ' 件が期待どおり');
 }
 
-/** Cisco KEV 固定ルールの単体テスト */
-function testCiscoKevJudge() {
-  const urgent = {
-    osStatus: '対象', kev: KEV_YES, reasonPhrase: '悪用が確認されているため',
-    verdict: V_URGENT
+/** 判定根拠が「1行目=構造値／2行目=理由と結論」の2行になっているか */
+function isTwoLineReason_(reason) {
+  const lines = String(reason || '').split('\n');
+  if (lines.length !== 2) return false;
+  return /^OS=\S+ \| KEV=(あり|なし)$/.test(lines[0])
+      && /.+「.+」$/.test(lines[1]);
+}
+
+/** ルールゲートの単体テスト。落とす理由が根拠欄に出ることまで見る */
+function testRuleGate() {
+  const cases = [
+    ['CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H', true, ''],
+    ['CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:H', false, '管理者権限'],
+    ['CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H', false, '認証済み'],
+    ['CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H', false, 'ローカル'],
+    ['CVSS:3.1/AV:A/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H', false, '隣接'],
+    ['CVSS:3.1/AV:P/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H', false, '物理'],
+    ['CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H', false, '操作'],
+    ['', true, '']                                   // ベクター無しは断定しない
+  ];
+
+  let pass = 0;
+  cases.forEach(function (c) {
+    const got = ruleGate_({ vector: c[0] });
+    const ok = got.pass === c[1] && got.phrase.indexOf(c[2]) !== -1;
+    if (ok) pass++;
+    Logger.log((ok ? 'OK  ' : 'NG  ') + (c[0] || '(ベクターなし)') +
+               ' → pass=' + got.pass + ' / ' + (got.phrase || '(理由なし)'));
+  });
+  Logger.log('ルールゲート: ' + pass + ' / ' + cases.length + ' 件が期待どおり');
+}
+
+/**
+ * ルールゲートが AI の前に効いているかのテスト（ネットワーク不要）。
+ * ここで なし に確定した行は AI を呼ばないので、needsVerdict が立たないこと。
+ */
+function testGateBeforeAi() {
+  const assets = [{ vendor: VENDOR_CISCO, product: 'IOS-XE', version: '17.15.5', tool: 'はい' }];
+  const base = {
+    vendor: VENDOR_CISCO, product: 'IOS-XE', cve: '', title: '', summary: '', impact: '',
+    affected: ['17.15.5'], fixesRaw: '', kev: KEV_NO
   };
-  urgent.reason = buildDecisionReason_(urgent);
-  const routine = {
-    osStatus: '対象', kev: KEV_NO, reasonPhrase: '定期更新で解消見込みのため',
-    verdict: V_ROUTINE
+
+  const cases = [
+    { name: 'ゲート落ち（PR:H）', vector: 'CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:H',
+      expectVerdict: V_NONE, expectAi: false },
+    { name: 'ゲート通過', vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H',
+      expectVerdict: V_INVEST, expectAi: true }
+  ];
+
+  let pass = 0;
+  cases.forEach(function (c) {
+    const row = JSON.parse(JSON.stringify(base));
+    row.vector = c.vector;
+    row.pubDate = new Date();
+    decideNotification_(row, assets);
+    const calledAi = !!(row.needsVerdict || row.needsDisplayAi);
+    const ok = row.verdict === c.expectVerdict && calledAi === c.expectAi;
+    if (ok) pass++;
+    Logger.log((ok ? 'OK  ' : 'NG  ') + c.name + ' → ' + row.verdict +
+               ' / AI呼び出し=' + calledAi + '（期待 ' + c.expectVerdict + ' / ' + c.expectAi + '）');
+  });
+  Logger.log('ゲートの前置き: ' + pass + ' / ' + cases.length + ' 件が期待どおり');
+}
+
+/** 影響機能の設定依存分類テスト。CHECK_STEPS の判断文と矛盾しないこと */
+function testFeatureExposure() {
+  const cases = [
+    ['データプレーン', 'always'],
+    ['IOS XE 基盤', 'always'],
+    ['管理GUI', 'config'],
+    ['Webフィルタ', 'config'],
+    ['WebUI', 'config'],
+    ['SSL-VPN', SSL_VPN_ENABLED ? 'config' : 'disabled'],
+    ['その他', 'unknown'],
+    ['', 'unknown']
+  ];
+
+  let pass = 0;
+  cases.forEach(function (c) {
+    const got = featureExposure_({ feature: c[0] });
+    const ok = got === c[1];
+    if (ok) pass++;
+    Logger.log((ok ? 'OK  ' : 'NG  ') + (c[0] || '(空)') + ' → ' + got + '（期待 ' + c[1] + '）');
+  });
+  Logger.log('機能の設定依存分類: ' + pass + ' / ' + cases.length + ' 件が期待どおり');
+}
+
+/** 台帳に出す確認方法からラベルが消えているか */
+function testStripCheckLabels() {
+  const src = '確認ポイント：管理GUIが有効か\nコマンド：show system interface\n判断：http があれば対応が必要';
+  const got = stripCheckLabels_(src);
+  const ok = got === '管理GUIが有効か\nshow system interface\nhttp があれば対応が必要';
+  Logger.log((ok ? 'OK  ' : 'NG  ') + 'ラベル除去 → ' + got.replace(/\n/g, ' ⏎ '));
+}
+
+/**
+ * Workarounds note の分解テスト（ネットワーク不要）。
+ * コマンド行と説明文が分かれ、免責文が落ち、「回避策なし」を取り違えないこと。
+ */
+function testCiscoWorkaround() {
+  const withCmds = {
+    document: {
+      notes: [{
+        title: 'Workarounds',
+        text: [
+          'Administrators can disable the affected OIDs on a device.',
+          'snmp-server view NO_BAD_SNMP snmpUsmMIB excluded',
+          'snmp-server community mycomm view NO_BAD_SNMP RO',
+          'While this mitigation has been deployed and was proven successful,',
+          'customers should consider it a temporary measure.'
+        ].join('\n')
+      }]
+    }
   };
-  routine.reason = buildDecisionReason_(routine);
-  const ok = urgent.reason.indexOf('「対応推奨」') !== -1
-    && routine.reason.indexOf('「次回定期」') !== -1
-    && urgent.reason.indexOf('パス=') === -1;
-  Logger.log('KEV=あり → ' + urgent.reason);
-  Logger.log('KEV=なし → ' + routine.reason);
-  Logger.log(ok ? 'Cisco 固定ルール: OK' : 'Cisco 固定ルール: NG');
+  const none = { document: { notes: [{ title: 'Workarounds', text: 'There are no workarounds that address this vulnerability.' }] } };
+  const absent = { document: { notes: [] } };
+  const mitigation = {
+    document: {
+      notes: [{
+        title: 'Workarounds',
+        text: 'There are no workarounds that address this vulnerability.\n\nHowever, there is a mitigation.\nsnmp-server view NO_BAD_SNMP snmpUsmMIB excluded\nWhile this mitigation has been deployed as a temporary measure.'
+      }]
+    }
+  };
+
+  const a = ciscoWorkaround_(withCmds);
+  const b = ciscoWorkaround_(none);
+  const c = ciscoWorkaround_(absent);
+  const d = ciscoWorkaround_(mitigation);
+
+  const checks = [
+    ['コマンド2件を抽出', a.cmds.length === 2],
+    ['コマンドが原文のまま', a.cmds[0] === 'snmp-server view NO_BAD_SNMP snmpUsmMIB excluded'],
+    ['説明文を保持', a.text.indexOf('disable the affected OIDs') !== -1],
+    ['免責文を除去', a.text.indexOf('temporary measure') === -1],
+    ['回避策なしを判定', b.none === true && b.cmds.length === 0],
+    ['note なしは none=false', c.none === false && c.cmds.length === 0],
+    ['no workarounds でも緩和策コマンドは取る', d.none === false && d.cmds.length === 1]
+  ];
+  let pass = 0;
+  checks.forEach(function (c2) {
+    if (c2[1]) pass++;
+    Logger.log((c2[1] ? 'OK  ' : 'NG  ') + c2[0]);
+  });
+  Logger.log('回避策の分解: ' + pass + ' / ' + checks.length + ' 件が期待どおり');
+}
+
+/** firstFixed の系列選択と応答パースのテスト（ネットワーク不要） */
+function testCiscoFirstFixedPick() {
+  const cases = [
+    { name: '同系列を選ぶ', self: '17.15.5', fixed: ['17.9.6', '17.12.4', '17.15.6'], expect: '17.15.6' },
+    { name: '同系列が複数なら最小', self: '17.15.5', fixed: ['17.15.8', '17.15.6'], expect: '17.15.6' },
+    { name: '同系列が無ければ最小', self: '17.15.5', fixed: ['17.12.4', '17.9.6'], expect: '17.9.6' },
+    { name: '取得できなければ空', self: '17.15.5', fixed: [], expect: '' }
+  ];
+
+  let pass = 0;
+  cases.forEach(function (c) {
+    const got = pickFirstFixed_(c.fixed, c.self);
+    const ok = got === c.expect;
+    if (ok) pass++;
+    Logger.log((ok ? 'OK  ' : 'NG  ') + c.name + ' → ' + (got || '(空)') +
+               '（期待 ' + (c.expect || '(空)') + '）');
+  });
+
+  // 応答形の揺れ（配列とカンマ区切り文字列）を両方受けられること
+  const parsed = parseFirstFixedMap_({
+    advisories: [
+      { advisoryId: 'cisco-sa-a', firstFixed: ['17.15.6', '17.12.4'] },
+      { advisoryId: 'cisco-sa-b', firstFixed: '17.9.6,17.15.7' },
+      { advisoryId: '', firstFixed: '17.15.9' }
+    ]
+  });
+  const parseOk = parsed['cisco-sa-a'].join(',') === '17.12.4,17.15.6'
+    && parsed['cisco-sa-b'].join(',') === '17.9.6,17.15.7'
+    && Object.keys(parsed).length === 2;
+  if (parseOk) pass++;
+  Logger.log((parseOk ? 'OK  ' : 'NG  ') + '応答パース（配列／カンマ区切り／ID欠落）');
+
+  Logger.log('修正版の系列選択: ' + pass + ' / ' + (cases.length + 1) + ' 件が期待どおり');
+}
+
+/**
+ * openVuln は GAS では運用しない（UrlFetch が id.cisco.com で Access Denied）。
+ * スタブが常に空を返すことだけ確認する。
+ */
+function testCiscoFirstFixed() {
+  Logger.log('openVuln API は GAS 運用対象外（ciscoFirstFixedMap_ は常に空）。');
+  const map = ciscoFirstFixedMap_('17.15.5');
+  Logger.log('version=17.15.5 → アドバイザリ ' + Object.keys(map).length + ' 件（期待 0）');
 }
 
 /** 確認手順テーブルの単体テスト */
@@ -3034,21 +4315,148 @@ function testCheckSteps() {
   let total = 0;
   Object.keys(CHECK_STEPS_FORTINET).forEach(function (f) {
     total++;
-    const row = { vendor: VENDOR_FORTINET, feature: f, howToCheck: 'アドバイザリの Affected Products を確認' };
+    const row = {
+      vendor: VENDOR_FORTINET, feature: f, osStatus: '対象', verdict: V_NONE,
+      howToCheck: 'アドバイザリの Affected Products を確認'
+    };
     const got = normalizeHowToCheck_(row);
-    const ok = /コマンド[：:]/.test(got) && /(show|get|diagnose)\b/i.test(got) && /判断[：:]/.test(got);
+    const ok = isActionableHowTo_(got) && !isVersionRecheckHowTo_(got);
     if (ok) pass++;
     Logger.log((ok ? 'OK  ' : 'NG  ') + 'Fortinet ' + f);
   });
-  ['WebUI', 'BEEP', 'XMCP Server', 'IOS XE 基盤', 'SD-WAN'].forEach(function (f) {
+  ['WebUI', 'BEEP', 'XMCP Server', 'SD-WAN'].forEach(function (f) {
     total++;
-    const row = { vendor: VENDOR_CISCO, feature: f, title: f, howToCheck: '' };
+    const row = {
+      vendor: VENDOR_CISCO, feature: f, title: f, osStatus: '対象',
+      verdict: V_NONE, howToCheck: ''
+    };
     const got = normalizeHowToCheck_(row);
-    const ok = /コマンド[：:]/.test(got) && /show\b/i.test(got) && /判断[：:]/.test(got);
+    const ok = isActionableHowTo_(got) && !isVersionRecheckHowTo_(got) && /コマンド[：:]/.test(got);
     if (ok) pass++;
     Logger.log((ok ? 'OK  ' : 'NG  ') + 'Cisco ' + f + ' → ' + got.split('\n')[0]);
   });
+
+  total++;
+  const noneRow = {
+    vendor: VENDOR_CISCO, feature: 'IOS XE 基盤', title: 'Security Hardening',
+    osStatus: '対象', verdict: V_NONE, howToCheck: ''
+  };
+  const noneGot = normalizeHowToCheck_(noneRow);
+  const noneOk = isRegularUpdateHowTo_(noneGot);
+  if (noneOk) pass++;
+  Logger.log((noneOk ? 'OK  ' : 'NG  ') + 'なし → 定期更新定型');
+
+  total++;
+  const invRow = {
+    vendor: VENDOR_CISCO, feature: 'その他', title: 'Unknown Thing',
+    osStatus: '対象', verdict: V_INVEST,
+    howToCheck: CHECK_STEPS_CISCO_DEFAULT
+  };
+  const invGot = normalizeHowToCheck_(invRow);
+  const invOk = !isRegularUpdateHowTo_(invGot) && /振り分け|特定/.test(invGot);
+  if (invOk) pass++;
+  Logger.log((invOk ? 'OK  ' : 'NG  ') + '影響調査 → 定期更新定型を拒否');
+
+  total++;
+  const bad = {
+    vendor: VENDOR_CISCO, feature: 'IOS XE 基盤', osStatus: '対象', verdict: V_NONE,
+    howToCheck: '確認ポイント：稼働バージョンが影響範囲内か\nコマンド：show version\n判断：範囲内なら対応'
+  };
+  const replaced = normalizeHowToCheck_(bad);
+  const rejOk = !isVersionRecheckHowTo_(replaced);
+  if (rejOk) pass++;
+  Logger.log((rejOk ? 'OK  ' : 'NG  ') + '対象済みの版再確認を差し替え');
+
   Logger.log('確認手順: ' + pass + ' / ' + total + ' 件が期待どおり');
+}
+
+/** 情報通知（notice）は台帳行にしない */
+function testCiscoInformationalSkip() {
+  const notice = {
+    document: {
+      category: 'csaf_informational_advisory',
+      title: 'Cisco Advance Notification for Publication of August 5, 2026, Security Advisories',
+      tracking: { id: 'cisco-sa-notice-L4XfJg8S' }
+    },
+    product_tree: {
+      branches: [{ product: { name: 'Cisco IOS XE Software ', product_id: 'C1' } }]
+    },
+    vulnerabilities: []
+  };
+  const item = { id: 'cisco-sa-notice-L4XfJg8S', title: notice.document.title, link: 'https://example.com', pubDate: new Date() };
+  const assets = [{ vendor: VENDOR_CISCO, product: 'IOS-XE', version: '17.15.5', tool: 'はい' }];
+  const rows = extractCiscoRowsFromCsaf_(notice, item, assets);
+  const ok = rows.length === 0 && isCiscoInformationalAdvisory_(notice, item);
+  Logger.log((ok ? 'OK  ' : 'NG  ') + 'notice は台帳行 0（got ' + rows.length + '）');
+}
+
+/** ユーザ影響が CVSS と矛盾しないことのテスト */
+function testImpactJaFromVector() {
+  const cases = [
+    {
+      name: 'DoSのみ',
+      vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:N/A:H',
+      expect: /停止|通信/
+    },
+    {
+      name: '掌握',
+      vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H',
+      expect: /乗っ取|掌握|改ざん/
+    }
+  ];
+  let pass = 0;
+  cases.forEach(function (c) {
+    const got = fallbackImpactJa_({ vector: c.vector, title: '', impact: '', summary: '' });
+    const ok = c.expect.test(got);
+    if (ok) pass++;
+    Logger.log((ok ? 'OK  ' : 'NG  ') + c.name + ' → ' + got);
+  });
+
+  const fixed = preferImpactJa_({
+    vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:N/A:H',
+    impactJa: '機器を掌握され設定改ざんや通信傍受の恐れ'
+  });
+  const fixOk = /停止|通信/.test(fixed) && !/掌握/.test(fixed);
+  if (fixOk) pass++;
+  Logger.log((fixOk ? 'OK  ' : 'NG  ') + 'DoSなのに掌握 → 差し替え');
+  Logger.log('ユーザ影響ベクター: ' + pass + ' / ' + (cases.length + 1) + ' 件が期待どおり');
+}
+
+/** AI が無いとき、内容が英語切れ端ではなく日本語のタイトル訳になること */
+function testTitleJaFromAdvisory() {
+  const cases = [
+    {
+      name: 'FortiGate UI DoS',
+      row: { vendor: VENDOR_FORTINET, title: 'UI DoS attack', feature: '', summary: '', impact: '' },
+      expect: /管理画面/
+    },
+    {
+      name: 'Cisco BEEP',
+      row: {
+        vendor: VENDOR_CISCO,
+        title: 'Cisco IOS XE Software Blocks Extensible Exchange Protocol Denial of Service Vulnerability',
+        feature: '', summary: '', impact: ''
+      },
+      expect: /BEEP/
+    },
+    {
+      name: 'Cisco XMCP',
+      row: {
+        vendor: VENDOR_CISCO,
+        title: 'Cisco IOS XE Software Extensible Messaging Client Protocol Denial of Service Vulnerability',
+        feature: '', summary: '', impact: ''
+      },
+      expect: /XMCP/
+    }
+  ];
+  let pass = 0;
+  cases.forEach(function (c) {
+    const got = slackContentsJa_(c.row);
+    const ok = c.expect.test(got) && /[\u3040-\u30ff\u4e00-\u9faf]/.test(got);
+    if (ok) pass++;
+    Logger.log((ok ? 'OK  ' : 'NG  ') + c.name + ' → ' + got);
+  });
+  Logger.log('タイトル日本語訳: ' + pass + ' / ' + cases.length + ' 件が期待どおり');
 }
 
 /** Cisco 影響機能名の正規化テスト */
@@ -3056,6 +4464,8 @@ function testCiscoFeatureNormalize_() {
   const cases = [
     ['Cisco IOS XE Software Security Hardening', 'IOS XE 基盤'],
     ['Cisco IOS XE Software Web-Based Management', 'WebUI'],
+    ['Cisco IOS XE Software Blocks Extensible Exchange Protocol Denial of Service Vulnerability', 'BEEP'],
+    ['Cisco IOS Software and IOS XE Software Extensible Messaging Client Protocol', 'XMCP Server'],
     ['BEEP', 'BEEP'],
     ['XMCP Server', 'XMCP Server']
   ];
@@ -3103,8 +4513,8 @@ function testAi() {
     summary: 'Buffer over-read in captive portal',
     impact: 'Information disclosure',
     cvss: 4.1, severity: 'MEDIUM', unauthRemote: 'いいえ',
-    verdict: V_URGENT,
-    needsFortinetAi: true,
+    verdict: V_INVEST,
+    needsFortinetAi: true, needsVerdict: true,
     selfVersion: 'FortiOS 7.4.5',
     affected: ['FortiOS >=7.4.0|<=7.4.8', 'FortiOS 7.2 all versions'],
     fixesRaw: 'FortiOS 7.6: Upgrade to 7.6.4 or above\nFortiOS 7.4: Upgrade to 7.4.9 or above',

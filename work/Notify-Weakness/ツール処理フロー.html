@@ -1,0 +1,340 @@
+<meta charset="utf-8">
+<title>脆弱性判定パイプライン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+/* 明るい面を基準に定義し、暗いテーマではトークンだけ差し替える */
+:root{
+  --ground:#F7F7F4;
+  --panel:#FFFFFF;
+  --panel-2:#F0F1EE;
+  --line:#D8DAD3;
+  --line-soft:#E6E7E2;
+  --ink:#1B1F26;
+  --ink-2:#3E454F;
+  --dim:#6A727E;
+  --dim-2:#8A929C;
+  --amber:#B4700C;
+  --amber-ink:#8A5405;
+  --amber-wash:rgba(180,112,12,.09);
+  --stop:#A33227;
+  --stop-wash:rgba(163,50,39,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D1320;
+    --panel:#151E30;
+    --panel-2:#1B2639;
+    --line:#2A3648;
+    --line-soft:#1F2A3D;
+    --ink:#E9EEF7;
+    --ink-2:#C3CEDF;
+    --dim:#8FA0B8;
+    --dim-2:#6C7C93;
+    --amber:#F0A63C;
+    --amber-ink:#FFD08A;
+    --amber-wash:rgba(240,166,60,.13);
+    --stop:#E2685E;
+    --stop-wash:rgba(226,104,94,.12);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D1320;
+  --panel:#151E30;
+  --panel-2:#1B2639;
+  --line:#2A3648;
+  --line-soft:#1F2A3D;
+  --ink:#E9EEF7;
+  --ink-2:#C3CEDF;
+  --dim:#8FA0B8;
+  --dim-2:#6C7C93;
+  --amber:#F0A63C;
+  --amber-ink:#FFD08A;
+  --amber-wash:rgba(240,166,60,.13);
+  --stop:#E2685E;
+  --stop-wash:rgba(226,104,94,.12);
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0;background:var(--ground);color:var(--ink);
+  font-family:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;
+  line-height:1.85;-webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:62rem;margin:0 auto;padding:4rem 1.5rem 6rem;}
+
+.eyebrow{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.72rem;letter-spacing:.18em;color:var(--dim-2);text-transform:uppercase;
+}
+h1{font-size:2.4rem;font-weight:900;line-height:1.3;margin:.5rem 0 0;letter-spacing:.01em;text-wrap:balance;}
+.lede{font-size:1.05rem;color:var(--ink-2);margin:1.1rem 0 0;max-width:46rem;}
+.lede b{color:var(--amber-ink);font-weight:700;}
+
+h2{
+  font-size:1.35rem;font-weight:700;margin:3.6rem 0 0;letter-spacing:.01em;
+  padding-bottom:.5rem;border-bottom:1px solid var(--line);
+}
+h2 .n{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.8rem;color:var(--amber);margin-right:.7rem;letter-spacing:.1em;
+}
+p{margin:1.1rem 0 0;color:var(--ink-2);}
+strong{color:var(--amber-ink);font-weight:700;}
+code{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.85em;background:var(--panel-2);border:1px solid var(--line-soft);
+  border-radius:.25rem;padding:.08em .38em;color:var(--ink);
+}
+
+figure{margin:1.8rem 0 0;}
+.scroll{overflow-x:auto;padding-bottom:.5rem;}
+svg.fig{display:block;width:100%;min-width:40rem;height:auto;color:var(--ink-2);}
+figcaption{margin-top:.9rem;font-size:.85rem;color:var(--dim);}
+
+/* 図の共通クラス。色はトークン経由なので両テーマで成立する */
+.fig .bx{fill:var(--panel);stroke:var(--line);stroke-width:1.5;}
+.fig .bx-lit{fill:var(--amber-wash);stroke:var(--amber);stroke-width:2;}
+.fig .bx-stop{fill:var(--stop-wash);stroke:var(--stop);stroke-width:1.5;}
+.fig .t1{fill:var(--ink);font-size:15px;font-weight:700;}
+.fig .t2{fill:var(--dim);font-size:12px;}
+.fig .mono{font-family:"IBM Plex Mono",ui-monospace,monospace;fill:var(--amber);font-size:11px;letter-spacing:.06em;}
+.fig .edge{stroke:var(--line);stroke-width:1.5;fill:none;}
+.fig .edge-lit{stroke:var(--amber);stroke-width:2;fill:none;}
+.fig .elab{fill:var(--dim-2);font-size:11.5px;}
+.fig text{font-family:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN",system-ui,sans-serif;}
+
+table{border-collapse:collapse;width:100%;margin:1.6rem 0 0;font-size:.94rem;}
+th,td{text-align:left;padding:.7rem .9rem;border-bottom:1px solid var(--line-soft);vertical-align:top;}
+th{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.72rem;letter-spacing:.12em;color:var(--dim-2);
+  text-transform:uppercase;border-bottom:1px solid var(--line);font-weight:500;
+}
+td:first-child{white-space:nowrap;color:var(--ink);font-weight:500;}
+
+.note{
+  margin:1.8rem 0 0;padding:1.1rem 1.3rem;background:var(--panel);
+  border-left:3px solid var(--amber);border-radius:0 .4rem .4rem 0;
+}
+.note p{margin:0;font-size:.95rem;}
+.note p + p{margin-top:.7rem;}
+
+.verdicts{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:1rem;margin:1.6rem 0 0;}
+.v{background:var(--panel);border:1px solid var(--line);border-radius:.5rem;padding:1rem 1.15rem;}
+.v h3{margin:0;font-size:1rem;font-weight:700;color:var(--amber-ink);}
+.v.plain h3{color:var(--ink);}
+.v p{margin:.4rem 0 0;font-size:.86rem;color:var(--dim);}
+:focus-visible{outline:2px solid var(--amber);outline-offset:3px;}
+</style>
+
+<div class="wrap">
+
+<div class="eyebrow">NW機器 脆弱性ウォッチャー v7</div>
+<h1>脆弱性判定パイプライン</h1>
+<p class="lede">毎朝9時半に起動し、メーカーの新着から自社に関係する行だけを残して、
+社内ルールで <b>あり（対応検討）／あり（影響調査）／なし</b> の3値に確定させるまでの流れ。
+設計上いちばん効いているのは、<b>ルールゲートをAI呼び出しの前に置いていること</b>。</p>
+
+<h2><span class="n">01</span>全体の流れ</h2>
+
+<figure>
+<div class="scroll">
+<svg class="fig" viewBox="0 0 1120 240" role="img"
+     aria-label="毎朝9時半のトリガーで起動し、Fortinet と Cisco の新着とCISA KEVを取得し、社内ルールとGeminiで判定し、台帳・処理済みシート・Slackへ出力する4段階の流れ">
+  <defs>
+    <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <rect class="bx" x="1" y="60" width="212" height="108" rx="8"/>
+  <text class="mono" x="18" y="86">01 いつ</text>
+  <text class="t1" x="18" y="114">毎朝 9:30</text>
+  <text class="t2" x="18" y="138">時間主導トリガー</text>
+  <text class="t2" x="18" y="156">createDailyTrigger()</text>
+
+  <line class="edge" x1="223" y1="114" x2="283" y2="114" marker-end="url(#a1)"/>
+
+  <rect class="bx" x="293" y="60" width="252" height="108" rx="8"/>
+  <text class="mono" x="310" y="86">02 どこから</text>
+  <text class="t1" x="310" y="114">新着を取る</text>
+  <text class="t2" x="310" y="138">Fortinet RSS ／ Cisco CSAF RSS</text>
+  <text class="t2" x="310" y="156">＋ CISA KEV（日次キャッシュ）</text>
+
+  <line class="edge" x1="555" y1="114" x2="615" y2="114" marker-end="url(#a1)"/>
+
+  <rect class="bx-lit" x="625" y="60" width="242" height="108" rx="8"/>
+  <text class="mono" x="642" y="86">03 どこで</text>
+  <text class="t1" x="642" y="114">判定する</text>
+  <text class="t2" x="642" y="138">社内ルール（コード）</text>
+  <text class="t2" x="642" y="156">＋ Gemini（表示列だけ）</text>
+
+  <line class="edge" x1="877" y1="114" x2="937" y2="114" marker-end="url(#a1)"/>
+
+  <rect class="bx" x="947" y="60" width="172" height="108" rx="8"/>
+  <text class="mono" x="964" y="86">04 どこへ</text>
+  <text class="t1" x="964" y="114">残す・届ける</text>
+  <text class="t2" x="964" y="138">台帳／処理済み</text>
+  <text class="t2" x="964" y="156">Slack（「あり」のみ）</text>
+
+  <text class="elab" x="1" y="205">失敗したときは notifyMainFailure_() が実行アカウントへメールする（日次トリガーはログを見ないと気づかないため）</text>
+</svg>
+</div>
+<figcaption>取得は2ベンダー並列。判定から先は <code>finalizeVerdict_()</code> に統合されていて、ベンダーで分岐しない。</figcaption>
+</figure>
+
+<h2><span class="n">02</span>1行の脆弱性が、3値になるまで</h2>
+
+<p>台帳の1行は「CVE × 対象製品」。CSAF の <code>vulnerabilities[]</code> がちょうどこの粒度で公開されているので、
+まとめ直さずそのまま展開している。その1行が、どこで落ちてどこでAIに回るか。</p>
+
+<figure>
+<div class="scroll">
+<svg class="fig" viewBox="0 0 900 726" role="img"
+     aria-label="CVEと製品の1行が、非保有や版が範囲外なら「なし」で台帳から外れ、製品不明や版不明なら「あり（影響調査）」になり、版が範囲内ならCVSSベクターのルールゲートへ進む。ゲートで落ちた行はAIを呼ばずに「なし」となり、通った行だけGeminiで表示列を埋めてから社内ルールで3値に確定する流れ">
+  <defs>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+    </marker>
+    <marker id="a2l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--amber)"/>
+    </marker>
+  </defs>
+
+  <!-- 入口 -->
+  <rect class="bx" x="40" y="6" width="300" height="52" rx="8"/>
+  <text class="t1" x="60" y="30">CVE × 対象製品 の 1行</text>
+  <text class="t2" x="60" y="48">extractRows_() ／ extractCiscoRowsFromCsaf_()</text>
+
+  <!-- 背骨 -->
+  <line class="edge" x1="190" y1="58" x2="190" y2="212" marker-end="url(#a2)"/>
+
+  <!-- 分岐1: 非保有・版が範囲外 -->
+  <path class="edge" d="M190 96 H460" marker-end="url(#a2)"/>
+  <text class="elab" x="200" y="90">非保有 ／ 版が影響範囲外</text>
+  <rect class="bx" x="470" y="74" width="300" height="44" rx="8"/>
+  <text class="t1" x="488" y="102">なし　—　台帳に出さない</text>
+
+  <!-- 分岐2: 製品不明・版不明 -->
+  <path class="edge" d="M190 168 H460" marker-end="url(#a2)"/>
+  <text class="elab" x="200" y="162">製品不明 ／ 版が不明</text>
+  <rect class="bx" x="470" y="146" width="300" height="44" rx="8"/>
+  <text class="t1" x="488" y="174">あり（影響調査）</text>
+
+  <!-- ルールゲート -->
+  <rect class="bx-lit" x="40" y="212" width="300" height="72" rx="8"/>
+  <text class="mono" x="60" y="234">ruleGate_()</text>
+  <text class="t1" x="60" y="256">CVSSベクターだけで判定</text>
+  <text class="t2" x="60" y="274">深刻度スコアは使わない</text>
+
+  <line class="edge" x1="190" y1="284" x2="190" y2="428" marker-end="url(#a2)"/>
+
+  <!-- 分岐3: ゲート落ち -->
+  <path class="edge" d="M190 330 H460" marker-end="url(#a2)"/>
+  <text class="elab" x="200" y="324">PR:H ／ PR:L ／ AV:P ／ AV:L ／ AV:A ／ UI:R</text>
+  <rect class="bx-stop" x="470" y="304" width="300" height="66" rx="8"/>
+  <text class="t1" x="488" y="330">なし</text>
+  <text class="t2" x="488" y="350">★ AIを呼ばない。表示列はコードで埋める</text>
+  <text class="t2" x="488" y="364">KEV掲載は例外 → あり（影響調査）</text>
+
+  <!-- AI -->
+  <text class="elab" x="200" y="404">外部から無認証・利用者操作なしで到達できる行だけ</text>
+  <rect class="bx" x="40" y="428" width="300" height="86" rx="8"/>
+  <text class="mono" x="60" y="450">enrichWithAI_()  Gemini</text>
+  <text class="t1" x="60" y="474">影響機能／確認方法／ユーザ影響</text>
+  <text class="t2" x="60" y="494">最終判定は書かせない（プロンプトで禁止）</text>
+  <text class="t2" x="60" y="508">失敗してもコードのフォールバックで埋まる</text>
+
+  <line class="edge" x1="190" y1="514" x2="190" y2="556" marker-end="url(#a2)"/>
+
+  <!-- 確定 -->
+  <rect class="bx-lit" x="40" y="556" width="300" height="66" rx="8"/>
+  <text class="mono" x="60" y="578">finalizeVerdict_()</text>
+  <text class="t1" x="60" y="600">社内ルールで3値に確定</text>
+  <text class="t2" x="60" y="616">featureExposure_() ／ KEV ／ isSevereImpact_()</text>
+
+  <!-- 3値へ扇状に分岐させる（1本だと箱の隙間を指してしまう） -->
+  <path class="edge-lit" d="M340 589 H405"/>
+  <path class="edge-lit" d="M405 562 V666"/>
+  <path class="edge-lit" d="M405 562 H470" marker-end="url(#a2l)"/>
+  <path class="edge-lit" d="M405 614 H470" marker-end="url(#a2l)"/>
+  <path class="edge-lit" d="M405 666 H470" marker-end="url(#a2l)"/>
+
+  <rect class="bx" x="470" y="540" width="300" height="44" rx="8"/>
+  <text class="t1" x="488" y="568">あり（対応検討）</text>
+  <rect class="bx" x="470" y="592" width="300" height="44" rx="8"/>
+  <text class="t1" x="488" y="620">あり（影響調査）</text>
+  <rect class="bx" x="470" y="644" width="300" height="44" rx="8"/>
+  <text class="t1" x="488" y="672">なし</text>
+
+  <text class="elab" x="470" y="710">「あり」2値だけ Slack へ。3値とも台帳に残る（「なし」は3か月で落とす）</text>
+</svg>
+</div>
+<figcaption>赤い枠が、AIを呼ばずに終わる経路。ここを通る行が実データでは最も多い。</figcaption>
+</figure>
+
+<div class="note">
+<p><strong>なぜゲートをAIの前に置くのか。</strong>
+<code>PR:H</code> の行の影響機能を分類しても、結論は変わらない。到達性と前提条件は
+CVSSベクターだけで決まるので、AIを呼ぶ前に落としてAPIを使わない。</p>
+<p>ただし<strong>落とした行の表示列を空にはしない</strong>。空欄だと「AIが失敗した行」と区別できなくなるため、
+コードのフォールバック（<code>applyFallbackDisplayFields_()</code>）で埋める。</p>
+</div>
+
+<h2><span class="n">03</span>誰が何を決めているか</h2>
+
+<p>この分担が、このツールの設計上いちばん重要な線引き。v5 はAIに版の該非まで判断させていて、
+実測で30行中20行が「未判定」になった。v6 で判定をコードに戻している。</p>
+
+<table>
+  <thead><tr><th>担当</th><th>決めていること</th><th>落ちたときどうなるか</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>コード</td>
+      <td>版の該非（数値比較）／ルールゲート／3値の確定</td>
+      <td>—（決定的な計算なので落ちない）</td>
+    </tr>
+    <tr>
+      <td>Gemini</td>
+      <td>影響機能の分類／確認方法／ユーザ影響／内容要約</td>
+      <td><strong>判定は残る。</strong>表示列だけコードのフォールバックで埋まる</td>
+    </tr>
+    <tr>
+      <td>人</td>
+      <td>「あり（影響調査）」行の実機確認と振り分け</td>
+      <td>未確認のまま残る（＝「待てると判断した」記録にはならない）</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2><span class="n">04</span>3値の意味</h2>
+
+<div class="verdicts">
+  <div class="v">
+    <h3>あり（対応検討）</h3>
+    <p>臨時更新の条件を満たした。外部から無認証で到達でき、常時有効な機能で、掌握または業務停止に至る。対応時期を検討する。</p>
+  </div>
+  <div class="v">
+    <h3>あり（影響調査）</h3>
+    <p>設定次第で影響が変わる。台帳の「確認方法」を実機で実行して、なし／対応検討に振り分ける。</p>
+  </div>
+  <div class="v plain">
+    <h3>なし</h3>
+    <p>定期更新まで待てる根拠がある。記録のみ。台帳には残す（臨時更新しないと判断した記録が監査で要る）。</p>
+  </div>
+</div>
+
+<p>判定に<strong>深刻度スコアは使わない</strong>。使うのは到達性（<code>AV</code>）・前提権限（<code>PR</code>）・
+利用者操作（<code>UI</code>）と、影響機能が設定依存かどうかの4点だけ。
+CVSS 9.8 でも管理者権限が前提なら、それを悪用できる者はすでに機器を掌握している。</p>
+
+<div class="note">
+<p><strong>この判定は資産構成に依存している。</strong>
+管理セグメントの分離や機器室の施錠が崩れたら、<code>PR:L</code> / <code>AV:L</code> / <code>AV:P</code> を
+「待てる根拠」として使えなくなる。構成を変えたら社内ルールごと見直すこと。</p>
+</div>
+
+</div>
