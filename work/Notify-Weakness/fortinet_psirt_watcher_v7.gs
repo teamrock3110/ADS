@@ -949,15 +949,19 @@ function runFortinet_() {
       Logger.log('改訂を検知: ' + revised.map(function (f) {
         return f.item.ir + '（' + known.dates[f.item.ir] + ' → ' + ymd_(f.updatedAt) + '）';
       }).join(', '));
-      removeRowsFor_(VENDOR_FORTINET, revised.map(function (f) { return f.item.ir; }));
     }
+    // 記録の有無に関わらず、これから書く分は先に消す。前回の実行が台帳を書いた直後に
+    // 落ちていると記録が付いておらず、消さずに追記すると同じ行が二重に並ぶ。
+    removeRowsFor_(VENDOR_FORTINET, todo.map(function (f) { return f.item.ir; }));
 
     let rows = [];
     todo.forEach(function (f) {
       if (f.error) {
         Logger.log((f.missing ? 'CSAF未作成: ' : 'CSAF 取得失敗（翌日再取得）: ') +
                    f.item.ir + ' / ' + f.error);
-        rows.push(errorRow_(f.item, f.error));
+        // RSS に CVSS と説明文があるので、それだけで台帳の行にする。
+        // 台帳から落とすと実行ログ以外に痕跡が残らない。
+        rows.push(extractFortinetRowFallback_(f.item, assets));
         return;
       }
       rows = rows.concat(extractRows_(f.csaf, f.item));
@@ -971,19 +975,21 @@ function runFortinet_() {
                ' / ' + V_INVEST + ' ' + counts[V_INVEST] + ' / ' + V_NONE + ' ' + counts[V_NONE]);
     if (batchNum === 1) logUnownedProducts_(rows);
 
-    // 取得に失敗した件は処理済みに記録しない。記録すると「やれることは全部やった」印になり、
-    // 翌日 CSAF が取れても、記録した日付（＝RSS の pubDate）と CSAF の日付が一致してしまって
-    // 台帳に載らない。新着は両者が同じ日であることが多く、実際に踏み得る経路。
-    // CSAF が存在しないと確定した 404 だけは記録し、毎日の再処理を止める。
-    const recordable = todo.filter(function (f) { return !f.error || f.missing; })
-      .map(function (f) {
-        if (!f.error) return f;
-        // CSAF を読めていないまま記録する行（＝未作成と確定した 404）。
-        // 版の欄を空にせず印を置く。後日 CSAF が公開されれば "未取得" ≠ "0" で必ず拾える。
-        return { item: f.item, csaf: f.csaf, updatedAt: f.updatedAt,
-                 version: STATE_VERSION_UNAVAILABLE, error: f.error, missing: f.missing };
-      });
-    mergeCounts_(labelTotals, writeState_(VENDOR_FORTINET, recordable, rows, assets));
+    // 取得に失敗した件も記録する（Cisco と同じ方針）。
+    // 以前は記録せず翌日やり直していたが、それは失敗が台帳に出ず誰も気づけなかったため。
+    // フォールバック行を台帳へ出すようにしたので、その前提は無くなった。
+    //
+    // 記録してもリトライは止まらない。Fortinet は毎回 RSS 全件の CSAF を取りに行くので、
+    // 取得自体は毎日続く。記録が止めるのは台帳への再反映だけで、
+    // CSAF が取れるようになった日に版の不一致（未取得 ≠ 0）で自動的に拾われる。
+    // 記録しないと、未解決の件が毎日 Slack に出続けることになる。
+    const recordable = todo.map(function (f) {
+      if (!f.error) return f;
+      // 版の欄を空にせず印を置く。空欄のままだと「入力漏れ」と区別が付かない。
+      return { item: f.item, csaf: f.csaf, updatedAt: f.updatedAt,
+               version: STATE_VERSION_UNAVAILABLE, error: f.error, missing: f.missing };
+    });
+    const judgeRows = snapshotJudgeRows_(rows);
 
     const ledgerRows = rows.filter(function (r) { return isLedgerRow_(r, assets); });
     Logger.log('Fortinet 台帳: ' + ledgerRows.length + ' / ' + rows.length + ' 行');
@@ -991,6 +997,13 @@ function runFortinet_() {
     fillLedgerDisplay_(ledgerRows);
 
     writeLedger_(ledgerRows);
+
+    // 処理済みへの記録は台帳へ書き終えてから。逆順だと、AI 生成中に 6 分の実行時間制限に
+    // 当たったとき「処理済みには記録されたが台帳には無い」状態が残り、
+    // 翌日以降は既知として扱われて改訂まで台帳に載らない。
+    // この順なら、途中で落ちても記録が付かないので次の実行でやり直せる。
+    mergeCounts_(labelTotals, writeState_(VENDOR_FORTINET, recordable, judgeRows, assets));
+
     allLedgerRows = allLedgerRows.concat(ledgerRows);
 
     if (todo.length >= pending.length) break;
@@ -1151,10 +1164,9 @@ function runCisco_() {
     Logger.log('Cisco 処理対象 ' + todo.length + ' 件' +
                (pending.length > todo.length ? '（未処理 ' + pending.length + ' 件・続きあり）' : ''));
 
-    const revised = todo.filter(function (f) { return known.dates[f.item.id]; });
-    if (revised.length) {
-      removeRowsFor_(VENDOR_CISCO, revised.map(function (f) { return f.item.id; }));
-    }
+    // 記録の有無に関わらず、これから書く分は先に消す。前回の実行が台帳を書いた直後に
+    // 落ちていると記録が付いておらず、消さずに追記すると同じ行が二重に並ぶ。
+    removeRowsFor_(VENDOR_CISCO, todo.map(function (f) { return f.item.id; }));
 
     let humanIndex = null;
     let rows = [];
@@ -1170,7 +1182,7 @@ function runCisco_() {
           description: human.description || '',
           pubDate: human.pubDate || f.item.pubDate
         };
-        const fb = extractCiscoRowFallback_(fallbackItem);
+        const fb = extractCiscoRowFallback_(fallbackItem, assets);
         if (fb) rows.push(fb);
         return;
       }
@@ -1187,7 +1199,17 @@ function runCisco_() {
     Logger.log('Cisco 全 ' + rows.length + ' 行: ' + V_ACT + ' ' + counts[V_ACT] +
                ' / ' + V_INVEST + ' ' + counts[V_INVEST] + ' / ' + V_NONE + ' ' + counts[V_NONE]);
 
-    mergeCounts_(labelTotals, writeState_(VENDOR_CISCO, todo, rows, assets));
+    // 取得に失敗した件も記録する。Fortinet は記録しない（＝翌日やり直す）が、
+    // Cisco は失敗時にフォールバック行を台帳へ出し Slack でも知らせるため、
+    // 記録しないと毎日同じ行を作り直すことになる。人に渡した時点で自動リトライは要らない。
+    // ただし版を空のままにすると selectRssCsafCandidates_ の「版が空なら再取得」に
+    // 毎回引っかかり、取得できない件を永久に取り続ける。印を書いてループを止める。
+    const recordable = todo.map(function (f) {
+      if (!f.error) return f;
+      return { item: f.item, csaf: f.csaf, updatedAt: f.updatedAt,
+               version: STATE_VERSION_UNAVAILABLE, error: f.error, missing: f.missing };
+    });
+    const judgeRows = snapshotJudgeRows_(rows);
 
     const ledgerRows = rows.filter(function (r) { return isLedgerRow_(r, assets); });
     Logger.log('Cisco 台帳: ' + ledgerRows.length + ' / ' + rows.length + ' 行');
@@ -1195,6 +1217,10 @@ function runCisco_() {
     fillLedgerDisplay_(ledgerRows);
 
     writeLedger_(ledgerRows);
+
+    // 処理済みへの記録は台帳へ書き終えてから（理由は runFortinet_ の同じ箇所）。
+    mergeCounts_(labelTotals, writeState_(VENDOR_CISCO, recordable, judgeRows, assets));
+
     allLedgerRows = allLedgerRows.concat(ledgerRows);
 
     if (todo.length >= pending.length) break;
@@ -1581,7 +1607,21 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
 }
 
 /** CSAF 失敗時の保険（通常 RSS）。情報通知 ID は行にしない。 */
-function extractCiscoRowFallback_(item) {
+/**
+ * フォールバック行に載せる製品名。資産シートのツール対象から拾う。
+ *
+ * CSAF が読めない以上こちらで製品を決めるしかないので、自社が持っているものを充てて
+ * 人の目に入れる。直書きにすると資産構成が変わったときに追随しない。
+ * 資産が取れない場合だけ、これまでの既定値に落とす。
+ */
+function primaryAssetProduct_(assets, fallback) {
+  const hit = (assets || []).filter(function (a) {
+    return a.product && a.product !== '—';
+  });
+  return hit.length ? hit[0].product : fallback;
+}
+
+function extractCiscoRowFallback_(item, assets) {
   if (isCiscoInformationalAdvisory_(null, item)) {
     Logger.log('Cisco 情報通知のためフォールバック行も作らない: ' + (item && item.id));
     return null;
@@ -1595,7 +1635,7 @@ function extractCiscoRowFallback_(item) {
     initialDate: item.pubDate,
     title: item.title,
     cve: meta.cves[0] || extractCveFromText_(item.title + ' ' + item.description),
-    product: 'IOS-XE',
+    product: primaryAssetProduct_(assets, 'IOS-XE'),
     cvss: meta.cvss,
     severity: meta.severity,
     vector: '', unauthRemote: '',
@@ -1860,7 +1900,8 @@ function fetchRssItems_() {
       title: item.getChildText('title'),
       link: link,
       pubDate: parsePubDate_(item.getChildText('pubDate')),
-      revisedOn: rev ? new Date(Number(rev[1]), Number(rev[2]) - 1, Number(rev[3])) : ''
+      revisedOn: rev ? new Date(Number(rev[1]), Number(rev[2]) - 1, Number(rev[3])) : '',
+      description: desc
     };
   });
 }
@@ -1935,7 +1976,9 @@ function ymd_(d) {
  * 取得する:
  *   - 処理済みに無い ID（初出。RSS に載っている限り古くても取得）
  *   - RSS 日付が処理済みの CSAF 最終更新日より新しい（改訂の可能性）
- *   - CSAF 版が未記録の既存行（＝前回の取得に失敗した件。実質のリトライ）
+ *   - CSAF 版が空欄の既存行。取得に失敗した件には「未取得」の印を書くので、
+ *     ここに引っかかるのは印が付く前に記録された古い行だけ。
+ *     印を書かずに空欄のままにすると、取得できない件を毎日取り続けることになる
  *
  * スキップする:
  *   - 処理済みがあり、RSS 日付が CSAF 最終更新日以下（日次では変更なし）
@@ -2246,6 +2289,48 @@ function guessProductFromAffected_(affected) {
   const first = String(affected[0]);
   const m = /^([A-Za-z][\w-]*(?:\s(?:PaaS|Cloud|on-premise|Manager))?)/.exec(first);
   return m ? m[1] : first.split(' ')[0];
+}
+
+/**
+ * CSAF が取れなかった Fortinet アドバイザリを、RSS の情報だけで台帳の行にする。
+ *
+ * アドバイザリページは altcha のボット対策で待機ページしか返らず、
+ * プログラムからは本文を取得できない（実測: "Just a moment — verifying connection security"）。
+ * 一方 RSS の description には CVSS と説明文が入っており、追加のリクエストも要らない。
+ * 取れる情報があるのに台帳から落として通知だけにするのは、確認の手がかりを捨てている。
+ * Cisco は以前からこの形（extractCiscoRowFallback_）で、Fortinet だけ無かった。
+ *
+ * 製品は資産シートのそのベンダーの対象製品を使う。RSS のタイトルに製品名が無く
+ * 特定できないため、「自社に関係するかもしれない」側に倒して人の目に入れる。
+ * 実際の影響製品はアドバイザリを開いて確認してもらう。
+ */
+function extractFortinetRowFallback_(item, assets) {
+  const text = decodeCiscoHtml_(item.description || '');
+  const cvss = /CVSSv3 Score:\s*([\d.]+)/i.exec(text);
+  const cves = text.match(/CVE-\d{4}-\d{4,}/gi) || [];
+
+  return {
+    vendor: VENDOR_FORTINET,
+    advisoryId: item.ir,
+    advisoryUrl: item.link,
+    pubDate: lastSeenDate_(item),
+    initialDate: item.pubDate,
+    title: item.title,
+    cve: cves.length ? cves[0].toUpperCase() : '',
+    product: primaryAssetProduct_(assets, 'FortiOS'),
+    cvss: cvss ? cvss[1] : '',
+    severity: '',
+    vector: '', unauthRemote: '',
+    affected: [],
+    summary: text.replace(/\s+/g, ' ').trim(),
+    impact: '',
+    fixesRaw: '',
+    workaround: '',
+    verdict: V_INVEST,
+    reason: 'CSAF を取得できず版比較できないため',
+    selfVersion: '', fixVersion: '',
+    feature: '', impactJa: '', howToCheck: '', plan: ''
+  };
 }
 
 function errorRow_(item, msg) {
@@ -3674,7 +3759,12 @@ function ownershipJudgement_(f, advisoryRows, assets) {
 
   const hit = owned.filter(function (r) { return r.osStatus !== '対象外'; });
   if (hit.length) {
-    return { label: '対象', reason: judgeReasonText_(hit[0], '影響範囲内') };
+    // ここで reasonPhrase を使ってはいけない。版が影響範囲内だった行では
+    // decideNotification_ が社内ルールを当てて「悪用に管理者権限が必要なため」のような
+    // 通知要否の理由で上書きしている。この列が答えるのは「なぜ対象と判定したか」であって
+    // 「なぜ緊急でないか」ではない。後者は台帳の判定根拠が持っている。
+    const self = String(hit[0].selfVersion || '').replace(/\n/g, ' / ').trim();
+    return { label: '対象', reason: (self ? self + '｜' : '') + '影響範囲内' };
   }
   return { label: '対象外-OS影響外', reason: judgeReasonText_(owned[0], '影響対象外') };
 }
@@ -3801,6 +3891,23 @@ function advisoryUrlFor_(vendor, advisoryId, item) {
   if (vendor === VENDOR_CISCO) return ciscoHumanAdvisoryUrl_(id);
   if (/^FG-IR-/i.test(id)) return 'https://fortiguard.fortinet.com/psirt/' + id;
   return '';
+}
+
+/**
+ * 処理済みの判定に使う値だけを、AI 生成の前に控えておく。
+ *
+ * 台帳を先に書くようにしたため、writeState_ は fillLedgerDisplay_ の後に走る。
+ * fillLedgerDisplay_ は reasonPhrase を通知判定の文言（「管理GUI の利用有無が
+ * 設定次第のため」など）に書き換えるので、そのまま渡すと処理済みの判定根拠に
+ * 「自社が対象か」ではなく「なぜ通知するか」が入り、列の意味が変わってしまう。
+ */
+function snapshotJudgeRows_(rows) {
+  return rows.map(function (r) {
+    return {
+      advisoryId: r.advisoryId, initialDate: r.initialDate, product: r.product,
+      osStatus: r.osStatus, selfVersion: r.selfVersion, reasonPhrase: r.reasonPhrase
+    };
+  });
 }
 
 /** バッチごとの判定内訳を 1 実行分に足し込む。 */
