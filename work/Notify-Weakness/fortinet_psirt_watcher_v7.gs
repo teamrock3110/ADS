@@ -3315,7 +3315,10 @@ function getKnownState_(vendor) {
     const id = String(cId >= 0 ? r[cId] : r[cIrLegacy]).trim();
     if (!id) return;
     dates[id] = ymd_(r[cUpd]);
-    versions[id] = cVer >= 0 ? String(r[cVer] || '').trim() : '';
+    // r[cVer] が数値 0 でも保持する。Fortinet の CSAF は tracking.version が
+    // 常に "0" で、セルに書くと数値 0 になる。`|| ''` だと falsy で空文字に化け、
+    // CSAF 側の "0" と一致せず毎回「改訂」と誤判定して再通知していた。
+    versions[id] = cVer >= 0 && r[cVer] != null ? String(r[cVer]).trim() : '';
   });
   return { dates: dates, versions: versions };
 }
