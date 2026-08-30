@@ -1848,11 +1848,19 @@ function fetchRssItems_() {
   return items.map(function (item) {
     const link = item.getChildText('link');
     const m = /FG-IR-[\w-]+/.exec(link || '');
+    // description 末尾の "Revised on YYYY-MM-DD" を拾う。
+    // 判定には使わない（CSAF の改訂と 41/49 でしか一致せず、見逃しと空振りを生む）。
+    // CSAF が取れなかった件の「最終更新日」を埋めるためだけに使う。
+    // そこは RSS が唯一の情報源で、使わないと公表日を最終更新日として書くことになる。
+    const desc = item.getChildText('description') || '';
+    const rev = /Revised on\s*(\d{4})-(\d{2})-(\d{2})/.exec(desc);
+
     return {
       ir: m ? m[0] : link,
       title: item.getChildText('title'),
       link: link,
-      pubDate: parsePubDate_(item.getChildText('pubDate'))
+      pubDate: parsePubDate_(item.getChildText('pubDate')),
+      revisedOn: rev ? new Date(Number(rev[1]), Number(rev[2]) - 1, Number(rev[3])) : ''
     };
   });
 }
@@ -2033,20 +2041,20 @@ function fetchAllCsaf_(items) {
           version: csafTrackingVersion_(csaf), error: '', missing: false };
       } catch (e) {
         failed++;
-        return { item: it, csaf: null, updatedAt: it.pubDate, version: '',
+        return { item: it, csaf: null, updatedAt: lastSeenDate_(it), version: '',
           error: 'CSAF の解析に失敗: ' + e, missing: false };
       }
     }
 
     if (code === 404) {
       missing++;
-      return { item: it, csaf: null, updatedAt: it.pubDate, version: '',
+      return { item: it, csaf: null, updatedAt: lastSeenDate_(it), version: '',
         error: 'CSAF未作成（HTTP 404。ベンダーがこのアドバイザリの CSAF を出していない）',
         missing: true };
     }
 
     failed++;
-    return { item: it, csaf: null, updatedAt: it.pubDate, version: '',
+    return { item: it, csaf: null, updatedAt: lastSeenDate_(it), version: '',
       error: 'CSAF 取得失敗 HTTP ' + code, missing: false };
   });
 
@@ -2056,6 +2064,21 @@ function fetchAllCsaf_(items) {
     Logger.log('  失敗した件は処理済みに記録していません。翌日の実行で取り直します。');
   }
   return out;
+}
+
+/**
+ * CSAF が取れなかった件の「最終更新日」に使う日付。
+ *
+ * CSAF が無いと更新日を名乗れる値が無く、公表日で代用すると
+ * 「2022 年から一度も更新されていない」ように見える。実際には Fortinet が
+ * 2026-08-27 に改訂しており、その事実は RSS の description にしか無い。
+ * 判定には使わず、表示する日付としてだけ採用する。
+ */
+function lastSeenDate_(item) {
+  const pub = (item && item.pubDate) || '';
+  const rev = (item && item.revisedOn) || '';
+  if (rev instanceof Date && pub instanceof Date) return rev > pub ? rev : pub;
+  return rev || pub;
 }
 
 /**
