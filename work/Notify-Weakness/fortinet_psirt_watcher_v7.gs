@@ -338,19 +338,6 @@ const STATE_HEADERS = ['ベンダー', '最終更新日', '初回公表日', '�
 /** 過去の構成にあって今は使わない列。migrateLedgerHeaders() が名前で削除する。 */
 const REMOVED_STATE_COLUMNS = ['台帳の行数'];
 
-/**
- * 影響機能名の統制語彙。表記ゆれを抑えるため AI にこの中から選ばせる。
- * 実データ（台帳50件）で CLI / CLI command / CLI commands のような
- * ゆれが出ていたことへの対処。該当する語がなければ原文の語句をそのまま使わせる。
- */
-const FEATURE_VOCAB = [
-  'SSL-VPN', 'IPsec VPN', 'captive portal', 'web filter', 'CLI', 'GUI（管理画面）',
-  'REST API', 'SSH', 'SNMP', 'LDAP認証', 'SAML認証', '二要素認証（2FA）',
-  'FortiGuard通信', 'ログ・デバッグ出力', '管理者アカウント', 'HA（冗長構成）',
-  'wireless controller（CAPWAP）', 'アンチウイルス／IPSエンジン',
-  'security fabric', 'FortiToken', 'AD Connector', 'セキュリティプロファイル'
-];
-
 // ============================================================
 // エントリポイント
 // ============================================================
@@ -1066,63 +1053,6 @@ function sortVersionsAsc_(versions) {
   });
 }
 
-// ------------------------------------------------------------
-// Cisco openVuln API（GAS では未使用）
-//
-// 手元の curl ではトークン取得できるが、GAS UrlFetchApp は
-// id.cisco.com で Akamai Access Denied（HTTP 403）になる。
-// 中継サーバー無しでは使えないため、呼び出しは行わない。
-// 修正版の版番号は担当者がアドバイザリの Fixed Software /
-// Software Checker を見る。parseFirstFixedMap_ / pickFirstFixed_
-// は単体テスト用に残す。
-// ------------------------------------------------------------
-
-/** @deprecated GAS では呼ばない。常に空を返す */
-function ciscoFirstFixedMap_(version) {
-  return {};
-}
-
-/** @deprecated GAS では呼ばない。常に空を返す */
-function ciscoFirstFixedFor_(advisoryId, selfVersions) {
-  return [];
-}
-
-/**
- * openVuln の応答を アドバイザリID → firstFixed[] にする（単体テスト用）。
- */
-function parseFirstFixedMap_(body) {
-  const list = (body && body.advisories) ? body.advisories : [];
-  const map = {};
-  list.forEach(function (a) {
-    const id = String((a && a.advisoryId) || '').trim();
-    if (!id) return;
-    const ff = a.firstFixed;
-    const items = Array.isArray(ff) ? ff : String(ff || '').split(',');
-    const versions = [];
-    items.forEach(function (s) {
-      const m = /(\d+\.\d+(?:\.\d+)?[a-z]?)/i.exec(String(s).trim());
-      if (m) pushUnique_(versions, m[1]);
-    });
-    if (versions.length) map[id] = sortVersionsAsc_(versions);
-  });
-  return map;
-}
-
-/**
- * firstFixed の候補から、自社版と同じ系列の更新先を選ぶ（単体テスト用）。
- */
-function pickFirstFixed_(fixed, selfVersion) {
-  const list = sortVersionsAsc_((fixed || []).filter(Boolean));
-  if (!list.length) return '';
-
-  const sv = parseVersion_(selfVersion);
-  if (!sv) return list[0];
-
-  const branch = sv.slice(0, 2).join('.') + '.';
-  const sameBranch = list.filter(function (f) { return f.indexOf(branch) === 0; });
-  return (sameBranch.length ? sameBranch : list)[0];
-}
-
 /**
  * Workarounds note を、設定コマンドと説明文に分けて取り出す。
  *
@@ -1515,11 +1445,6 @@ function fetchCiscoHumanRssIndex_() {
     Logger.log('Cisco 通常 RSS（補助）取得失敗: ' + e);
     return {};
   }
-}
-
-/** @deprecated 互換用。主経路は fetchCiscoCsafRssItems_ */
-function fetchCiscoRssItems_() {
-  return fetchCiscoCsafRssItems_();
 }
 
 function parseCiscoAdvisoryId_(link) {
@@ -2128,11 +2053,6 @@ function jpRange_(entry, product) {
   return b;
 }
 
-/** 影響バージョンの一覧をまとめて読みやすくする。 */
-function jpRanges_(entries, product) {
-  return entries.map(function (e) { return jpRange_(e, product); }).join('、');
-}
-
 /**
  * 自社が使っている系列（例 7.4）に対応する影響範囲を 1 件だけ返す。
  *
@@ -2608,11 +2528,6 @@ function ruleGate_(row) {
   if (/AV:A/.test(v)) return { pass: false, phrase: '悪用に隣接ネットワークからのアクセスが必要なため' };
   if (/UI:R/.test(v)) return { pass: false, phrase: '悪用に利用者の操作が必要なため' };
   return { pass: true, phrase: '' };
-}
-
-/** ベクターが無認証リモートを満たすか（ゲート通過と同義） */
-function passesRuleGate_(row) {
-  return ruleGate_(row).pass;
 }
 
 /**
@@ -3321,11 +3236,6 @@ function getKnownState_(vendor) {
     versions[id] = cVer >= 0 && r[cVer] != null ? String(r[cVer]).trim() : '';
   });
   return { dates: dates, versions: versions };
-}
-
-/** 既読アドバイザリの最終更新日（yyyy-mm-dd）のみ。後方互換用。 */
-function getKnownAdvisories_(vendor) {
-  return getKnownState_(vendor).dates;
 }
 
 function vendorFromAdvisoryId_(advisoryId) {
@@ -4265,51 +4175,6 @@ function testCiscoWorkaround() {
     Logger.log((c2[1] ? 'OK  ' : 'NG  ') + c2[0]);
   });
   Logger.log('回避策の分解: ' + pass + ' / ' + checks.length + ' 件が期待どおり');
-}
-
-/** firstFixed の系列選択と応答パースのテスト（ネットワーク不要） */
-function testCiscoFirstFixedPick() {
-  const cases = [
-    { name: '同系列を選ぶ', self: '17.15.5', fixed: ['17.9.6', '17.12.4', '17.15.6'], expect: '17.15.6' },
-    { name: '同系列が複数なら最小', self: '17.15.5', fixed: ['17.15.8', '17.15.6'], expect: '17.15.6' },
-    { name: '同系列が無ければ最小', self: '17.15.5', fixed: ['17.12.4', '17.9.6'], expect: '17.9.6' },
-    { name: '取得できなければ空', self: '17.15.5', fixed: [], expect: '' }
-  ];
-
-  let pass = 0;
-  cases.forEach(function (c) {
-    const got = pickFirstFixed_(c.fixed, c.self);
-    const ok = got === c.expect;
-    if (ok) pass++;
-    Logger.log((ok ? 'OK  ' : 'NG  ') + c.name + ' → ' + (got || '(空)') +
-               '（期待 ' + (c.expect || '(空)') + '）');
-  });
-
-  // 応答形の揺れ（配列とカンマ区切り文字列）を両方受けられること
-  const parsed = parseFirstFixedMap_({
-    advisories: [
-      { advisoryId: 'cisco-sa-a', firstFixed: ['17.15.6', '17.12.4'] },
-      { advisoryId: 'cisco-sa-b', firstFixed: '17.9.6,17.15.7' },
-      { advisoryId: '', firstFixed: '17.15.9' }
-    ]
-  });
-  const parseOk = parsed['cisco-sa-a'].join(',') === '17.12.4,17.15.6'
-    && parsed['cisco-sa-b'].join(',') === '17.9.6,17.15.7'
-    && Object.keys(parsed).length === 2;
-  if (parseOk) pass++;
-  Logger.log((parseOk ? 'OK  ' : 'NG  ') + '応答パース（配列／カンマ区切り／ID欠落）');
-
-  Logger.log('修正版の系列選択: ' + pass + ' / ' + (cases.length + 1) + ' 件が期待どおり');
-}
-
-/**
- * openVuln は GAS では運用しない（UrlFetch が id.cisco.com で Access Denied）。
- * スタブが常に空を返すことだけ確認する。
- */
-function testCiscoFirstFixed() {
-  Logger.log('openVuln API は GAS 運用対象外（ciscoFirstFixedMap_ は常に空）。');
-  const map = ciscoFirstFixedMap_('17.15.5');
-  Logger.log('version=17.15.5 → アドバイザリ ' + Object.keys(map).length + ' 件（期待 0）');
 }
 
 /** 確認手順テーブルの単体テスト */

@@ -67,12 +67,11 @@ Key/Secret 自体は有効（手元 `curl` で確認済み）だが、`UrlFetchA
 | 6 | `testCheckSteps()` | `確認手順: N / N 件が期待どおり`（影響調査は定期更新定型を拒否） |
 | 7 | `testStripCheckLabels()` | `OK ラベル除去` |
 | 8 | `testCiscoWorkaround()` | `回避策の分解: 7 / 7 件が期待どおり` |
-| 9 | `testCiscoFirstFixedPick()` | `修正版の系列選択: 5 / 5 件が期待どおり` |
-| 10 | `testImpactJaFromVector()` | `ユーザ影響ベクター: 3 / 3 件が期待どおり` |
-| 11 | `testTitleJaFromAdvisory()` | `タイトル日本語訳: 3 / 3 件が期待どおり` |
-| 12 | `testCiscoInformationalSkip()` | `notice は台帳行 0` |
-| 13 | `testExternalSurface_()` | 外面判定が期待どおり |
-| 14 | `testSlackBlocks()` | 対応検討／影響調査／AI未生成のカード JSON がログに出る（Webhook には送らない） |
+| 9 | `testImpactJaFromVector()` | `ユーザ影響ベクター: 3 / 3 件が期待どおり` |
+| 10 | `testTitleJaFromAdvisory()` | `タイトル日本語訳: 3 / 3 件が期待どおり` |
+| 11 | `testCiscoInformationalSkip()` | `notice は台帳行 0` |
+| 12 | `testExternalSurface_()` | 外面判定が期待どおり |
+| 13 | `testSlackBlocks()` | 対応検討／影響調査／AI未生成のカード JSON がログに出る（Webhook には送らない） |
 
 **ネットワークが必要**
 
