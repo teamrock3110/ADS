@@ -354,8 +354,13 @@ const DEFAULT_ASSET_ROWS = [
 ];
 
 /** 処理済みシート。分母（今月の公表件数）はここから数える。 */
-const STATE_HEADERS = ['ベンダー', '最終更新日', '初回公表日', 'アドバイザリID', 'タイトル',
-                       '対象製品', 'CSAF版', '自社判定'];
+/*
+ * 列は確認する人の思考順に並べる。「今月のものか（日付）→ 初出か改訂か（2つの日付の差）
+ * → 対象か対象外か → なぜそう判定したか → 何の製品でどんな内容か → 深掘り」。
+ * ツールが書きやすい順ではない。CSAF版は人が見る値ではないので末尾に置く。
+ */
+const STATE_HEADERS = ['最終更新日', '初回公表日', 'ベンダー', 'CVE', 'タイトル', '自社判定',
+                       '判定根拠', '対象製品', 'アドバイザリID', 'CSAF版'];
 
 /** 過去の構成にあって今は使わない列。migrateLedgerHeaders() が名前で削除する。 */
 const REMOVED_STATE_COLUMNS = ['台帳の行数'];
@@ -375,8 +380,8 @@ const SHEET_RUNLOG = '実行履歴';
  * Fortinet は毎回全件、Cisco は差分のみという内部事情の数字で、合計すると
  * 「確認 100 なのに取得 50、残り 50 はどこへ？」という誤読を生むため、内訳へ回す。
  */
-const RUNLOG_HEADERS = ['実行日時', '結果', '確認件数', '新規・改訂', '台帳へ追加',
-                        '失敗', '所要秒', 'AI呼び出し', '内訳'];
+const RUNLOG_HEADERS = ['実行日時', '結果', '確認件数', '差分なし', '更新あり', '台帳追加',
+                        '台帳追加なし', '失敗', '所要秒', 'AI呼び出し', '備考'];
 
 /**
  * 1 回の実行（main）で集めた統計。
@@ -398,7 +403,7 @@ function addVendorStats_(vendor, s) {
     vendor: vendor,
     rss: s.rss || 0, fetched: s.fetched || 0, ok: s.ok || 0,
     missing: s.missing || 0, failed: s.failed || 0,
-    processed: s.processed || 0, ledger: s.ledger || 0,
+    processed: s.processed || 0, ledger: s.ledger || 0, labels: s.labels || {},
     mode: s.mode || '', note: s.note || ''
   });
 }
@@ -910,6 +915,7 @@ function runFortinet_() {
   let allLedgerRows = [];
   let batchNum = 0;
   let processedCount = 0;
+  const labelTotals = {};
   // このバッチで扱い終えた ID。取得に失敗した件は処理済みに記録しないため、
   // 記録の有無だけでループを回すと同じ件を選び続けてしまう。
   const handled = {};
@@ -977,7 +983,7 @@ function runFortinet_() {
         return { item: f.item, csaf: f.csaf, updatedAt: f.updatedAt,
                  version: STATE_VERSION_UNAVAILABLE, error: f.error, missing: f.missing };
       });
-    writeState_(VENDOR_FORTINET, recordable, rows, assets);
+    mergeCounts_(labelTotals, writeState_(VENDOR_FORTINET, recordable, rows, assets));
 
     const ledgerRows = rows.filter(function (r) { return isLedgerRow_(r, assets); });
     Logger.log('Fortinet 台帳: ' + ledgerRows.length + ' / ' + rows.length + ' 行');
@@ -1000,6 +1006,7 @@ function runFortinet_() {
     failed: fetched.filter(function (f) { return f.error && !f.missing; }).length,
     processed: processedCount,
     ledger: allLedgerRows.length,
+    labels: labelTotals,
     mode: 'all'
   });
 
@@ -1125,6 +1132,7 @@ function runCisco_() {
   let allLedgerRows = [];
   let batchNum = 0;
   let processedCount = 0;
+  const labelTotals = {};
 
   while (true) {
     const known = getKnownState_(VENDOR_CISCO);
@@ -1179,7 +1187,7 @@ function runCisco_() {
     Logger.log('Cisco 全 ' + rows.length + ' 行: ' + V_ACT + ' ' + counts[V_ACT] +
                ' / ' + V_INVEST + ' ' + counts[V_INVEST] + ' / ' + V_NONE + ' ' + counts[V_NONE]);
 
-    writeState_(VENDOR_CISCO, todo, rows, assets);
+    mergeCounts_(labelTotals, writeState_(VENDOR_CISCO, todo, rows, assets));
 
     const ledgerRows = rows.filter(function (r) { return isLedgerRow_(r, assets); });
     Logger.log('Cisco 台帳: ' + ledgerRows.length + ' / ' + rows.length + ' 行');
@@ -1203,7 +1211,8 @@ function runCisco_() {
     ok: fetched.filter(function (f) { return !f.error; }).length,
     failed: fetched.filter(function (f) { return f.error; }).length,
     processed: processedCount,
-    ledger: allLedgerRows.length
+    ledger: allLedgerRows.length,
+    labels: labelTotals
   });
 
   return allLedgerRows;
@@ -1498,11 +1507,9 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
   const tracking = doc.tracking || {};
   const advisoryId = tracking.id || item.id;
   const updatedAt = tracking.current_release_date
-    ? new Date(tracking.current_release_date)
-    : (tracking.initial_release_date ? new Date(tracking.initial_release_date) : item.pubDate);
-  const initialAt = tracking.initial_release_date
-    ? new Date(tracking.initial_release_date)
-    : updatedAt;
+    ? csafDate_(tracking.current_release_date, item.pubDate)
+    : csafDate_(tracking.initial_release_date, item.pubDate);
+  const initialAt = csafDate_(tracking.initial_release_date, updatedAt);
   const vulnName = String(doc.title || item.title || '').trim();
   const idMap = ciscoProductMap_(csaf);
   const configHints = ciscoConfigHints_(csaf);
@@ -2051,10 +2058,27 @@ function fetchAllCsaf_(items) {
   return out;
 }
 
+/**
+ * CSAF の日付を Date にする。日本時間に変換して扱う。
+ *
+ * Cisco の CSAF は "2026-08-19T16:00:00+00:00" のように UTC の 16 時で出るため、
+ * 日本時間では翌日 8/20 になる。Cisco の公表ページ（August 19）とは 1 日ずれるが、
+ * 運用が日本時間である以上、日本時間で読める方を優先する（月末締めの要件は無い）。
+ * 日次トリガーは 9 時台なので、8/20 に拾う件が 8/20 と記録されるのは動きとも合う。
+ *
+ * Fortinet の CSAF は "2025-08-08T00:00:00" とタイムゾーンを持たず、
+ * 実行環境のローカル時刻＝日本時間として解釈されるため、こちらは元から日付が動かない。
+ */
+function csafDate_(value, fallback) {
+  if (!value) return fallback;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? fallback : d;
+}
+
 function csafUpdatedAt_(csaf, item) {
   const t = ((csaf || {}).document || {}).tracking || {};
-  if (t.current_release_date) return new Date(t.current_release_date);
-  if (t.initial_release_date) return new Date(t.initial_release_date);
+  if (t.current_release_date) return csafDate_(t.current_release_date, item.pubDate);
+  if (t.initial_release_date) return csafDate_(t.initial_release_date, item.pubDate);
   return item.pubDate;
 }
 
@@ -2087,11 +2111,9 @@ function extractRows_(csaf, item) {
   // 何か月も前の日付として沈み、「今月見るべきもの」から漏れる。
   // 初回公表日は処理済みシートに残す。
   const updatedAt = tracking.current_release_date
-    ? new Date(tracking.current_release_date)
-    : (tracking.initial_release_date ? new Date(tracking.initial_release_date) : item.pubDate);
-  const initialAt = tracking.initial_release_date
-    ? new Date(tracking.initial_release_date)
-    : updatedAt;
+    ? csafDate_(tracking.current_release_date, item.pubDate)
+    : csafDate_(tracking.initial_release_date, item.pubDate);
+  const initialAt = csafDate_(tracking.initial_release_date, updatedAt);
 
   // 脆弱性名は document.title を使う。
   // vulnerabilities[].title は "FortiOS - LOW - FG-IR-24-257" のような
@@ -3610,18 +3632,45 @@ function removeRowsFor_(vendor, advisoryIds) {
  * 判定の結論だけをここに書き写す。判断そのものは decideNotification_ が済ませたもので、
  * ここで新しい判断はしない。
  */
-function ownershipLabel_(f, advisoryRows, assets) {
+function ownershipJudgement_(f, advisoryRows, assets) {
   // 値の先頭は必ず 対象 / 対象外 / 判定不能 にする。列を眺めたときに
   // 可否が最初の 2〜3 文字で読めないと、根拠として使えない。
-  if (f && f.error) return '判定不能';
-  if (isCiscoInformationalAdvisory_(f && f.csaf, f && f.item)) return STATE_JUDGE_INFO;
+  if (f && f.error) {
+    return { label: '判定不能', reason: 'CSAF を取得できず判定できない' };
+  }
+  if (isCiscoInformationalAdvisory_(f && f.csaf, f && f.item)) {
+    return { label: STATE_JUDGE_INFO, reason: '脆弱性ではなく公開一覧のお知らせ' };
+  }
 
   const owned = (advisoryRows || []).filter(function (r) {
     return r.product && assetsForProduct_(assets || [], r.product).length;
   });
-  if (!owned.length) return '対象外-未保有';
-  if (owned.some(function (r) { return r.osStatus !== '対象外'; })) return '対象';
-  return '対象外-OS影響外';
+  if (!owned.length) {
+    return { label: '対象外-未保有', reason: '資産に該当する製品が無い' };
+  }
+
+  const hit = owned.filter(function (r) { return r.osStatus !== '対象外'; });
+  if (hit.length) {
+    return { label: '対象', reason: judgeReasonText_(hit[0], '影響範囲内') };
+  }
+  return { label: '対象外-OS影響外', reason: judgeReasonText_(owned[0], '影響対象外') };
+}
+
+/**
+ * 判定に使った数値をそのまま書き写す。
+ *
+ * 「対象外-OS影響外」とだけ書いても、後から人が正しさを確かめられない。
+ * 自社の版と、影響範囲の解釈をここに残しておけば、アドバイザリを開き直さずに
+ * 突き合わせができる。台帳に載らなかった行は台帳の判定根拠を参照できないため、
+ * この列が唯一の記録になる。
+ */
+function judgeReasonText_(row, fallback) {
+  const self = String(row.selfVersion || '').replace(/\n/g, ' / ').trim();
+  const phrase = String(row.reasonPhrase || '').replace(/のため$/, '').trim();
+  const parts = [];
+  if (self) parts.push(self);
+  parts.push(phrase || fallback);
+  return parts.join('｜');
 }
 
 function writeState_(vendor, todo, rows, assets) {
@@ -3641,26 +3690,30 @@ function writeState_(vendor, todo, rows, assets) {
     a.rows.push(r);
   });
 
+  const labelCounts = {};
   const values = todo.map(function (f) {
     const item = f.item || f;
     const id = item.ir || item.id;
     const a = byAdvisory[id] || { products: [], initial: f.updatedAt || item.pubDate, rows: [] };
+    const judgement = ownershipJudgement_(f, a.rows, assets);
     // CSAF から製品名が取れていればそれを使う（自社保有と無関係に「何の製品か」を残す）。
     // 取れない場合だけ、台帳へ展開した行から拾った製品名に落とす。
     const products = (f.products && f.products.length) ? f.products : a.products;
     return [
-      vendor,
       f.updatedAt || item.pubDate || '',
-      a.initial || f.updatedAt || item.pubDate || '',
-      id,
-      item.title,
+      stateInitialDate_(f, a, item),
+      vendor,
+      csafCveList_(f.csaf).join(', '),
+      stateTitle_(f, item),
+      countLabel_(labelCounts, judgement.label),
+      judgement.reason,
       products.join(', '),
-      f.version || '',
-      ownershipLabel_(f, a.rows, assets)
+      advisoryIdCell_(vendor, id, item),
+      f.version || ''
     ];
   });
 
-  if (!values.length) return;
+  if (!values.length) return labelCounts;
 
   if (sh.getMaxColumns() < STATE_HEADERS.length) {
     sh.insertColumnsAfter(sh.getMaxColumns(), STATE_HEADERS.length - sh.getMaxColumns());
@@ -3668,8 +3721,122 @@ function writeState_(vendor, todo, rows, assets) {
 
   const startRow = sh.getLastRow() + 1;
   sh.getRange(startRow, 1, values.length, STATE_HEADERS.length).setValues(values);
-  sh.getRange(startRow, 2, values.length, 2).setNumberFormat('yyyy/mm/dd');
+  sh.getRange(startRow, STATE_HEADERS.indexOf('最終更新日') + 1, values.length, 2)
+    .setNumberFormat('yyyy/mm/dd');
   Logger.log('処理済みシートに ' + values.length + ' 件のアドバイザリを記録しました。');
+
+  sortState_(sh);
+  return labelCounts;
+}
+
+/**
+ * 処理済みを最終更新日の降順に並べ替える。
+ *
+ * 追記型なので放っておくと実行順に積まれ、ベンダーも日付も混ざる。
+ * 確認する人の出発点は「今月公表されたもの」なので、日付が並んでいないと
+ * 毎回フィルタ操作が要る。台帳は毎回ソートしているのに、確認用のこちらが
+ * 並んでいないのは筋が通らない。
+ * アドバイザリID はハイパーリンクの数式なので、値ではなく数式のまま入れ替える。
+ */
+function sortState_(sh) {
+  if (!sh || sh.getLastRow() < 3) return;
+
+  const n = sh.getLastRow() - 1;
+  const range = sh.getRange(2, 1, n, STATE_HEADERS.length);
+  const cUpd = STATE_HEADERS.indexOf('最終更新日');
+  const cId = STATE_HEADERS.indexOf('アドバイザリID');
+
+  const formulas = range.getFormulas();
+  const values = range.getValues();
+  for (let i = 0; i < values.length; i++) {
+    if (cId >= 0 && formulas[i][cId]) values[i][cId] = formulas[i][cId];
+  }
+
+  values.sort(function (a, b) {
+    const da = a[cUpd], db = b[cUpd];
+    if (da instanceof Date && db instanceof Date) return db - da;
+    return 0;
+  });
+
+  range.setValues(values);
+}
+
+/**
+ * 公式アドバイザリの URL。RSS が持っていればそれを使い、無ければ ID から組み立てる。
+ *
+ * 処理済みシートでは =HYPERLINK() の形でアドバイザリID 列に入れる。
+ * セルの値は ID のままなので、ID で突合している既読判定は壊れない。
+ * URL 体系が変わると過去行のリンクは古いままになるが、ID の文字列は残るので
+ * 人が検索すればたどれる。セルに数式を置く以上これは避けられない。
+ */
+function advisoryUrlFor_(vendor, advisoryId, item) {
+  const fromFeed = String((item && item.link) || '').trim();
+  if (fromFeed) return fromFeed;
+
+  const id = String(advisoryId || '').trim();
+  if (!id) return '';
+  if (vendor === VENDOR_CISCO) return ciscoHumanAdvisoryUrl_(id);
+  if (/^FG-IR-/i.test(id)) return 'https://fortiguard.fortinet.com/psirt/' + id;
+  return '';
+}
+
+/** バッチごとの判定内訳を 1 実行分に足し込む。 */
+function mergeCounts_(into, counts) {
+  Object.keys(counts || {}).forEach(function (k) {
+    into[k] = (into[k] || 0) + counts[k];
+  });
+}
+
+/**
+ * 処理済みに残すタイトル。CSAF の document.title を最優先にする。
+ *
+ * Cisco の csaf_20.xml は <title> がアドバイザリ ID そのもので、そのまま使うと
+ * ID 列と同じ文字列が 2 列並ぶだけになる（実測 50/50 行）。
+ * 人が読める題名は CSAF の中にあるので、そちらを使う。
+ */
+function stateTitle_(f, item) {
+  const t = String((((f || {}).csaf || {}).document || {}).title || '').trim();
+  return t || (item && item.title) || '';
+}
+
+/**
+ * 処理済みに残す初回公表日。CSAF の initial_release_date を最優先にする。
+ *
+ * 展開した行から拾うと、自社資産に該当せず行が 1 つも作られなかったアドバイザリで
+ * 最終更新日が代入され、初出か改訂かの区別が付かなくなる（実測 Cisco 19/50 行）。
+ * 日付を 2 列並べる意味そのものが失われるため、CSAF の値を使う。
+ */
+function stateInitialDate_(f, a, item) {
+  const t = ((((f || {}).csaf || {}).document || {}).tracking) || {};
+  if (t.initial_release_date) {
+    return csafDate_(t.initial_release_date, a.initial || f.updatedAt || '');
+  }
+  return a.initial || f.updatedAt || (item && item.pubDate) || '';
+}
+
+/**
+ * アドバイザリが持つ CVE を全部並べる。実測で最大 7 件。
+ * 台帳は自社該当分しか持たないので、除外した件の CVE はここにしか残らない。
+ * ニュースで見た CVE 番号から自社影響の有無を引けるようにするための列。
+ */
+function csafCveList_(csaf) {
+  const out = [];
+  ((csaf || {}).vulnerabilities || []).forEach(function (v) {
+    if (v && v.cve) pushUnique_(out, String(v.cve).trim());
+  });
+  return out;
+}
+
+/** アドバイザリID のセル。リンクを張れるときは数式にする（値は ID のまま）。 */
+function advisoryIdCell_(vendor, id, item) {
+  const url = advisoryUrlFor_(vendor, id, item);
+  return url ? '=HYPERLINK("' + url + '","' + id + '")' : id;
+}
+
+/** 判定を数えながらそのまま返す。writeState_ の中で 1 度だけ判定するための小道具。 */
+function countLabel_(counts, label) {
+  counts[label] = (counts[label] || 0) + 1;
+  return label;
 }
 
 /**
@@ -3685,6 +3852,14 @@ function writeRunLog_(errorText) {
     function sum(key) {
       return v.reduce(function (a, x) { return a + x[key]; }, 0);
     }
+    function judged(label) {
+      return v.reduce(function (a, x) { return a + (x.labels[label] || 0); }, 0);
+    }
+
+    // 内訳は「見るべきことがあった日」だけ書く。平常日（更新も失敗もエラーも無い日）は
+    // 毎日同じ文字列が並ぶだけで読む価値がなく、空欄にしておけば
+    // 「何か書いてある行＝見るべき行」として拾える。
+    const worthWriting = !!errorText || sum('processed') > 0 || sum('failed') > 0;
 
     // ベンダー別の数字は 1 列にまとめる。異常時に切り分けられればよく、
     // ベンダーごとに行を分けると「今日動いたか」が 1 行で読めなくなる。
@@ -3713,8 +3888,15 @@ function writeRunLog_(errorText) {
         if (x.failed) inner.push('失敗' + x.failed);
       }
 
+      // 判定の内訳。列に出るのは「対象」と「未保有」だけなので、
+      // OS影響外・情報通知・判定不能はここに出さないと件数の足し算が合わなくなる。
+      const judge = Object.keys(x.labels).map(function (k) {
+        return k + x.labels[k];
+      }).join('・');
+
       return x.vendor + ' ' + x.rss + '件：' + body +
              (inner.length ? '（' + inner.join('・') + '）' : '') +
+             (judge ? ' 判定[' + judge + ']' : '') +
              (x.note ? ' ' + x.note : '');
     }).join('  ');
 
@@ -3746,10 +3928,20 @@ function writeRunLog_(errorText) {
     sh.getRange(row, 1, 1, RUNLOG_HEADERS.length).setValues([[
       new Date(),
       result,
-      sum('rss'), sum('processed'), sum('ledger'), sum('failed'),
+      sum('rss'),
+      // 差分なしは「確認したが前回から変わっていなかった」件数。
+      // 差分ゼロの日は他が全部 0 になり、動いた形跡が読めなくなるため列に出す。
+      sum('rss') - sum('processed'),
+      sum('processed'),
+      judged('対象'),
+      // 台帳追加なしは差し引きで出す。未保有だけを数えると、OS影響外・情報通知・
+      // 判定不能がどの列にも現れず、更新あり ＝ 台帳追加 ＋ 台帳追加なし が崩れる。
+      sum('processed') - judged('対象'),
+      sum('failed'),
       Math.round((Date.now() - runStats_.startedAt) / 1000),
       aiRequestCount_ - runStats_.aiAtStart,
-      errorText ? ('エラー: ' + errorText + (detail ? '  /  ' + detail : '')) : detail
+      errorText ? ('エラー: ' + errorText + (detail ? '  /  ' + detail : ''))
+                : (worthWriting ? detail : '')
     ]]);
     sh.getRange(row, 1).setNumberFormat('yyyy/mm/dd hh:mm');
   } catch (e) {
