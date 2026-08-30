@@ -180,19 +180,26 @@ const KEV_NO = 'なし';
  * OS該当は列に出さず、判定根拠の「OS=…」に含める。
  * 外面・掌握・停止は判定の内部入力のみ。
  */
+/*
+ * 列は確認する人の思考順に並べる。
+ *   いつ検知した何か → どれくらい危ないか → どんな影響か → なぜその判定か
+ *   → 何を確認しどう直すか → 公式で裏を取る
+ * 毎日動いて新着が積まれる表なので、最終更新日は付随情報ではなく
+ * 「その行が自分にとって新しいか」を判断する一次情報として先頭に置く。
+ */
 const LEDGER_HEADERS = [
-  '自社影響',     // 1  あり（対応検討）/ あり（影響調査）/ なし
-  '製品',         // 2
-  'CVE',          // 3
-  '脆弱性名',     // 4  CSAF / RSS の文書タイトル（短い表示）
+  '最終更新日',   // 1  いつ検知したか
+  '自社影響',     // 2  あり（対応検討）/ あり（影響調査）/ なし。並べ替えの第1キー
+  '製品',         // 3
+  'CVE',          // 4
   'CVSS',         // 5
-  '最終更新日',   // 6
-  '公式推奨対応', // 7  ベンダー公式（日本語）
-  'KEV',          // 8  あり / なし
+  'KEV',          // 6  あり / なし。悪用実績は CVSS より強い信号なので隣に置く
+  '脆弱性名',     // 7  CSAF / RSS の文書タイトル（短い表示）
+  'ユーザ影響',   // 8  最悪ケース50字以内
   '影響機能',     // 9
   '判定根拠',     // 10 OS=… | KEV=… | ◯◯のため「結論」
   '確認方法',     // 11 確認ポイント／コマンド／判断
-  'ユーザ影響',   // 12 最悪ケース50字以内
+  '公式推奨対応', // 12 ベンダー公式（日本語）
   'アドバイザリ'  // 13
 ];
 
@@ -4157,18 +4164,18 @@ function toRowArray_(r) {
   const cvss = (r.cvss === '' || r.cvss === undefined) ? '' : String(r.cvss);
 
   return [
-    r.verdict || '',                  // 1  自社影響
-    r.product || '不明',              // 2  製品
-    r.cve || '',                      // 3  CVE
-    shortTitle_(r.title),             // 4  脆弱性名
+    r.pubDate || '',                  // 1  最終更新日
+    r.verdict || '',                  // 2  自社影響
+    r.product || '不明',              // 3  製品
+    r.cve || '',                      // 4  CVE
     cvss,                             // 5  CVSS
-    r.pubDate || '',                  // 6  最終更新日
-    action,                           // 7  公式推奨対応
-    r.kev || '',                      // 8  KEV
+    r.kev || '',                      // 6  KEV
+    shortTitle_(r.title),             // 7  脆弱性名
+    r.impactJa || '',                 // 8  ユーザ影響
     r.feature || '',                  // 9  影響機能
     r.reason || '',                   // 10 判定根拠
     stripCheckLabels_(r.howToCheck),  // 11 確認方法
-    r.impactJa || '',                 // 12 ユーザ影響
+    action,                           // 12 公式推奨対応
     advisoryCell                      // 13 アドバイザリ
   ];
 }
@@ -4226,9 +4233,15 @@ function formatLedger_(sh) {
     .setFontWeight('bold')
     .setBackground('#f0f0f0');
 
-  const widths = [90, 100, 140, 220, 70, 100, 220, 55, 120, 280, 320, 220, 150];
-  widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
+  // 幅は列名で引く。位置で並べると、列順を変えたときに黙ってずれる。
+  const widths = {
+    '最終更新日': 100, '自社影響': 90, '製品': 100, 'CVE': 140, 'CVSS': 70, 'KEV': 55,
+    '脆弱性名': 220, 'ユーザ影響': 220, '影響機能': 120, '判定根拠': 280,
+    '確認方法': 320, '公式推奨対応': 220, 'アドバイザリ': 150
+  };
+  LEDGER_HEADERS.forEach(function (h, i) { sh.setColumnWidth(i + 1, widths[h] || 120); });
 
+  // 「いつ・対応要否・どの機器・どれくらい危ないか」までを固定して、右へ読み進める。
   sh.setFrozenColumns(6);
 
   const all = sh.getRange(1, 1, sh.getMaxRows(), LEDGER_HEADERS.length);
