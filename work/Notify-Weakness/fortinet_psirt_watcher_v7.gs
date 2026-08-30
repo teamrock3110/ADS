@@ -68,7 +68,22 @@ const AI_PROVIDER = 'gemini';
 const GEMINI_MODEL = 'gemini-3.7-flash';
 /** 3.7 の無料枠（1日20回程度）を使い切ったら、枠が残っているモデルへ順に退避する */
 const GEMINI_MODEL_FALLBACKS = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
-const CLAUDE_MODEL = 'claude-sonnet-5';
+/**
+ * Claude のモデル ID。判定はコードが行い、AI は日本語生成だけなので Haiku で足りる。
+ * 呼び出しには ANTHROPIC_API_KEY（スクリプト プロパティ）が要る。
+ */
+const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+
+/**
+ * AI に投げた HTTP リクエストの回数。実行履歴に残して無料枠の消費を追えるようにする。
+ *
+ * 数えるのはプロンプトの数ではなく、実際に投げたリクエストの数。
+ * リトライもモデルのフォールバックも 1 回ずつ数える。枠を減らすのはリクエストだから。
+ * 呼び出しは AI 生成の内側 3 階層で起きるため、引数で持ち回らずここで数える。
+ */
+let aiRequestCount_ = 0;
+
+function countAiRequest_() { aiRequestCount_++; }
 
 const RSS_URL = 'https://filestore.fortinet.com/fortiguard/rss/ir.xml';
 /** Cisco CSAF RSS（主経路）。link/guid に CSAF JSON の URL が直接入る */
@@ -318,25 +333,85 @@ const CHECK_STEPS_CISCO_INVEST = [
 ].join('\n');
 
 /** 資産シート v7。「製品」はベンダー公式表記（FortiOS / IOS-XE）。ツール対象=いいえ は台帳に出さない */
-const ASSET_HEADERS = ['ベンダー', '種別', '製品', '機種', 'バージョン', '台数', 'ツール対象', '備考'];
+/**
+ * 資産シートの列。判定は「バージョン」を突き合わせて行うので、
+ * この表がいつ時点のものかが分からないと、判定結果の根拠も定まらない。
+ * 「更新日」は人が棚卸しした日を手で入れる欄。ツールは書き込まない。
+ */
+const ASSET_HEADERS = ['ベンダー', '種別', '製品', '機種', 'バージョン', '台数', 'ツール対象',
+                       '備考', '更新日'];
 
 const DEFAULT_ASSET_ROWS = [
-  [VENDOR_FORTINET, 'UTM', 'FortiOS', 'FortiGate 120G', '7.4.11', 1, 'はい', ''],
-  [VENDOR_CISCO, 'Switch', 'IOS-XE', 'C9200-24PXG-E', '17.15.5', 1, 'はい', ''],
-  [VENDOR_CISCO, 'Switch', 'IOS-XE', 'C9200L-24PXG-4X', '17.15.5', 1, 'はい', ''],
-  [VENDOR_CISCO, 'WLC', 'IOS-XE', 'Catalyst 9800-L', '17.15.5', 1, 'はい', '版は実機確認推奨'],
-  [VENDOR_CISCO, 'AP', '—', 'CW9166I-Q', '', 1, 'はい', 'WLC管理下'],
-  [VENDOR_FORTINET, '—', '—', 'FortiClient EMS', '', 1, 'いいえ', 'クライアント・対象外'],
-  ['Netgear', 'Switch', '—', 'MS510TXM', '', 1, 'いいえ', '別ベンダー'],
-  ['Netgear', 'Switch', '—', 'GS108Tv3', '', 1, 'いいえ', '別ベンダー'],
-  ['Soliton', 'RADIUS', '—', 'NetAttest EPS-edge SX06', '', 1, 'いいえ', '別ベンダー']
+  [VENDOR_FORTINET, 'UTM', 'FortiOS', 'FortiGate 120G', '7.4.11', 1, 'はい', '', ''],
+  [VENDOR_CISCO, 'Switch', 'IOS-XE', 'C9200-24PXG-E', '17.15.5', 1, 'はい', '', ''],
+  [VENDOR_CISCO, 'Switch', 'IOS-XE', 'C9200L-24PXG-4X', '17.15.5', 1, 'はい', '', ''],
+  [VENDOR_CISCO, 'WLC', 'IOS-XE', 'Catalyst 9800-L', '17.15.5', 1, 'はい', '版は実機確認推奨', ''],
+  [VENDOR_CISCO, 'AP', '—', 'CW9166I-Q', '', 1, 'はい', 'WLC管理下', ''],
+  [VENDOR_FORTINET, '—', '—', 'FortiClient EMS', '', 1, 'いいえ', 'クライアント・対象外', ''],
+  ['Netgear', 'Switch', '—', 'MS510TXM', '', 1, 'いいえ', '別ベンダー', ''],
+  ['Netgear', 'Switch', '—', 'GS108Tv3', '', 1, 'いいえ', '別ベンダー', ''],
+  ['Soliton', 'RADIUS', '—', 'NetAttest EPS-edge SX06', '', 1, 'いいえ', '別ベンダー', '']
 ];
 
 /** 処理済みシート。分母（今月の公表件数）はここから数える。 */
-const STATE_HEADERS = ['ベンダー', '最終更新日', '初回公表日', 'アドバイザリID', 'タイトル', '対象製品', 'CSAF版'];
+const STATE_HEADERS = ['ベンダー', '最終更新日', '初回公表日', 'アドバイザリID', 'タイトル',
+                       '対象製品', 'CSAF版', '自社判定'];
 
 /** 過去の構成にあって今は使わない列。migrateLedgerHeaders() が名前で削除する。 */
 const REMOVED_STATE_COLUMNS = ['台帳の行数'];
+
+/**
+ * 実行履歴。1 回の実行につき、ベンダーごとに 1 行。
+ *
+ * Slack は「判断が要る行があった日」だけ鳴る（NOTIFY_WHEN_NO_HITS = false）。
+ * つまり「該当なしだった日」「取得に失敗した日」「トリガーが消えて実行されなかった日」が
+ * すべて "Slack が静か" という同じ見え方になる。実行ログは保持期間が短く後から遡れない。
+ * 動いた事実だけはここに残し、行が途切れていれば止まったと分かるようにする。
+ */
+const SHEET_RUNLOG = '実行履歴';
+/*
+ * 列は「確認 → 新規・改訂 → 台帳 → 失敗」の順に、上流から下流へ一直線に読めるようにする。
+ * 取得件数（実際に CSAF を何本ダウンロードしたか）はここに置かない。
+ * Fortinet は毎回全件、Cisco は差分のみという内部事情の数字で、合計すると
+ * 「確認 100 なのに取得 50、残り 50 はどこへ？」という誤読を生むため、内訳へ回す。
+ */
+const RUNLOG_HEADERS = ['実行日時', '結果', '確認件数', '新規・改訂', '台帳へ追加',
+                        '失敗', '所要秒', 'AI呼び出し', '内訳'];
+
+/**
+ * 1 回の実行（main）で集めた統計。
+ *
+ * 履歴は「1 日 1 実行 = 1 行」で読めるのが理想なので、ベンダーごとの処理は
+ * ここへ足すだけにして、書き出しは main() が最後に 1 回だけ行う。
+ * ベンダー別の数字は「内訳」列に残すので、異常時の切り分けはできる。
+ */
+let runStats_ = null;
+
+function startRunStats_() {
+  runStats_ = { startedAt: Date.now(), aiAtStart: aiRequestCount_, vendors: [] };
+}
+
+/** main() の外から呼ばれた場合（reprocessCisco など）は何もしない。 */
+function addVendorStats_(vendor, s) {
+  if (!runStats_) return;
+  runStats_.vendors.push({
+    vendor: vendor,
+    rss: s.rss || 0, fetched: s.fetched || 0, ok: s.ok || 0,
+    missing: s.missing || 0, failed: s.failed || 0,
+    processed: s.processed || 0, ledger: s.ledger || 0,
+    mode: s.mode || '', note: s.note || ''
+  });
+}
+
+/**
+ * CSAF を読めていない行の「CSAF版」に置く印。
+ *
+ * 空欄にしない。空欄は人から見て入力漏れと区別が付かず、埋められたり
+ * 移行で正規化されたりすると、後日 CSAF が公開されたときに拾えなくなる
+ * （Fortinet の版は常に "0" なので、日付が初回公表日のままだと版だけが手がかりになる）。
+ * この列は "0" と空欄の取り違えで一度全件を誤検知した場所でもある。
+ */
+const STATE_VERSION_UNAVAILABLE = '未取得';
 
 // ============================================================
 // エントリポイント
@@ -505,6 +580,28 @@ function clearRunData() {
  * Cisco の処理済み・台帳だけ消して再取得する。
  * 処理済みに残っていると main() は Cisco を再取得しない。
  */
+/**
+ * Fortinet の処理済みと台帳を消し、RSS 50 件を取り直す。
+ * 列を増やしたときなど、既存行を新しい構成で埋め直したいときに手で実行する。
+ *
+ * 注意: 50 件を一度に再処理するため実行が長い。過去に同等の処理量で
+ * 6 分の実行時間制限に到達している。制限に当たると、処理済みには記録されたが
+ * 台帳には入らなかった件が残る（writeState_ が台帳書き込みより先に走るため）。
+ * その場合はもう一度この関数を実行すれば、消してからやり直すので回復する。
+ */
+function reprocessFortinet() {
+  const removedState = deleteVendorStateRows_(VENDOR_FORTINET);
+  const removedLedger = deleteVendorLedgerRows_(VENDOR_FORTINET);
+  Logger.log('Fortinet 再取得の準備: 処理済み ' + removedState + ' 行 / 台帳 ' +
+             removedLedger + ' 行を削除');
+
+  const rows = runFortinet_();
+  Logger.log('reprocessFortinet 完了: 台帳へ ' + rows.length + ' 行');
+  if (rows.length) notifySlack_(rows);
+  else Logger.log('Fortinet 台帳 0 行。ログの「自社影響」「OS該当」を確認してください。');
+  return rows;
+}
+
 function reprocessCisco() {
   clearCiscoEmptyRetryMark_();
   const removedState = deleteVendorStateRows_(VENDOR_CISCO);
@@ -630,16 +727,48 @@ function deleteSheetRowSafe_(sh, row) {
 /** 資産シートを v7 列構成に更新する（既存データは消える）。 */
 function migrateAssetHeaders() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sh = ss.getSheetByName(SHEET_ASSET);
+  const sh = ss.getSheetByName(SHEET_ASSET);
   if (!sh) {
     setup();
     return;
   }
-  if (sh.getLastRow() > 1) clearSheetDataRows_(sh);
+
+  if (sh.getMaxColumns() < ASSET_HEADERS.length) {
+    sh.insertColumnsAfter(sh.getMaxColumns(), ASSET_HEADERS.length - sh.getMaxColumns());
+  }
+
+  const cur = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getDisplayValues()[0];
+  const isV7 = cur.indexOf('ベンダー') !== -1;
+  const dataRows = Math.max(sh.getLastRow() - 1, 0);
+
+  // すでに v7 構成なら見出しを合わせるだけ。列を末尾に増やしたときはこちらを通る。
+  // ここで入力済みの資産を消してはいけない。台帳や処理済みと違い、
+  // 資産シートは人が手で維持している唯一の入力で、消すと復元できない。
+  if (isV7) {
+    sh.getRange(1, 1, 1, ASSET_HEADERS.length).setValues([ASSET_HEADERS]);
+    sh.setFrozenRows(1);
+    Logger.log('資産シートの見出しを ' + ASSET_HEADERS.length + ' 列に更新しました' +
+               '（入力済みの ' + dataRows + ' 行はそのまま残しています）。');
+    return;
+  }
+
+  // v6 構成（製品・バージョン・台数・—・備考の 5 列）からの移行。
+  // 列の意味が違うので並べ替えが要るが、入力済みの資産は捨てずに移し替える。
+  const old = dataRows ? sh.getRange(2, 1, dataRows, 5).getValues() : [];
+  const moved = old.filter(function (r) { return r[0]; }).map(function (r) {
+    return [VENDOR_FORTINET, '', String(r[0]).trim(), '', String(r[1] || '').trim(),
+            r[2], 'はい', String(r[4] || '').trim(), ''];
+  });
+
+  if (dataRows) clearSheetDataRows_(sh);
   sh.getRange(1, 1, 1, ASSET_HEADERS.length).setValues([ASSET_HEADERS]);
-  DEFAULT_ASSET_ROWS.forEach(function (r) { sh.appendRow(r); });
+
+  const rows = moved.length ? moved : DEFAULT_ASSET_ROWS;
+  sh.getRange(2, 1, rows.length, ASSET_HEADERS.length).setValues(rows);
   sh.setFrozenRows(1);
-  Logger.log('資産シートを v7 構成（' + ASSET_HEADERS.length + ' 列）に更新しました。');
+  Logger.log('資産シートを v7 構成（' + ASSET_HEADERS.length + ' 列）に更新しました。' +
+             (moved.length ? '既存 ' + moved.length + ' 行を移し替えました。'
+                           : '空だったので初期値を入れました。'));
 }
 
 function createDailyTrigger() {
@@ -651,6 +780,8 @@ function createDailyTrigger() {
 }
 
 function main() {
+  startRunStats_();
+  let runError = '';
   try {
     const fortinetRows = runFortinet_();
     const ciscoRows = runCisco_();
@@ -662,7 +793,40 @@ function main() {
   } catch (e) {
     Logger.log('main() 失敗: ' + e);
     notifyMainFailure_(e);
+    runError = String(e);
     throw e;
+  } finally {
+    // 落ちた実行こそ履歴に残す。行が無い＝そもそも実行されなかった、と読めるようにする。
+    writeRunLog_(runError);
+  }
+}
+
+/**
+ * 運用者（実行アカウント）へメールする。
+ *
+ * 日次トリガーの結果はログを見ないと分からず、実行ログの保持期間も短い。
+ * 「人が見に行かなくても届く」経路はここだけなので、
+ * 人の判断が要る事実に限ってここから送る。Slack と台帳は増やさない。
+ * 送信に失敗しても処理は止めない（通知の失敗で本体を落とさない）。
+ */
+function sendOpsMail_(subject, bodyLines) {
+  try {
+    const to = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail();
+    if (!to) {
+      Logger.log('メール通知: 宛先メールが取得できませんでした（' + subject + '）');
+      return;
+    }
+    MailApp.sendEmail({
+      to: to,
+      subject: subject,
+      body: bodyLines.concat([
+        '',
+        'スプレッドシート: ' + SpreadsheetApp.getActiveSpreadsheet().getUrl()
+      ]).join('\n')
+    });
+    Logger.log('メールを送信しました（' + subject + '） → ' + to);
+  } catch (mailErr) {
+    Logger.log('メール送信に失敗（' + subject + '）: ' + mailErr);
   }
 }
 
@@ -671,29 +835,48 @@ function main() {
  * 日次トリガーはログを見ないと気づかないので、失敗だけは能動的に届ける。
  */
 function notifyMainFailure_(err) {
-  try {
-    const to = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail();
-    if (!to) {
-      Logger.log('失敗通知メール: 宛先メールが取得できませんでした。');
-      return;
-    }
-    const sheetUrl = SpreadsheetApp.getActiveSpreadsheet().getUrl();
-    MailApp.sendEmail({
-      to: to,
-      subject: '[脆弱性ウォッチャー] main() 失敗',
-      body: [
-        '日次の脆弱性チェック（main）が失敗しました。',
-        '',
-        'エラー: ' + err,
-        'スプレッドシート: ' + sheetUrl,
-        '',
-        'Apps Script の実行ログを確認してください。'
-      ].join('\n')
-    });
-    Logger.log('失敗通知メールを送信しました: ' + to);
-  } catch (mailErr) {
-    Logger.log('失敗通知メールの送信にも失敗: ' + mailErr);
-  }
+  sendOpsMail_('[脆弱性ウォッチャー] main() 失敗', [
+    '日次の脆弱性チェック（main）が失敗しました。',
+    '',
+    'エラー: ' + err,
+    '',
+    'Apps Script の実行ログを確認してください。'
+  ]);
+}
+
+/**
+ * 一度も処理できていないアドバイザリの CSAF を取得できなかったとき、運用者へメールする。
+ *
+ * 台帳にも Slack にも出さない。ログだけだと「Slack に何も出ない日」と
+ * 「取りこぼした日」が同じ見え方になり、疑うきっかけが無いため、
+ * 人が動く必要がある場合に限ってメールで知らせる。
+ *
+ * 送るのは「処理済みシートに記録が無い＝一度も台帳に反映できていない」件だけ。
+ * 記録済みの件が一時的に取れなかった場合は、翌日の実行で取り直せば済むので送らない。
+ */
+function notifyFetchFailures_(vendor, failures) {
+  const lines = [
+    vendor + ' の新しいアドバイザリ ' + failures.length + ' 件で、CSAF を取得できませんでした。',
+    'これらはまだ一度も台帳に反映できていません。',
+    ''
+  ];
+
+  failures.forEach(function (f) {
+    const item = f.item || f;
+    lines.push('・' + (item.ir || item.id) + '  ' + (item.title || ''));
+    lines.push('    ' + f.error);
+    lines.push('    アドバイザリ: ' + (item.link || ''));
+    lines.push('    CSAF: ' + (item.csafUrl || csafUrlFor_(item)));
+    lines.push(f.missing
+      ? '    → CSAF未作成として記録しました。以後この件を自動では取りに行きません。'
+      : '    → 記録していません。翌日の実行で自動的に取り直します。');
+    lines.push('');
+  });
+
+  lines.push('「CSAF未作成」と出ている件は、CSAF が実在するのに URL を外している可能性もあります。');
+  lines.push('アドバイザリページを開いて中身を確認してください。');
+
+  sendOpsMail_('[脆弱性ウォッチャー] CSAF 取得失敗 ' + failures.length + ' 件（' + vendor + '）', lines);
 }
 
 function runFortinet_() {
@@ -706,20 +889,37 @@ function runFortinet_() {
   const known0 = getKnownState_(VENDOR_FORTINET);
   warnIfFeedOverflowed_(allItems, known0.dates, function (it) { return it.ir; });
 
-  const candidates = selectRssCsafCandidates_(allItems, known0, function (it) { return it.ir; },
-    function (it) { return it.pubDate; });
-  Logger.log('Fortinet RSS: 全 ' + allItems.length + ' 件 → CSAF 候補 ' + candidates.length + ' 件');
+  // RSS の日付では CSAF の改訂を判断できないため、毎回すべて取得する。
+  // 実測: RSS の pubDate / description の "Revised on" と CSAF の current_release_date は
+  // 双方向にずれる。RSS だけ動いて CSAF が変わらない件（FG-IR-24-257: Revised on 2026-06-15、
+  // CSAF は 2025-08-08 のまま）もあれば、RSS が一切動かないまま CSAF だけ改訂される件
+  // （FG-IR-26-139: 2026-05-13 公表 → CSAF 2026-06-08 改訂）もある。後者は RSS の日付で
+  // 候補を絞る限り永久に検知できない。よって RSS は ID とタイトルの目次としてだけ使い、
+  // 既読判定は CSAF の実データ 1 本に寄せる。fetchAll のパラレル取得で 50 件およそ 5 秒。
+  Logger.log('Fortinet RSS: 全 ' + allItems.length +
+             ' 件の CSAF を取得します（RSS の日付は CSAF の改訂を表さないため毎回全件）');
+  const fetched = fetchAllCsaf_(allItems);
 
-  const fetched = fetchAllCsaf_(candidates);
+  // 一度も処理できていない件の取得に失敗したときだけメールする。
+  // 記録済みの件の一時的な失敗は、翌日取り直せば済むので通知しない。
+  const unseenFailures = fetched.filter(function (f) {
+    return f.error && !known0.dates[f.item.ir];
+  });
+  if (unseenFailures.length) notifyFetchFailures_(VENDOR_FORTINET, unseenFailures);
 
   let allLedgerRows = [];
   let batchNum = 0;
+  let processedCount = 0;
+  // このバッチで扱い終えた ID。取得に失敗した件は処理済みに記録しないため、
+  // 記録の有無だけでループを回すと同じ件を選び続けてしまう。
+  const handled = {};
 
   // 未処理がなくなるまで同一実行内で繰り返す（日次1回で全件処理）
   while (true) {
     const known = getKnownState_(VENDOR_FORTINET);
     const pending = fetched.filter(function (f) {
-      return needsAdvisoryProcessing_(f.item.ir, f.updatedAt, f.version, known);
+      if (handled[f.item.ir]) return false;
+      return needsAdvisoryProcessing_(f.item.ir, f.updatedAt, f.version, known, !!f.error);
     });
 
     if (!pending.length) {
@@ -728,6 +928,8 @@ function runFortinet_() {
     }
 
     const todo = pending.slice(0, MAX_ADVISORIES_PER_RUN);
+    todo.forEach(function (f) { handled[f.item.ir] = true; });
+    processedCount += todo.length;
     batchNum++;
     if (pending.length > todo.length) {
       Logger.log('Fortinet: 未処理 ' + pending.length + ' 件 → このバッチ ' + todo.length +
@@ -747,7 +949,8 @@ function runFortinet_() {
     let rows = [];
     todo.forEach(function (f) {
       if (f.error) {
-        Logger.log('CSAF 取得失敗: ' + f.item.ir + ' / ' + f.error);
+        Logger.log((f.missing ? 'CSAF未作成: ' : 'CSAF 取得失敗（翌日再取得）: ') +
+                   f.item.ir + ' / ' + f.error);
         rows.push(errorRow_(f.item, f.error));
         return;
       }
@@ -762,7 +965,19 @@ function runFortinet_() {
                ' / ' + V_INVEST + ' ' + counts[V_INVEST] + ' / ' + V_NONE + ' ' + counts[V_NONE]);
     if (batchNum === 1) logUnownedProducts_(rows);
 
-    writeState_(VENDOR_FORTINET, todo, rows);
+    // 取得に失敗した件は処理済みに記録しない。記録すると「やれることは全部やった」印になり、
+    // 翌日 CSAF が取れても、記録した日付（＝RSS の pubDate）と CSAF の日付が一致してしまって
+    // 台帳に載らない。新着は両者が同じ日であることが多く、実際に踏み得る経路。
+    // CSAF が存在しないと確定した 404 だけは記録し、毎日の再処理を止める。
+    const recordable = todo.filter(function (f) { return !f.error || f.missing; })
+      .map(function (f) {
+        if (!f.error) return f;
+        // CSAF を読めていないまま記録する行（＝未作成と確定した 404）。
+        // 版の欄を空にせず印を置く。後日 CSAF が公開されれば "未取得" ≠ "0" で必ず拾える。
+        return { item: f.item, csaf: f.csaf, updatedAt: f.updatedAt,
+                 version: STATE_VERSION_UNAVAILABLE, error: f.error, missing: f.missing };
+      });
+    writeState_(VENDOR_FORTINET, recordable, rows, assets);
 
     const ledgerRows = rows.filter(function (r) { return isLedgerRow_(r, assets); });
     Logger.log('Fortinet 台帳: ' + ledgerRows.length + ' / ' + rows.length + ' 行');
@@ -776,6 +991,18 @@ function runFortinet_() {
   }
 
   if (allLedgerRows.length) sortLedger_();
+
+  addVendorStats_(VENDOR_FORTINET, {
+    rss: allItems.length,
+    fetched: fetched.length,
+    ok: fetched.filter(function (f) { return !f.error; }).length,
+    missing: fetched.filter(function (f) { return f.missing; }).length,
+    failed: fetched.filter(function (f) { return f.error && !f.missing; }).length,
+    processed: processedCount,
+    ledger: allLedgerRows.length,
+    mode: 'all'
+  });
+
   return allLedgerRows;
 }
 
@@ -878,6 +1105,7 @@ function runCisco_() {
   const assets = ciscoAssets_(readAssets_());
   if (!assets.length) {
     Logger.log('Cisco: ツール対象の資産がありません。スキップします。');
+    addVendorStats_(VENDOR_CISCO, { note: '資産に対象機器が無くスキップ' });
     return [];
   }
 
@@ -889,13 +1117,14 @@ function runCisco_() {
 
   const candidates = selectRssCsafCandidates_(allItems, known0, function (it) { return it.id; },
     function (it) { return it.pubDate; });
-  Logger.log('Cisco CSAF RSS: 全 ' + allItems.length + ' 件 → CSAF 候補 ' + candidates.length +
-             ' 件（資産シートの製品で判定）');
+  Logger.log('Cisco CSAF RSS: 全 ' + allItems.length + ' 件 → CSAF 取得 ' + candidates.length +
+             ' 件（残りは前回から更新なし。Cisco はフィードの日付が CSAF と一致するため差分のみ取得）');
 
   const fetched = fetchCiscoCsafBatch_(candidates);
 
   let allLedgerRows = [];
   let batchNum = 0;
+  let processedCount = 0;
 
   while (true) {
     const known = getKnownState_(VENDOR_CISCO);
@@ -909,6 +1138,7 @@ function runCisco_() {
     }
 
     const todo = pending.slice(0, MAX_ADVISORIES_PER_RUN);
+    processedCount += todo.length;
     batchNum++;
     Logger.log('Cisco 処理対象 ' + todo.length + ' 件' +
                (pending.length > todo.length ? '（未処理 ' + pending.length + ' 件・続きあり）' : ''));
@@ -949,7 +1179,7 @@ function runCisco_() {
     Logger.log('Cisco 全 ' + rows.length + ' 行: ' + V_ACT + ' ' + counts[V_ACT] +
                ' / ' + V_INVEST + ' ' + counts[V_INVEST] + ' / ' + V_NONE + ' ' + counts[V_NONE]);
 
-    writeState_(VENDOR_CISCO, todo, rows);
+    writeState_(VENDOR_CISCO, todo, rows, assets);
 
     const ledgerRows = rows.filter(function (r) { return isLedgerRow_(r, assets); });
     Logger.log('Cisco 台帳: ' + ledgerRows.length + ' / ' + rows.length + ' 行');
@@ -966,6 +1196,16 @@ function runCisco_() {
     sortLedger_();
     clearCiscoEmptyRetryMark_();
   }
+
+  addVendorStats_(VENDOR_CISCO, {
+    rss: allItems.length,
+    fetched: fetched.length,
+    ok: fetched.filter(function (f) { return !f.error; }).length,
+    failed: fetched.filter(function (f) { return f.error; }).length,
+    processed: processedCount,
+    ledger: allLedgerRows.length
+  });
+
   return allLedgerRows;
 }
 
@@ -1112,6 +1352,44 @@ function ciscoConfigHints_(csaf) {
     }
   });
   return hints.join('\n\n');
+}
+
+/**
+ * 処理済みシートの「対象製品」に書く製品名を CSAF から取り出す。
+ *
+ * 台帳用の ciscoTargetProducts_ とは目的が違う。あちらは「自社資産のどれに当たるか」を
+ * 資産シート起点で絞り込むので、自社に関係ないアドバイザリでは空になる。
+ * 処理済みシートはベンダーが公表した全件の記録（分母）なので、
+ * 自社保有と無関係に「何の製品の脆弱性か」が読めないと、
+ * 後から「なぜこれは台帳に無いのか」を説明できない。
+ *
+ * 版番号の葉には降りない（"17.2.10" だけ並んでも読めない）。
+ * Cisco の CSAF は「Cisco Secure Endpoint が Apple macOS 上に入っている」形で
+ * 同梱先の OS も持つため、Cisco 製品名があればそちらを優先する。
+ * 実測: RSS 50 件すべてで製品名を取得できた。
+ */
+function ciscoCsafProductNames_(csaf) {
+  const out = [];
+  function walk(b) {
+    if (!b) return;
+    const cat = String(b.category || '');
+    if ((cat === 'product_family' || cat === 'product_name') && b.name) {
+      const n = String(b.name).trim();
+      if (n) pushUnique_(out, n);
+      return;
+    }
+    (b.branches || []).forEach(walk);
+  }
+  (((csaf || {}).product_tree || {}).branches || []).forEach(walk);
+
+  const cisco = out.filter(function (n) { return /^cisco/i.test(n); });
+  const names = cisco.length ? cisco : out;
+
+  // 15 製品並ぶ例があり、そのままだとセルが読めなくなる。
+  if (names.length > 5) {
+    return names.slice(0, 5).concat(['他 ' + (names.length - 5) + ' 製品']);
+  }
+  return names;
 }
 
 function ciscoProductTreeNames_(csaf) {
@@ -1577,22 +1855,20 @@ function fetchRssItems_() {
 // ============================================================
 
 /**
- * CSAF を取得する。まず RSS のタイトルから URL を組み立てて取りにいき、
- * 失敗した場合だけアドバイザリ HTML から csaf_url を拾う経路に落とす。
- * HTML 経路は社内プロキシで遮断される場合があるため、あくまで保険。
+ * CSAF を 1 件取得する（単体確認用。日次実行は fetchAllCsaf_ を使う）。
+ *
+ * かつては失敗時にアドバイザリ HTML から csaf_url を拾う「保険」を持っていたが、
+ * その経路は成立しないため削除した。fortiguard.fortinet.com のアドバイザリページは
+ * JS で描画され、HTML 中に文字列 "csaf" は 1 度も現れない（altcha によるボット対策も入る）。
+ * 残しておくと、失敗のたびに無駄なリクエストを 2 本増やしたうえ、
+ * 「取りこぼしても回復手段がある」という誤解だけが残る。
  */
 function fetchCsaf_(item) {
-  const direct = csafUrlFor_(item);
-  let res = UrlFetchApp.fetch(direct, { muteHttpExceptions: true });
-  if (res.getResponseCode() === 200) return JSON.parse(res.getContentText());
-
-  Logger.log('スラッグ導出に失敗（HTTP ' + res.getResponseCode() + '）。HTML 経由で再試行: ' + item.ir);
-  const html = UrlFetchApp.fetch(item.link, { muteHttpExceptions: true }).getContentText();
-  const m = /csaf_url=(https:\/\/[^"'&\s]+\.json)/.exec(html);
-  if (!m) throw new Error('CSAF の URL を特定できませんでした');
-
-  res = UrlFetchApp.fetch(m[1], { muteHttpExceptions: true });
-  if (res.getResponseCode() !== 200) throw new Error('CSAF 取得失敗 HTTP ' + res.getResponseCode());
+  const url = csafUrlFor_(item);
+  const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) {
+    throw new Error('CSAF 取得失敗 HTTP ' + res.getResponseCode() + ': ' + url);
+  }
   return JSON.parse(res.getContentText());
 }
 
@@ -1634,12 +1910,17 @@ function ymd_(d) {
 }
 
 /**
- * RSS 50 件のうち CSAF を取りに行く候補を選ぶ（日次運用向け）。
+ * RSS のうち CSAF を取りに行く候補を選ぶ（現在は Cisco 専用）。
+ *
+ * この絞り込みは「フィードの日付が CSAF の更新を反映している」ことが前提。
+ * Cisco の csaf_20.xml は CSAF から生成されているため前提が成り立つ。
+ * Fortinet の ir.xml は成り立たないことが実測で分かったので、Fortinet はこの関数を
+ * 使わず毎回全件を取得する（理由は runFortinet_ のコメント）。
  *
  * 取得する:
  *   - 処理済みに無い ID（初出。RSS に載っている限り古くても取得）
  *   - RSS 日付が処理済みの CSAF 最終更新日より新しい（改訂の可能性）
- *   - CSAF 版が未記録の既存行（移行後の1回だけ再確認）
+ *   - CSAF 版が未記録の既存行（＝前回の取得に失敗した件。実質のリトライ）
  *
  * スキップする:
  *   - 処理済みがあり、RSS 日付が CSAF 最終更新日以下（日次では変更なし）
@@ -1660,8 +1941,16 @@ function selectRssCsafCandidates_(items, known, getId, getRssDate) {
   return out;
 }
 
-/** CSAF 取得後、台帳へ反映するか（最終更新日・版で判定）。 */
-function needsAdvisoryProcessing_(id, csafDate, csafVersion, known) {
+/**
+ * CSAF 取得後、台帳へ反映するか（最終更新日・版で判定）。
+ *
+ * hasError は CSAF を取得できなかったことを表す。記録済みの件なら何もしない。
+ * CSAF が読めていない以上、台帳を書き換える材料が無いし、
+ * 取得できなかった日付（RSS の pubDate で代用している）で比較しても意味がない。
+ * 未記録なら true を返し、取得できなかった事実をログに出す経路へ回す。
+ */
+function needsAdvisoryProcessing_(id, csafDate, csafVersion, known, hasError) {
+  if (hasError && known.dates[id]) return false;
   if (!known.dates[id]) return true;
   if (ymd_(csafDate) !== known.dates[id]) return true;
   if (String(csafVersion || '') !== String(known.versions[id] || '')) return true;
@@ -1683,6 +1972,7 @@ function fetchCiscoCsafBatch_(items) {
         csaf: csaf,
         updatedAt: csafUpdatedAt_(csaf, it),
         version: csafTrackingVersion_(csaf),
+        products: ciscoCsafProductNames_(csaf),
         error: ''
       };
     } catch (e) {
@@ -1692,12 +1982,20 @@ function fetchCiscoCsafBatch_(items) {
 }
 
 /**
- * 指定 item の CSAF をまとめて取得する（items は呼び出し側で期間絞り込み済み）。
+ * 指定 item の CSAF をまとめて取得する（Fortinet は RSS 全件を渡す）。
  *
  * UrlFetchApp.fetchAll() は複数リクエストを並行して投げるため、
- * 1 件ずつ fetch するより大幅に速い。
+ * 1 件ずつ fetch するより大幅に速い（実測: 約 50 件で 5 秒）。
  *
- * 戻り値: [{ item, csaf, updatedAt, version, error }]
+ * 応答は 3 つに分ける。同じ「取れなかった」でも扱いが違うため。
+ *   200      成功
+ *   404      CSAF未作成。Fortinet が CSAF を出し始めたのは 2025 年 3 月頃で、それ以前の
+ *            アドバイザリには CSAF が遡って作られていない。改訂されると RSS には載るが
+ *            CSAF は無いまま（例: FG-IR-22-059）。存在しないものを毎日待っても仕方がないので、
+ *            処理済みに記録して再処理を止める（missing: true）。
+ *   その他    一時的な失敗として扱う。処理済みには記録せず、翌日の実行で取り直す。
+ *
+ * 戻り値: [{ item, csaf, updatedAt, version, error, missing }]
  */
 function fetchAllCsaf_(items) {
   const reqs = items.map(function (it) {
@@ -1713,26 +2011,43 @@ function fetchAllCsaf_(items) {
   }
 
   let ok = 0;
+  let missing = 0;
+  let failed = 0;
+
   const out = items.map(function (it, i) {
     const r = res[i];
-    try {
-      if (!r || r.getResponseCode() !== 200) {
-        // スラッグ導出が外れた場合だけ HTML 経由に落とす
-        const csaf = fetchCsaf_(it);
+    const code = r ? r.getResponseCode() : 0;
+
+    if (code === 200) {
+      try {
+        const csaf = JSON.parse(r.getContentText());
         ok++;
         return { item: it, csaf: csaf, updatedAt: csafUpdatedAt_(csaf, it),
-          version: csafTrackingVersion_(csaf), error: '' };
+          version: csafTrackingVersion_(csaf), error: '', missing: false };
+      } catch (e) {
+        failed++;
+        return { item: it, csaf: null, updatedAt: it.pubDate, version: '',
+          error: 'CSAF の解析に失敗: ' + e, missing: false };
       }
-      const csaf = JSON.parse(r.getContentText());
-      ok++;
-      return { item: it, csaf: csaf, updatedAt: csafUpdatedAt_(csaf, it),
-        version: csafTrackingVersion_(csaf), error: '' };
-    } catch (e) {
-      return { item: it, csaf: null, updatedAt: it.pubDate, version: '', error: String(e) };
     }
+
+    if (code === 404) {
+      missing++;
+      return { item: it, csaf: null, updatedAt: it.pubDate, version: '',
+        error: 'CSAF未作成（HTTP 404。ベンダーがこのアドバイザリの CSAF を出していない）',
+        missing: true };
+    }
+
+    failed++;
+    return { item: it, csaf: null, updatedAt: it.pubDate, version: '',
+      error: 'CSAF 取得失敗 HTTP ' + code, missing: false };
   });
 
-  Logger.log('CSAF 取得: ' + ok + ' / ' + items.length + ' 件');
+  Logger.log('CSAF 取得: 成功 ' + ok + ' / CSAF未作成 ' + missing + ' / 失敗 ' + failed +
+             '（全 ' + items.length + ' 件）');
+  if (failed) {
+    Logger.log('  失敗した件は処理済みに記録していません。翌日の実行で取り直します。');
+  }
   return out;
 }
 
@@ -2101,7 +2416,8 @@ function readAssets_() {
         version: String(r[4] || '').trim(),
         count: r[5],
         toolTarget: String(r[6] || 'はい').trim(),
-        note: String(r[7] || '').trim()
+        note: String(r[7] || '').trim(),
+        updatedAt: r[8] || ''
       };
     });
   }
@@ -3129,6 +3445,7 @@ function callGeminiModel_(model, prompt) {
 
   let res;
   for (let attempt = 1; attempt <= 3; attempt++) {
+    countAiRequest_();
     res = UrlFetchApp.fetch(url, options);
     const code = res.getResponseCode();
     if (code === 200) break;
@@ -3176,6 +3493,7 @@ function callClaude_(prompt) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY がスクリプト プロパティに未設定です。');
 
+  countAiRequest_();
   const res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
     method: 'post',
     contentType: 'application/json',
@@ -3284,7 +3602,29 @@ function removeRowsFor_(vendor, advisoryIds) {
  * 処理したアドバイザリを 1 件 1 行で記録する。
  * 「今月 Fortinet から公表：N 件」の分母はこのシートを数えて出す。
  */
-function writeState_(vendor, todo, rows) {
+/**
+ * 処理済みシートに残す自社判定。
+ *
+ * 台帳に載らなかった件は、載せなかった根拠がどこにも残らない。
+ * 分母（公表 N 件）だけあっても「なぜ 44 件を対象外としたのか」を後から説明できないので、
+ * 判定の結論だけをここに書き写す。判断そのものは decideNotification_ が済ませたもので、
+ * ここで新しい判断はしない。
+ */
+function ownershipLabel_(f, advisoryRows, assets) {
+  // 値の先頭は必ず 対象 / 対象外 / 判定不能 にする。列を眺めたときに
+  // 可否が最初の 2〜3 文字で読めないと、根拠として使えない。
+  if (f && f.error) return '判定不能';
+  if (isCiscoInformationalAdvisory_(f && f.csaf, f && f.item)) return STATE_JUDGE_INFO;
+
+  const owned = (advisoryRows || []).filter(function (r) {
+    return r.product && assetsForProduct_(assets || [], r.product).length;
+  });
+  if (!owned.length) return '対象外-未保有';
+  if (owned.some(function (r) { return r.osStatus !== '対象外'; })) return '対象';
+  return '対象外-OS影響外';
+}
+
+function writeState_(vendor, todo, rows, assets) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(SHEET_STATE);
   if (!sh) {
@@ -3296,24 +3636,35 @@ function writeState_(vendor, todo, rows) {
   const byAdvisory = {};
   rows.forEach(function (r) {
     const a = byAdvisory[r.advisoryId] ||
-      (byAdvisory[r.advisoryId] = { products: [], initial: r.initialDate });
+      (byAdvisory[r.advisoryId] = { products: [], initial: r.initialDate, rows: [] });
     pushUnique_(a.products, r.product);
+    a.rows.push(r);
   });
 
   const values = todo.map(function (f) {
     const item = f.item || f;
     const id = item.ir || item.id;
-    const a = byAdvisory[id] || { products: [], initial: f.updatedAt || item.pubDate };
+    const a = byAdvisory[id] || { products: [], initial: f.updatedAt || item.pubDate, rows: [] };
+    // CSAF から製品名が取れていればそれを使う（自社保有と無関係に「何の製品か」を残す）。
+    // 取れない場合だけ、台帳へ展開した行から拾った製品名に落とす。
+    const products = (f.products && f.products.length) ? f.products : a.products;
     return [
       vendor,
       f.updatedAt || item.pubDate || '',
       a.initial || f.updatedAt || item.pubDate || '',
       id,
       item.title,
-      a.products.join(', '),
-      f.version || ''
+      products.join(', '),
+      f.version || '',
+      ownershipLabel_(f, a.rows, assets)
     ];
   });
+
+  if (!values.length) return;
+
+  if (sh.getMaxColumns() < STATE_HEADERS.length) {
+    sh.insertColumnsAfter(sh.getMaxColumns(), STATE_HEADERS.length - sh.getMaxColumns());
+  }
 
   const startRow = sh.getLastRow() + 1;
   sh.getRange(startRow, 1, values.length, STATE_HEADERS.length).setValues(values);
@@ -3322,19 +3673,115 @@ function writeState_(vendor, todo, rows) {
 }
 
 /**
+ * 実行を 1 行残す。通知は増やさない。main() から 1 実行につき 1 回だけ呼ぶ。
+ *
+ * 記録に失敗しても本体は止めない。履歴のために日次処理を落とすのは本末転倒。
+ */
+function writeRunLog_(errorText) {
+  try {
+    if (!runStats_) return;
+
+    const v = runStats_.vendors;
+    function sum(key) {
+      return v.reduce(function (a, x) { return a + x[key]; }, 0);
+    }
+
+    // ベンダー別の数字は 1 列にまとめる。異常時に切り分けられればよく、
+    // ベンダーごとに行を分けると「今日動いたか」が 1 行で読めなくなる。
+    //
+    // 件数だけを並べない。取りに行く仕様がベンダーで違い（Fortinet は毎回全件、
+    // Cisco は更新分のみ）、Cisco の「取得 0」を知らない人が読むと
+    // 失敗したように見えるため、そうなった理由を必ず添える。
+    const detail = v.map(function (x) {
+      if (!x.rss && x.note) return x.vendor + '：' + x.note;
+
+      // 数字を記号で並べず文にする。両ベンダーとも「N件を確認、」で始めることで、
+      // 取りに行った件数が違っても「どちらも 50 件ちゃんと見た」が先に読める。
+      let body;
+      if (x.mode === 'all') {
+        body = '全件取得';
+      } else if (!x.fetched) {
+        body = '変更なし';
+      } else {
+        body = x.fetched + '件取得';
+      }
+
+      const inner = [];
+      if (x.fetched) {
+        inner.push('成功' + x.ok);
+        if (x.missing) inner.push('CSAF未作成' + x.missing);
+        if (x.failed) inner.push('失敗' + x.failed);
+      }
+
+      return x.vendor + ' ' + x.rss + '件：' + body +
+             (inner.length ? '（' + inner.join('・') + '）' : '') +
+             (x.note ? ' ' + x.note : '');
+    }).join('  ');
+
+    const result = errorText ? '失敗' : (sum('failed') ? '要確認' : '正常');
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sh = ss.getSheetByName(SHEET_RUNLOG);
+    if (!sh) {
+      sh = ss.insertSheet(SHEET_RUNLOG);
+      sh.appendRow(RUNLOG_HEADERS);
+      sh.setFrozenRows(1);
+    } else {
+      // 列構成を変えたときに見出しだけ差し替える。
+      const cur = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getDisplayValues()[0];
+      const same = cur.length === RUNLOG_HEADERS.length &&
+                   RUNLOG_HEADERS.every(function (h, i) { return cur[i] === h; });
+      if (!same) {
+        // 列を減らしたときは右端の古い見出しを消す。残すと見出しだけ 11 列、
+        // データは 9 列という状態になり、読む側が列を数え違える。
+        if (sh.getLastColumn() > RUNLOG_HEADERS.length) {
+          sh.deleteColumns(RUNLOG_HEADERS.length + 1, sh.getLastColumn() - RUNLOG_HEADERS.length);
+        }
+        sh.getRange(1, 1, 1, RUNLOG_HEADERS.length).setValues([RUNLOG_HEADERS]);
+        Logger.log('実行履歴の見出しを ' + RUNLOG_HEADERS.length + ' 列に更新しました。');
+      }
+    }
+
+    const row = sh.getLastRow() + 1;
+    sh.getRange(row, 1, 1, RUNLOG_HEADERS.length).setValues([[
+      new Date(),
+      result,
+      sum('rss'), sum('processed'), sum('ledger'), sum('failed'),
+      Math.round((Date.now() - runStats_.startedAt) / 1000),
+      aiRequestCount_ - runStats_.aiAtStart,
+      errorText ? ('エラー: ' + errorText + (detail ? '  /  ' + detail : '')) : detail
+    ]]);
+    sh.getRange(row, 1).setNumberFormat('yyyy/mm/dd hh:mm');
+  } catch (e) {
+    Logger.log('実行履歴の記録に失敗: ' + e);
+  }
+}
+
+/**
  * 月ごとの公表件数を数える。月次サマリの分母。
  *
  * 台帳の行数は数えない。同じアドバイザリでも実行タイミングで行数が変わり、
  * 集計の意味が定まらないうえ、台帳を数えれば同じ数字が出る。
  */
+/** 集計の分母から外す行か。情報通知は Cisco が同じ内容を個別アドバイザリで出し直す重複で、
+ *  脆弱性の公表件数として数えると水増しになる。記録自体は証跡として残す。 */
+const STATE_JUDGE_INFO = '対象外-情報通知';
+
+function isCountableStateRow_(row, cJudge) {
+  return !(cJudge >= 0 && String(row[cJudge]).trim() === STATE_JUDGE_INFO);
+}
+
 function countByMonth() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_STATE);
   if (!sh || sh.getLastRow() < 2) { Logger.log('処理済みシートが空です。'); return; }
 
   const values = sh.getRange(2, 1, sh.getLastRow() - 1, STATE_HEADERS.length).getValues();
   const cUpd = STATE_HEADERS.indexOf('最終更新日');
+  const cJudge = STATE_HEADERS.indexOf('自社判定');
   const m = {};
+  let skipped = 0;
   values.forEach(function (r) {
+    if (!isCountableStateRow_(r, cJudge)) { skipped++; return; }
     const d = r[cUpd];   // 改訂された月に計上する
     const key = (d instanceof Date)
       ? d.getFullYear() + '/' + ('0' + (d.getMonth() + 1)).slice(-2)
@@ -3346,6 +3793,7 @@ function countByMonth() {
   Object.keys(m).sort().reverse().forEach(function (k) {
     Logger.log(k + '  公表 ' + m[k] + ' 件');
   });
+  if (skipped) Logger.log('※ 情報通知 ' + skipped + ' 件を除く（公開一覧のお知らせで、実体は個別アドバイザリ側にある）');
 }
 
 function countByMonthVendor() {
@@ -3355,8 +3803,11 @@ function countByMonthVendor() {
   const values = sh.getRange(2, 1, sh.getLastRow() - 1, STATE_HEADERS.length).getValues();
   const cVendor = STATE_HEADERS.indexOf('ベンダー');
   const cUpd = STATE_HEADERS.indexOf('最終更新日');
+  const cJudge = STATE_HEADERS.indexOf('自社判定');
   const m = {};
+  let skipped = 0;
   values.forEach(function (r) {
+    if (!isCountableStateRow_(r, cJudge)) { skipped++; return; }
     const d = r[cUpd];
     const key = (d instanceof Date)
       ? d.getFullYear() + '/' + ('0' + (d.getMonth() + 1)).slice(-2)
@@ -3372,6 +3823,7 @@ function countByMonthVendor() {
       Logger.log(month + '  ' + vendor + ': 公表 ' + m[month][vendor] + ' 件');
     });
   });
+  if (skipped) Logger.log('※ 情報通知 ' + skipped + ' 件を除く');
 }
 
 function toRowArray_(r) {
@@ -3559,6 +4011,9 @@ function backfillAiColumns_() {
     written++;
   });
   Logger.log('AI 補完: ' + written + ' / ' + targets.length + ' 行を書き戻しました。');
+
+  // 台帳の行数は増えないので合計には足さない。何をしたかだけ内訳に残す。
+  addVendorStats_('AI補完', { note: written + ' 行を埋め直し' });
 }
 
 // ============================================================
