@@ -126,8 +126,38 @@ const MAX_ADVISORIES_PER_RUN = 50;
  */
 const KEEP_OUT_OF_SCOPE_MONTHS = 3;
 
-/** Slack に個別表示する最大件数。超えた分は「ほか N 件」にまとめる */
-const SLACK_MAX_ITEMS = 5;
+/**
+ * Slack に 1 通で個別表示する最大件数。超えた分は末尾に件数だけ出す。
+ *
+ * 通知に出るのは「あり（対応検討）」「あり（影響調査）」だけなので、
+ * ここで隠れる行はすべて人が見る必要のある行になる。5 では足りない。
+ * 数えているのは台帳の行数（CVE × 製品）で、Cisco の複数 CVE アドバイザリが
+ * 1 本あるだけで超える（ClamAV は 1 本で 7 行）。
+ *
+ * 上限は Slack 側の制約から決めている。1 メッセージ 50 ブロック、
+ * カード 1 枚が divider + section の 2 ブロック、ヘッダ・サマリ・末尾で 4 ブロック。
+ * 15 枚なら 34 ブロックで収まる。計算上は 23 枚まで入るがそこまで上げないのは、
+ * 読む側の限界がブロック上限より手前にあるため。
+ */
+const SLACK_MAX_ITEMS = 15;
+
+/**
+ * Slack の宛先。キー → スクリプトプロパティ名と表示名。
+ *
+ * 宛先を増やすときはここに 1 行足すだけにする。送信側の関数は触らない。
+ *
+ * personal のプロパティ名を SLACK_WEBHOOK_URL のまま残しているのは、命名を
+ * 揃えたい気持ちより「設定の欠落を沈黙にしない」を優先しているため。
+ * 改名した .gs を貼った瞬間、プロパティを直すまで日次通知が黙って止まり、
+ * それは「該当が無くて静かな日」と見分けが付かない。
+ */
+const SLACK_TARGETS = {
+  personal: { prop: 'SLACK_WEBHOOK_URL',      label: '個人検証' },
+  team:     { prop: 'SLACK_WEBHOOK_URL_TEAM', label: '会社テスト' }
+};
+
+/** SLACK_TARGET が未設定・未知のときに使う宛先。 */
+const SLACK_TARGET_DEFAULT = 'personal';
 
 /** Slack 末尾の外部一覧。URL は表示せずリンクテキストだけ出す */
 const SECURITY_NEXT_VULN_URL = 'https://www.security-next.com/category/cat177';
@@ -382,13 +412,20 @@ const REMOVED_STATE_COLUMNS = ['台帳の行数'];
  */
 const SHEET_RUNLOG = '実行履歴';
 /*
- * 列は「確認 → 新規・改訂 → 台帳 → 失敗」の順に、上流から下流へ一直線に読めるようにする。
+ * 列は「確認 → 新規・改訂 → 判定 → 失敗」の順に、上流から下流へ一直線に読めるようにする。
  * 取得件数（実際に CSAF を何本ダウンロードしたか）はここに置かない。
  * Fortinet は毎回全件、Cisco は差分のみという内部事情の数字で、合計すると
  * 「確認 100 なのに取得 50、残り 50 はどこへ？」という誤読を生むため、内訳へ回す。
+ *
+ * 「対象」「対象以外」はアドバイザリ件数で、台帳の行数ではない。
+ * 以前は「台帳追加」「台帳追加なし」と呼んでいたが、実体と合っていなかった。
+ * 台帳は 1 アドバイザリが CVE × 製品で複数行に開くうえ、古い「なし」を
+ * isLedgerRow_ が落とすので、どう数えてもこの列とは一致しない。
+ * ここが答えるのは「自社の資産に当たる公表がいくつあったか」であり、
+ * 台帳に何行増えたかではない。
  */
-const RUNLOG_HEADERS = ['実行日時', '結果', '確認件数', '差分なし', '更新あり', '台帳追加',
-                        '台帳追加なし', '失敗', '所要秒', 'AI呼び出し', '備考'];
+const RUNLOG_HEADERS = ['実行日時', '結果', '確認件数', '差分なし', '更新あり', '対象',
+                        '対象以外', '失敗', '所要秒', 'AI呼び出し', '備考'];
 
 /**
  * 1 回の実行（main）で集めた統計。
@@ -430,10 +467,14 @@ const STATE_VERSION_UNAVAILABLE = '未取得';
 // ============================================================
 
 function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('脆弱性ウォッチャー')
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('脆弱性ウォッチャー')
     .addItem('データ削除（台帳・処理済み）', 'clearRunData')
     .addItem('Ciscoだけ再取得', 'reprocessCisco')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('Slack テスト送信')
+      .addItem('個人検証チャンネルへ', 'sendSlackTestToPersonal')
+      .addItem('会社テストチャンネルへ', 'sendSlackTestToTeam'))
     .addToUi();
 }
 
@@ -4001,10 +4042,17 @@ function writeRunLog_(errorText) {
       return v.reduce(function (a, x) { return a + (x.labels[label] || 0); }, 0);
     }
 
+    // Slack の宛先は既定以外のときだけ書く。通常運用では 1 文字も増えない。
+    // 検証で会社テストへ向けたまま戻し忘れても、後からこの列で追える。
+    const tgt = runStats_.slackTarget;
+    const targetNote = (tgt && tgt !== SLACK_TARGET_DEFAULT && SLACK_TARGETS[tgt])
+      ? 'Slack宛先: ' + SLACK_TARGETS[tgt].label
+      : '';
+
     // 内訳は「見るべきことがあった日」だけ書く。平常日（更新も失敗もエラーも無い日）は
     // 毎日同じ文字列が並ぶだけで読む価値がなく、空欄にしておけば
     // 「何か書いてある行＝見るべき行」として拾える。
-    const worthWriting = !!errorText || sum('processed') > 0 || sum('failed') > 0;
+    const worthWriting = !!errorText || sum('processed') > 0 || sum('failed') > 0 || !!targetNote;
 
     // ベンダー別の数字は 1 列にまとめる。異常時に切り分けられればよく、
     // ベンダーごとに行を分けると「今日動いたか」が 1 行で読めなくなる。
@@ -4079,14 +4127,21 @@ function writeRunLog_(errorText) {
       sum('rss') - sum('processed'),
       sum('processed'),
       judged('対象'),
-      // 台帳追加なしは差し引きで出す。未保有だけを数えると、OS影響外・情報通知・
-      // 判定不能がどの列にも現れず、更新あり ＝ 台帳追加 ＋ 台帳追加なし が崩れる。
+      // 「対象以外」は差し引きで出す。未保有だけを数えると、OS影響外・情報通知・
+      // 判定不能がどの列にも現れず、更新あり ＝ 対象 ＋ 対象以外 が崩れる。
+      //
+      // 「対象外」ではなく「対象以外」と呼ぶ。この残差には判定ラベルの
+      // 対象外-未保有 / 対象外-OS影響外 / 対象外-情報通知 に加えて、
+      // 判定不能（CSAF が取れず判定できなかった件）も入る。
+      // 判定できなかった件を「対象外」と名乗らせると、分からなかった事実が消える。
+      // 内訳は備考の 判定[…] にそのまま出る。
       sum('processed') - judged('対象'),
       sum('failed'),
       Math.round((Date.now() - runStats_.startedAt) / 1000),
       aiRequestCount_ - runStats_.aiAtStart,
-      errorText ? ('エラー: ' + errorText + (detail ? '  /  ' + detail : ''))
-                : (worthWriting ? detail : '')
+      [errorText ? 'エラー: ' + errorText : '',
+       worthWriting ? detail : '',
+       targetNote].filter(function (t) { return t; }).join('  /  ')
     ]]);
     sh.getRange(row, 1).setNumberFormat('yyyy/mm/dd hh:mm');
   } catch (e) {
@@ -4373,10 +4428,15 @@ function backfillAiColumns_() {
  *   4. 必要なら台帳で詳細（任意）
  *
  * 「なし」は件数のみ。コミ猫風の画像添付はしない（Webhook のみ）。
+ *
+ * targetKey を渡すとその宛先へ送る（メニューからのテスト送信）。
+ * 省略すると運用宛先（SLACK_TARGET）になるので、main / reprocess の 3 箇所は
+ * 宛先を知らないまま呼べる。宛先が増えても呼び出し側は変わらない。
  */
-function notifySlack_(rows) {
-  const url = PropertiesService.getScriptProperties().getProperty('SLACK_WEBHOOK_URL');
-  if (!url) { Logger.log('SLACK_WEBHOOK_URL 未設定のため通知をスキップします。'); return; }
+function notifySlack_(rows, targetKey) {
+  const key = targetKey || operationalSlackTarget_();
+  const url = slackWebhookUrl_(key);
+  if (!url) return;
 
   const hits = rows
     .filter(function (r) { return r.verdict === V_ACT || r.verdict === V_INVEST; })
@@ -4389,15 +4449,73 @@ function notifySlack_(rows) {
 
   const sheetUrl = SpreadsheetApp.getActiveSpreadsheet().getUrl();
   const shown = hits.slice(0, SLACK_MAX_ITEMS);
-  const rest = hits.length - SLACK_MAX_ITEMS;
-  const payload = buildSlackPayload_(shown, sheetUrl, rest);
+  const payload = buildSlackPayload_(shown, sheetUrl, hits);
 
-  UrlFetchApp.fetch(url, {
+  // 実際に送った宛先だけ実行履歴に残す。ここより上で戻る日は何も送っていないので
+  // 記録しない。切り替えたまま戻し忘れた日は、送った実行に必ず印が残る。
+  if (runStats_) runStats_.slackTarget = key;
+
+  postSlack_(url, payload);
+  Logger.log('Slack 通知を送信しました（' + SLACK_TARGETS[key].label + '）: ' +
+             '全 ' + hits.length + ' 件のうち ' + shown.length + ' 件を表示');
+}
+
+/**
+ * 宛先キーから Webhook URL を引く。取れないときは null を返して理由をログに残す。
+ * 表示名とプロパティ名の両方を出す。「どの宛先が」「どの設定を」欠いているかが
+ * 一度で分からないと、宛先が増えたときにログだけでは切り分けられない。
+ */
+function slackWebhookUrl_(targetKey) {
+  const t = SLACK_TARGETS[targetKey];
+  if (!t) {
+    Logger.log('Slack 宛先「' + targetKey + '」は定義されていません。送信しません。');
+    return null;
+  }
+  const url = PropertiesService.getScriptProperties().getProperty(t.prop);
+  if (!url) {
+    Logger.log('Slack ' + t.label + '（' + t.prop + '）が未設定のため通知をスキップします。');
+    return null;
+  }
+  return url;
+}
+
+/**
+ * 運用（main / reprocess）の宛先。スクリプトプロパティ SLACK_TARGET で切り替える。
+ *
+ * 未知の値でも送信は止めず、既定へ落として警告だけ出す。
+ * ここで止めると、設定の打ち間違いが「Slack が静かな日」と区別できなくなる。
+ * 既定へ送ってしまう害より、通知が消えて誰も気づかない害の方が大きい。
+ */
+function operationalSlackTarget_() {
+  const v = String(PropertiesService.getScriptProperties().getProperty('SLACK_TARGET') || '').trim();
+  if (!v) return SLACK_TARGET_DEFAULT;
+  if (!SLACK_TARGETS[v]) {
+    Logger.log('SLACK_TARGET の値「' + v + '」は未知です。' +
+               SLACK_TARGETS[SLACK_TARGET_DEFAULT].label + ' に送ります。');
+    return SLACK_TARGET_DEFAULT;
+  }
+  return v;
+}
+
+/**
+ * Slack へ送る。応答コードを見てログに残す。
+ *
+ * 以前は muteHttpExceptions のまま結果を捨てていた。宛先が 1 つのうちは
+ * 「届かない ＝ すぐ気づく」だったが、宛先が複数になると片方の Webhook だけ
+ * 失効しても残りが届き、欠測に気づけなくなる。
+ */
+function postSlack_(url, payload) {
+  const res = UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
     muteHttpExceptions: true,
     payload: JSON.stringify(payload)
   });
+  const code = res.getResponseCode();
+  if (code !== 200) {
+    Logger.log('Slack 送信に失敗しました: HTTP ' + code + ' ' + res.getContentText());
+  }
+  return code;
 }
 
 function slackHitSort_(a, b) {
@@ -4412,8 +4530,14 @@ function slackHitSort_(a, b) {
  *   1行目: 新しい脆弱性が発表されました🔍
  *   2行目: FortiGate:1件 Cisco:2件
  */
-function buildSlackPayload_(hits, sheetUrl, rest) {
-  const summary = slackDeviceSummary_(hits);
+function buildSlackPayload_(shown, sheetUrl, all) {
+  // サマリは表示分ではなく全件で数える。ここを shown で数えると、
+  // 2 行目の内訳とカードの枚数が一致してしまい、切られた事実がどこにも出ない。
+  // 読む人は 2 行目を「今日の該当件数」として読むので、そこが表示件数だと
+  // 末尾の残り件数が何に対する残りなのか繋がらなくなる。
+  const total = all || shown;
+  const rest = total.length - shown.length;
+  const summary = slackDeviceSummary_(total);
   const title = '新しい脆弱性が発表されました:mag:';
   const blocks = [{
     type: 'header',
@@ -4426,13 +4550,15 @@ function buildSlackPayload_(hits, sheetUrl, rest) {
     });
   }
 
-  hits.forEach(function (r) {
+  shown.forEach(function (r) {
     blocks.push({ type: 'divider' });
     formatSlackItemBlocks_(r).forEach(function (b) { blocks.push(b); });
   });
 
   const foot = [];
-  if (rest > 0) foot.push('ほか ' + rest + ' 件は台帳');
+  // 「は台帳」とは書かない。直下のリンクが台帳を指しているので重複する。
+  // ここが担うのは「全部は出していない」という事実と、その分母だけ。
+  if (rest > 0) foot.push('全 ' + total.length + ' 件のうち ' + shown.length + ' 件を表示');
   const links = ['<' + SECURITY_NEXT_VULN_URL + '|Security NEXTで確認>'];
   if (sheetUrl) links.push('<' + sheetUrl + '|判定台帳を確認>');
   foot.push(links.join('  /  '));
@@ -4657,11 +4783,11 @@ function slackCvssBand_(score) {
 }
 
 /**
- * Webhook に送らず、組み立てた payload をログに出す（表示確認用）。
+ * 表示確認に使うサンプル 3 行。台帳の実データではない。
+ * ログ出力（testSlackBlocks）と実送信（sendSlackTest_）で同じ内容を使う。
  */
-function testSlackBlocks() {
-  const sheetUrl = 'https://example.com/ledger';
-  const rows = [
+function sampleSlackRows_() {
+  return [
     {
       vendor: VENDOR_FORTINET, verdict: V_ACT, product: 'FortiOS',
       selfVersion: 'FortiOS 7.4.11', cve: 'CVE-2026-0001', cvss: 9.8,
@@ -4695,10 +4821,56 @@ function testSlackBlocks() {
       pubDate: new Date('2026-08-20')
     }
   ];
-  const payload = buildSlackPayload_(rows, sheetUrl, 0);
+}
+
+/**
+ * Webhook に送らず、組み立てた payload をログに出す（表示確認用）。
+ */
+function testSlackBlocks() {
+  const payload = buildSlackPayload_(sampleSlackRows_(), 'https://example.com/ledger');
   Logger.log(JSON.stringify(payload, null, 2));
   Logger.log('testSlackBlocks: 1行タイトル＋件数の payload を出力しました。');
 }
+
+/**
+ * サンプル 3 行を実際に Slack へ送る。宛先はスプレッドシートのメニューから選ぶ。
+ *
+ * 先頭に「テスト送信」の 1 行を足す。中身は架空の CVE（CVE-2026-0001 など）で、
+ * 会社のチャンネルに出したとき本物の公表として読まれると実害が出る。
+ * 印は buildSlackPayload_ ではなくここで足す。本番の見た目のコードは 1 行も変えない。
+ *
+ * 実データで見せたいときはこの経路を使わない。SLACK_TARGET を切り替えて
+ * reprocessCisco() を実行すれば、本番と同じ経路で 1 通出る。
+ */
+function sendSlackTest_(targetKey) {
+  const t = SLACK_TARGETS[targetKey];
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  const url = slackWebhookUrl_(targetKey);
+  if (!url) {
+    // メニューから実行するとログを見に行かないので、シート側にも出す。
+    ss.toast(t.label + '（' + t.prop + '）が未設定です。', 'Slack テスト送信', 8);
+    return;
+  }
+
+  const payload = buildSlackPayload_(sampleSlackRows_(), ss.getUrl());
+  payload.blocks.unshift({
+    type: 'context',
+    elements: [{
+      type: 'mrkdwn',
+      text: ':test_tube: *表示確認のテスト送信です。* 以下は架空のサンプルで、実際の脆弱性ではありません。'
+    }]
+  });
+
+  const code = postSlack_(url, payload);
+  ss.toast(code === 200 ? t.label + ' へ送信しました。'
+                        : '送信に失敗しました（HTTP ' + code + '）。実行ログを確認してください。',
+           'Slack テスト送信', 8);
+}
+
+function sendSlackTestToPersonal() { sendSlackTest_('personal'); }
+
+function sendSlackTestToTeam() { sendSlackTest_('team'); }
 
 // ============================================================
 // 動作確認用
@@ -4709,7 +4881,14 @@ function testProps() {
   Logger.log('AI_PROVIDER        : ' + AI_PROVIDER);
   Logger.log('GEMINI_API_KEY     : ' + (p.getProperty('GEMINI_API_KEY') ? 'OK' : '未設定'));
   Logger.log('ANTHROPIC_API_KEY  : ' + (p.getProperty('ANTHROPIC_API_KEY') ? 'OK' : '未設定'));
-  Logger.log('SLACK_WEBHOOK_URL  : ' + (p.getProperty('SLACK_WEBHOOK_URL') ? 'OK' : '未設定'));
+  Object.keys(SLACK_TARGETS).forEach(function (k) {
+    const t = SLACK_TARGETS[k];
+    Logger.log(t.prop + ' : ' + (p.getProperty(t.prop) ? 'OK' : '未設定') +
+               '（' + t.label + '）');
+  });
+  const raw = p.getProperty('SLACK_TARGET');
+  Logger.log('SLACK_TARGET : ' + (raw || '(未設定)') +
+             ' → 運用宛先は ' + SLACK_TARGETS[operationalSlackTarget_()].label);
 }
 
 function testRss() {

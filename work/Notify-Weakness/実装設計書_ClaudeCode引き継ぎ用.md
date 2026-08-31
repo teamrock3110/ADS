@@ -167,7 +167,7 @@ Advance Notification は同じ内容を個別アドバイザリで出し直す�
 ### 2.3 実行履歴（11列）— 1実行1行。動いた事実そのもの
 
 ```
-実行日時 | 結果 | 確認件数 | 差分なし | 更新あり | 台帳追加 | 台帳追加なし | 失敗 | 所要秒 | AI呼び出し | 備考
+実行日時 | 結果 | 確認件数 | 差分なし | 更新あり | 対象 | 対象以外 | 失敗 | 所要秒 | AI呼び出し | 備考
 ```
 
 **なぜ要るか**: Slack は該当ありの日だけ鳴る（`NOTIFY_WHEN_NO_HITS = false`）。
@@ -175,7 +175,13 @@ Advance Notification は同じ内容を個別アドバイザリで出し直す�
 すべて同じ静けさに見える。実行ログの保持期間も短く後から遡れない。
 **行が途切れていれば実行されていない日**と読めるようにするためのシート。
 
-- 数字は左から右へ一直線。`確認件数 = 差分なし + 更新あり`、`更新あり = 台帳追加 + 台帳追加なし`
+- 数字は左から右へ一直線。`確認件数 = 差分なし + 更新あり`、`更新あり = 対象 + 対象以外`
+- **単位はアドバイザリ件数**。台帳の行数ではない（1 アドバイザリが CVE × 製品で複数行に開き、
+  さらに古い「なし」を `isLedgerRow_` が落とすので、どう数えても一致しない）。
+  この列が答えるのは「自社の資産に当たる公表がいくつあったか」であって、台帳が何行増えたかではない
+- `対象以外` は残差。`対象外-未保有` / `対象外-OS影響外` / `対象外-情報通知` に加えて
+  **`判定不能`（CSAF が取れず判定できなかった件）も入る**。だから「対象外」とは呼ばない。
+  判定できなかった件を対象外と名乗らせると、分からなかった事実が消える。内訳は `備考` の `判定[…]`
 - 取得件数（何本ダウンロードしたか）は列に出さない。ベンダーで意味が違い、
   合計すると「確認100なのに取得50、残り50はどこへ？」という誤読を生む
 - `備考` は更新・失敗・エラーがあった日だけ書く。平常日は空欄。
@@ -274,17 +280,61 @@ v7 で意図的に残している非対称と、その根拠。
 
 根拠を書けない非対称は残さない。
 
+### 4.6 Slack の宛先はテーブルに置き、呼び出し側に持たせない
+
+宛先は `SLACK_TARGETS`（`personal` / `team`）の 1 箇所だけで定義する。
+`notifySlack_(rows, targetKey)` の第2引数を省くと運用宛先（`SLACK_TARGET` プロパティ、
+未設定なら `personal`）になるので、**`main()` / `reprocessFortinet()` / `reprocessCisco()` の
+3 箇所は宛先を知らない**。3 つ目の宛先が要るときもテーブルに 1 行足すだけで、関数は触らない。
+
+| 関数 | 役割 |
+|---|---|
+| `slackWebhookUrl_(key)` | キー → Webhook URL。未設定・未知は理由をログに残して `null` |
+| `operationalSlackTarget_()` | `SLACK_TARGET` → キー。**未知の値でも止めず既定へ落とす** |
+| `postSlack_(url, payload)` | 送信のみ。HTTP コードを見てログに残す |
+
+判断が 2 つある。
+
+- **`SLACK_WEBHOOK_URL` を `..._PERSONAL` に改名しない。** 命名は揃わないが、改名した .gs を
+  貼った瞬間、プロパティを直すまで日次通知が黙って止まる。それは「該当が無くて静かな日」と
+  見分けが付かない（§4.1 と同じ理由）
+- **`SLACK_TARGET` が未知の値でも既定へ送る。** 設定ミスを隠す妥協だが、
+  誤った宛先へ 1 通出る害より、通知が消えて誰も気づかない害の方が大きい。警告はログに残す
+
+`postSlack_` で応答コードを見るのはこの変更で足した。宛先が 1 つのうちは「届かない ＝ すぐ気づく」
+だったが、宛先が複数になると片方の Webhook だけ失効しても残りが届き、欠測に気づけない。
+
+メニューからのテスト送信（`sendSlackTest_`）はサンプル行を使い、先頭に「テスト送信」の印を足す。
+印は `buildSlackPayload_` ではなく送信側で `unshift` する。**本番の見た目を作るコードは変えない。**
+
+### 4.7 通知で隠す件数は、隠れる行が何かで決める
+
+Slack に出るのは `あり（対応検討）` と `あり（影響調査）` だけで、`なし` は台帳止まり。
+つまり **表示上限で隠れる行は、すべて人が見る必要のある行**になる。
+上限は「読みやすさ」ではなく「隠してよいか」で決める。
+
+`SLACK_MAX_ITEMS = 15`。数えているのは台帳の行数（CVE × 製品）なので、
+Cisco の複数 CVE アドバイザリが 1 本あるだけで旧値の 5 を超えていた（ClamAV は 1 本で 7 行）。
+15 の根拠は Slack 側の制約: 1 メッセージ 50 ブロック、カード 1 枚が divider + section の
+2 ブロック、ヘッダ・サマリ・末尾で 4 ブロック。15 枚で 34 ブロック。
+計算上 23 枚まで入るがそこまで上げないのは、読む側の限界が手前にあるため。
+
+2 行目のサマリは `buildSlackPayload_(shown, sheetUrl, all)` の第 3 引数で**全件を渡して数える**。
+`shown` で数えると内訳とカード枚数が一致してしまい、切られた事実がどこにも出ない。
+読む人は 2 行目を「今日の該当件数」として読むので、そこが表示件数だと末尾の数字と繋がらない。
+
 ---
 
 ## 5. ファイル構成
 
-単一 GAS ファイル `fortinet_psirt_watcher_v7.gs`（5,185行・205関数）。
+単一 GAS ファイル `fortinet_psirt_watcher_v7.gs`（5,371行・212関数）。
 
 ```
 設定定数   AI_PROVIDER / GEMINI_MODEL(+FALLBACKS) / CLAUDE_MODEL(Haiku)
            RSS_URL / CSAF_BASE / CISCO_CSAF_RSS_URL / KEV_FEED_URL
            MAX_ADVISORIES_PER_RUN=50 / AI_CHUNK_SIZE=10 / KEEP_OUT_OF_SCOPE_MONTHS=3
-           SLACK_MAX_ITEMS=5 / NOTIFY_WHEN_NO_HITS=false
+           SLACK_MAX_ITEMS=15 / NOTIFY_WHEN_NO_HITS=false
+           SLACK_TARGETS{personal,team} / SLACK_TARGET_DEFAULT='personal'
            LEDGER_HEADERS(13) / STATE_HEADERS(10) / RUNLOG_HEADERS(11) / ASSET_HEADERS(9)
            STATE_VERSION_UNAVAILABLE='未取得' / aiRequestCount_ / runStats_
 エントリ   setup() / migrateLedgerHeaders() / migrateAssetHeaders() / clearRunData()
@@ -309,35 +359,27 @@ AI         enrichWithAI_() / buildEnrichPrompt_() / callGemini_() / callGeminiMo
            snapshotJudgeRows_() / advisoryIdCell_() / advisoryUrlFor_()
            toRowArray_() / writeLedger_() / sortLedger_() / formatLedger_()
            writeRunLog_() / startRunStats_() / addVendorStats_() / notifySlack_()
+           slackWebhookUrl_() / operationalSlackTarget_() / postSlack_()
            sendOpsMail_() / notifyMainFailure_() / notifyFetchFailures_()
 テスト     testVersion() / testRuleGate() / testJudge() / testCheckSteps() / testRss()
            testCsafUrls() / testCsaf() / testCiscoRss() / testAi() ほか（約540行）
+           sampleSlackRows_() / testSlackBlocks() / sendSlackTest_()
 ```
 
-テスト関数は本体と同居している。**別ファイルへの分離は未着手**（§6-4）。
+テスト関数は本体と同居している。**別ファイルへの分離は未着手**（§6-2）。
 
 ---
 
 ## 6. 次にやること（優先順）
 
-1. **実行履歴の `台帳追加` が実態とずれている** — 実際には「対象と判定した件数」で、
-   台帳の行数ではない。古い `なし` の行を `isLedgerRow_` が落とすため一致しない。
-   列名を `対象` / `対象外` に戻すか、実際に台帳へ入った件数を数えるか
-2. **Cisco の脆弱性名** — CVE ごとの `vulnerabilities[].title` を使う。実装1行。
-   Cisco の複数CVE 11件中8件で行ごとに正しい名前が出る。Fortinet は
-   `document.title` のままにする（CVE ごとの title が `FortiOS - LOW - FG-IR-…` で無意味なため）
-3. **フォールバック行の製品名** — 現在は資産シートの先頭製品を充てている。
+1. **フォールバック行の製品名** — 現在は資産シートの先頭製品を充てている。
    本来はアドバイザリの内容から絞りたいが、RSS のタイトルに製品名が無い
-4. **テスト約540行を別ファイルへ分離** — GAS は複数ファイル可でグローバルスコープを共有する。
+2. **テスト約540行を別ファイルへ分離** — GAS は複数ファイル可でグローバルスコープを共有する。
    取得層を次に触るときに、§4.5 の非対称の解消と一緒にやる
-5. **clasp 導入** — 現在は `.gs` を GAS エディタへ手貼り。
-   このセッションだけで貼り忘れが5回起きた。`npx @google/clasp@3` で動くことは確認済み
-   （グローバルインストール不要）。`.claspignore` で v5/v6 を除外しないと
-   同じ関数が三重定義になる点に注意
-6. **KEV 連携の基準承認** — 実装済みだが「KEV掲載＋機能使用中のとき対応」の
+3. **KEV 連携の基準承認** — 実装済みだが「KEV掲載＋機能使用中のとき対応」の
    基準は未承認（合意事項 1.4-2）
-7. **判断記録シート** — 人の判断を残す（上位文書 2.2）
-8. **JPCERT/CC 別シート** — RDF パーサを別実装。判定には混ぜない
+4. **判断記録シート** — 人の判断を残す（上位文書 2.2）
+5. **JPCERT/CC 別シート** — RDF パーサを別実装。判定には混ぜない
 
 ### 追わないと決めたもの
 
@@ -347,6 +389,19 @@ AI         enrichWithAI_() / buildEnrichPrompt_() / callGemini_() / callGeminiMo
 - **条件付きGET（ETag / Last-Modified）** — ファイルの更新であってアドバイザリの改訂ではない
 - **Cisco を Fortinet と同じ全件取得にする** — フィードが 50/50 で一致するので不要。
   直列取得のため30〜50秒かかる
+- **clasp（ローカルから GAS へ push）** — 2026-09-01 に見送りと決定。
+  デプロイは今後も `.gs` を GAS エディタへ手貼り＋保存で行う。
+  技術的には `npx @google/clasp@3` で動くことを確認済みだが、有効化・ログイン・
+  スクリプトID の共有というユーザー側の作業が要る。**再提案しないこと。**
+  手貼りである以上、実装した内容が GAS に入っているとは限らない。
+  作業の区切りで「貼ったか」を確認する側で担保する
+- **Slack のカードをアドバイザリ単位にまとめる** — 一見きれいだが、`影響` は
+  `fallbackImpactJa_` が CVE のベクターから引き、`推奨対応` の修正版は
+  `ciscoFixedVersions_(vuln, …)` が CVE ごとの `product_status` から引き、
+  自社影響そのものも `ruleGate_(row)` が CVE のベクターを見て決めている。
+  同じアドバイザリでも CVE ごとに割れるので、1 枚にまとめると代表値を選ぶことになり、
+  選んだ瞬間に他の CVE については誤りになる。とくに修正版を低い方に丸めると
+  「更新したのに直っていない」を生む。**やるなら集約規則の設計から**
 
 ---
 
