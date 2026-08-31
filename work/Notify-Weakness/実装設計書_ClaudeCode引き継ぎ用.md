@@ -307,21 +307,35 @@ v7 で意図的に残している非対称と、その根拠。
 メニューからのテスト送信（`sendSlackTest_`）はサンプル行を使い、先頭に「テスト送信」の印を足す。
 印は `buildSlackPayload_` ではなく送信側で `unshift` する。**本番の見た目を作るコードは変えない。**
 
-### 4.7 フォールバック行の製品はベンダーで絞る
+### 4.7 フォールバック行は製品を名乗らない
 
-`primaryAssetProduct_(assets, vendor, fallback)` は必ずベンダーを渡す。
-絞らないと資産シートの先頭行（`Fortinet / FortiOS`）がどのベンダーにも返り、
-Cisco のフォールバック行が「ベンダー Cisco・製品 FortiOS」になる。
-Slack の機器名は `vendor` から引くので、台帳と Slack で違う製品が出ることにもなる。
+CSAF が取れなかった行の `product` は空にする。**知らないものに名前を付けない。**
 
-`ツール対象=いいえ` の資産も外す。判定に使わないと決めた機器の製品名を判定行に
-載せると、その行が何を指しているのか説明できない。
+以前は `primaryAssetProduct_` が自社の主力製品（`FortiOS` / `IOS-XE`）を機械的に
+充てていた。「分からない」が「FortiOS だと分かった」に化けるうえ、自社が持っていない
+製品のアドバイザリ（RoomOS・BroadWorks・Crosswork など）まで自社製品として
+「あり（影響調査）」で台帳に載っていた。CSAF が取れたときは
+`ciscoAdvisoryTargetsAssets_` が弾いているのに、取れないと素通りする経路だった。
 
-ベンダー名の表記が資産シート側で揺れている場合（`cisco` など）は一致せず
-fallback（`IOS-XE` / `FortiOS`）へ落ちるが、それは元々そのベンダーの主力製品なので害はない。
+判定層は最初からこの形を想定して作られていた。`decideNotification_` は空の `product` を
+見て「影響調査・OS=不明」に落とし、`toRowArray_` は `r.product || '不明'` と表示する。
+塞いでいたのは `isLedgerRow_` の `if (!row.product) return false;` の 1 行だけで、
+フォールバック行が製品をでっち上げてその経路を迂回していた。
 
-**これは「どの製品か」を当てる仕組みではない。**CSAF が無い以上、自社が持っていない
-製品のアドバイザリでもここで製品が付く。その解決は §6-1。
+いまは `noCsaf: true` を立てた行だけが製品なしで台帳を通る。通常の行で製品が空なのは
+抽出の失敗なので従来どおり落とす。通さないと、取得に失敗した件が台帳から消えて
+誰も気づけなくなる。
+
+理由は `reason` ではなく `reasonPhrase` に置く。`reason` は `decideNotification_` が
+「OS=… | KEV=…」の見出しごと組み立て直すので、行の側で書いても消える。
+`decideNotification_` は行が持っている `reasonPhrase` を優先する
+（CSAF が取れなかった行にとって「製品を特定できない」は結果であって理由ではない）。
+
+**タイトルから製品を当てにはいかない。** Cisco の人向け RSS のタイトルには製品名が
+入る（`Cisco RoomOS Stack Overflow Vulnerability`）が、影響製品を 1 つしか名乗らない
+題名があり、`ClamAV Vulnerabilities Affecting Cisco Products` のように製品名を書かない型もある。
+Fortinet のタイトルには製品名自体が無い（`UI DoS attack`）。CSAF が無い状態で製品を
+断定するのは、ここで直したのと同じ誤りになる。
 
 ### 4.8 通知で隠す件数は、隠れる行が何かで決める
 
@@ -343,7 +357,7 @@ Cisco の複数 CVE アドバイザリが 1 本あるだけで旧値の 5 を超
 
 ## 5. ファイル構成
 
-単一 GAS ファイル `fortinet_psirt_watcher_v7.gs`（5,387行・212関数）。
+単一 GAS ファイル `fortinet_psirt_watcher_v7.gs`（5,362行・210関数）。
 
 ```
 設定定数   AI_PROVIDER / GEMINI_MODEL(+FALLBACKS) / CLAUDE_MODEL(Haiku)
@@ -361,11 +375,11 @@ Cisco の複数 CVE アドバイザリが 1 本あるだけで旧値の 5 を超
            selectRssCsafCandidates_()【Cisco専用】/ csafDate_() / csafUpdatedAt_()
            lastSeenDate_() / warnIfFeedOverflowed_() / ymd_()
 展開       extractRows_() / extractCiscoRowsFromCsaf_() / noVulnRow_()
-           extractFortinetRowFallback_() / extractCiscoRowFallback_() / errorRow_()
+           extractFortinetRowFallback_() / extractCiscoRowFallback_()
            ciscoCsafProductNames_() / csafCveList_()
 バージョン parseVersion_() / compareVersion_() / matchesSpec_() / judgeVersions_()
            judgeCiscoVersions_() / narrowFixVersion_()
-判定       readAssets_() / normProduct_() / assetsForProduct_() / primaryAssetProduct_()
+判定       readAssets_() / normProduct_() / assetsForProduct_() / isLedgerRow_()
            decideNotification_() / judgeOsApplicability_() / ruleGate_() / finalizeVerdict_()
            needsAdvisoryProcessing_() / ownershipJudgement_() / judgeReasonText_()
            isKevListed_() / fetchKevCatalog_()
@@ -382,32 +396,18 @@ AI         enrichWithAI_() / buildEnrichPrompt_() / callGemini_() / callGeminiMo
            sampleSlackRows_() / testSlackBlocks() / sendSlackTest_()
 ```
 
-テスト関数は本体と同居している。**別ファイルへの分離は未着手**（§6-2）。
+テスト関数は本体と同居している。**別ファイルへの分離は未着手**（§6-1）。
 
 ---
 
 ## 6. 次にやること（優先順）
 
-1. **フォールバック行が自社非保有の製品まで台帳に載せる** — ベンダー絞り込みは入れたが
-   （§4.7）、CSAF が読めない以上「どの製品か」は分からないままで、
-   `primaryAssetProduct_` はそのベンダーの主力製品を機械的に充てている。
-   RoomOS や BroadWorks のアドバイザリも `IOS-XE` として「あり（影響調査）」で載る。
-   CSAF が取れたときは `ciscoAdvisoryTargetsAssets_` が弾いているのに、取れないと素通りする。
-
-   使える情報がベンダーで違う（2026-09-01 実測）。Cisco の人向け RSS のタイトルには
-   製品名が入る（`Cisco RoomOS Stack Overflow Vulnerability`）が、Fortinet の RSS には
-   無い（`UI DoS attack` / `Vulnerability in OpenSSL library`）。
-   Cisco だけタイトルで絞ると、`ClamAV Vulnerabilities Affecting Cisco Products` のように
-   製品名を書かない題名を見逃す。
-
-   正しくは「分からない」を書けるようにすること。ただし `isLedgerRow_` が
-   製品なし・非保有の行を落とすので、判定の中核に例外を足すことになる。単独で時間を取る
-2. **テスト約540行を別ファイルへ分離** — GAS は複数ファイル可でグローバルスコープを共有する。
+1. **テスト約540行を別ファイルへ分離** — GAS は複数ファイル可でグローバルスコープを共有する。
    取得層を次に触るときに、§4.5 の非対称の解消と一緒にやる
-3. **KEV 連携の基準承認** — 実装済みだが「KEV掲載＋機能使用中のとき対応」の
+2. **KEV 連携の基準承認** — 実装済みだが「KEV掲載＋機能使用中のとき対応」の
    基準は未承認（合意事項 1.4-2）
-4. **判断記録シート** — 人の判断を残す（上位文書 2.2）
-5. **JPCERT/CC 別シート** — RDF パーサを別実装。判定には混ぜない
+3. **判断記録シート** — 人の判断を残す（上位文書 2.2）
+4. **JPCERT/CC 別シート** — RDF パーサを別実装。判定には混ぜない
 
 ### 追わないと決めたもの
 
@@ -423,6 +423,10 @@ AI         enrichWithAI_() / buildEnrichPrompt_() / callGemini_() / callGeminiMo
   スクリプトID の共有というユーザー側の作業が要る。**再提案しないこと。**
   手貼りである以上、実装した内容が GAS に入っているとは限らない。
   作業の区切りで「貼ったか」を確認する側で担保する
+- **CSAF が取れない件の製品を RSS タイトルから当てる** — 2026-09-01 実測。
+  Cisco のタイトルには製品名が入るが影響製品を 1 つしか名乗らない題名があり、
+  ClamAV 型は製品名すら書かない。Fortinet のタイトルには製品名が無い。
+  当たったケースを信じてしまうぶん、名乗らないより悪い（§4.7）
 - **Slack のカードをアドバイザリ単位にまとめる** — 一見きれいだが、`影響` は
   `fallbackImpactJa_` が CVE のベクターから引き、`推奨対応` の修正版は
   `ciscoFixedVersions_(vuln, …)` が CVE ごとの `product_status` から引き、

@@ -1089,7 +1089,10 @@ function runFortinet_() {
  * 落としても処理済みシートには全件残るので、取得した事実は消えない。
  */
 function isLedgerRow_(row, assets) {
-  if (!row.product) return false;
+  // 製品が分からない行を通すのは、CSAF が取れなかったときだけ。
+  // それ以外で製品が空なのは抽出の失敗なので、従来どおり落とす。
+  // 通さないと、取得に失敗した件が台帳から消えて誰も気づけなくなる。
+  if (!row.product) return !!row.noCsaf;
   if (!assetsForProduct_(assets, row.product).length) return false;
   if (row.osStatus === '対象外') return false;
   if (row.verdict === V_NONE && isStaleOutOfScope_(row.pubDate)) return false;
@@ -1663,36 +1666,6 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
 }
 
 /** CSAF 失敗時の保険（通常 RSS）。情報通知 ID は行にしない。 */
-/**
- * フォールバック行に載せる製品名。資産シートのツール対象から拾う。
- *
- * CSAF が読めない以上こちらで製品を決めるしかないので、自社が持っているものを充てて
- * 人の目に入れる。直書きにすると資産構成が変わったときに追随しない。
- * 資産が取れない場合だけ、これまでの既定値に落とす。
- *
- * ベンダーで絞ること。絞らないと資産シートの先頭行（Fortinet / FortiOS）が
- * どのベンダーにも返り、Cisco のフォールバック行が「ベンダー Cisco・製品 FortiOS」
- * という矛盾した行になる。Slack の機器名は vendor から引くので、
- * 台帳とSlackで違う製品が出ることにもなる。
- *
- * ツール対象が「いいえ」の資産も外す。判定に使わないと決めた機器の製品名を
- * 判定行に載せると、その行が何を指しているのか説明できない。
- *
- * ベンダー名の表記が資産シート側で揺れている場合（cisco / CISCO など）は
- * 一致せず fallback に落ちるが、fallback は元々そのベンダーの主力製品なので害はない。
- *
- * なお、これは「どの製品か」を当てる仕組みではない。CSAF が無い以上
- * 自社が持っていない製品のアドバイザリでもここで製品が付いてしまう
- * （RoomOS や BroadWorks の件が IOS-XE として載る）。その解決は別件（§6）。
- */
-function primaryAssetProduct_(assets, vendor, fallback) {
-  const hit = (assets || []).filter(function (a) {
-    return a.product && a.product !== '—' &&
-           a.vendor === vendor && a.toolTarget !== 'いいえ';
-  });
-  return hit.length ? hit[0].product : fallback;
-}
-
 function extractCiscoRowFallback_(item, assets) {
   if (isCiscoInformationalAdvisory_(null, item)) {
     Logger.log('Cisco 情報通知のためフォールバック行も作らない: ' + (item && item.id));
@@ -1707,7 +1680,12 @@ function extractCiscoRowFallback_(item, assets) {
     initialDate: item.pubDate,
     title: item.title,
     cve: meta.cves[0] || extractCveFromText_(item.title + ' ' + item.description),
-    product: primaryAssetProduct_(assets, VENDOR_CISCO, 'IOS-XE'),
+    // 製品は空のまま（理由は extractFortinetRowFallback_ と同じ）。
+    // Cisco の RSS タイトルには製品名が入るが、そこから当てにはいかない。
+    // 影響製品を 1 つしか名乗らない題名があり、ClamAV 型は製品名すら書かない。
+    // CSAF が無い状態で製品を断定するのは、ここで直している誤りと同じになる。
+    product: '',
+    noCsaf: true,
     cvss: meta.cvss,
     severity: meta.severity,
     vector: '', unauthRemote: '',
@@ -1717,7 +1695,9 @@ function extractCiscoRowFallback_(item, assets) {
     fixesRaw: '',
     workaround: '',
     verdict: V_INVEST,
-    reason: 'CSAF を取得できず版比較できないため',
+    // reason ではなく reasonPhrase に置く。reason は decideNotification_ が
+    // 「OS=… | KEV=…」の見出しごと組み立て直すので、ここで書いても消える。
+    reasonPhrase: 'CSAF を取得できず製品も版も特定できないため',
     selfVersion: '', fixVersion: '',
     feature: '', impactJa: '', howToCheck: '', plan: ''
   };
@@ -2389,7 +2369,12 @@ function extractFortinetRowFallback_(item, assets) {
     initialDate: item.pubDate,
     title: item.title,
     cve: cves.length ? cves[0].toUpperCase() : '',
-    product: primaryAssetProduct_(assets, VENDOR_FORTINET, 'FortiOS'),
+    // 製品は空のままにする。CSAF が無い以上どの製品かは分からず、
+    // 自社の主力製品を充てると「分からない」が「FortiOS だと分かった」に化ける。
+    // decideNotification_ が空を見て「製品を特定できないため → 影響調査」に落とし、
+    // 台帳の製品列は toRowArray_ が「不明」と表示する。
+    product: '',
+    noCsaf: true,
     cvss: cvss ? cvss[1] : '',
     severity: '',
     vector: '', unauthRemote: '',
@@ -2399,23 +2384,11 @@ function extractFortinetRowFallback_(item, assets) {
     fixesRaw: '',
     workaround: '',
     verdict: V_INVEST,
-    reason: 'CSAF を取得できず版比較できないため',
+    // reason ではなく reasonPhrase に置く。reason は decideNotification_ が
+    // 「OS=… | KEV=…」の見出しごと組み立て直すので、ここで書いても消える。
+    reasonPhrase: 'CSAF を取得できず製品も版も特定できないため',
     selfVersion: '', fixVersion: '',
     feature: '', impactJa: '', howToCheck: '', plan: ''
-  };
-}
-
-function errorRow_(item, msg) {
-  return {
-    vendor: VENDOR_FORTINET, advisoryId: item.ir, advisoryUrl: item.link,
-    pubDate: item.pubDate, initialDate: item.pubDate,
-    title: item.title, cve: '', product: '', cvss: '', severity: '', vector: '',
-    unauthRemote: '', affected: [], summary: '', impact: '', fixesRaw: '',
-    workaround: '',     verdict: V_INVEST,
-    reason: 'アドバイザリ情報を取得できませんでした（' + msg + '）。手動で確認してください。',
-    osStatus: '不明', kev: '', externalSurface: '—', takeover: '—', serviceStop: '—',
-    _lockedVerdict: true,
-    selfVersion: '', fixVersion: '', feature: '', impactJa: '', howToCheck: '', plan: ''
   };
 }
 
@@ -3178,7 +3151,9 @@ function decideNotification_(row, assets) {
     row.verdict = V_INVEST;
     row.osStatus = '不明';
     row.kev = kevLabel_(row.cve);
-    row.reasonPhrase = '製品を特定できないため';
+    // 行が理由を持っていればそれを使う。CSAF が取れなかった行にとっては
+    // 「製品を特定できない」は結果であって理由ではない。
+    row.reasonPhrase = row.reasonPhrase || '製品を特定できないため';
     row.needsDisplayAi = true;
     row.reason = buildDecisionReason_(row);
     row._lockedVerdict = true;
