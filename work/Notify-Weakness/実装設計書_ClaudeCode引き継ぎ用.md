@@ -112,7 +112,7 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
 
 ---
 
-## 2. スプレッドシート（4シート）
+## 2. スプレッドシート（5シート）
 
 ### 2.1 台帳（13列・左6列固定）— 対応要否を判断する作業リスト
 
@@ -200,6 +200,35 @@ Advance Notification は同じ内容を個別アドバイザリで出し直す�
 - `更新日` は棚卸しした日を人が手で入れる欄。ツールは書き込まない。
   判定はバージョンの突き合わせで行うため、この表がいつ時点のものか分からないと
   判定の根拠も定まらない
+
+### 2.5 判断記録（7列）— 人が下した対応の判断。ツールは書かない
+
+```
+判断日 | アドバイザリID | CVE | 判断 | 根拠 | 判断者 | 対象時点
+```
+
+**なぜ台帳の列にしないか**: `removeRowsFor_` がアドバイザリの改訂ごとに台帳の行を
+消して書き直すので、人が書いた内容は消える。台帳は再生成できるツールの出力、
+ここは再生成できない人の記録、と役割を分ける（設計書v3 §2.2 の判断でもある）。
+
+- `CVE` が空の行はそのアドバイザリ全体に効く。Cisco の複数 CVE をまとめて処理できる
+- **`対象時点` は改訂検知用。**判断は「そのアドバイザリの、その時点の内容」に対して
+  下したもの。改訂で影響範囲や修正版が変わったのに前回の「対応不要」が効き続けたら
+  見逃しになる。台帳の最終更新日が対象時点より新しければ判断を無効にし、
+  ツールの判定へ戻す（既読判定を `current_release_date` と版で行うのと同じ考え方）
+- メニュー「選択行から判断記録を作る」で台帳から起こすと `対象時点` は自動で入る。
+  ここを人任せにすると空欄や打ち間違いが出て、その行が捨てられる
+- `判断` はプルダウン。語彙は `DECISION_VERDICT` のキーが正
+
+| 判断 | 自社影響 | 台帳 | Slack |
+|---|---|---|---|
+| 対応不要（定期更新枠） | `なし` に落とす | 残る | 出ない |
+| 対応済み | `なし` に落とす | 残る | 出ない |
+| 対応する（実施待ち） | `あり（対応検討）` | 残る | 出る |
+| 保留 | 変えない | 残る | ツールの判定次第 |
+
+新しい判定値は作っていない。「なし」に落とせば台帳には残り Slack からは外れるという
+既存の仕組みが、そのまま「臨時更新しないと判断した記録を残す」監査要件を満たす。
 - `migrateAssetHeaders()` は**入力済みの資産を消さない**。台帳や処理済みと違い、
   資産シートは人が手で維持している唯一の入力で、消すと復元できない
 
@@ -337,7 +366,29 @@ CSAF が取れなかった行の `product` は空にする。**知らないも�
 Fortinet のタイトルには製品名自体が無い（`UI DoS attack`）。CSAF が無い状態で製品を
 断定するのは、ここで直したのと同じ誤りになる。
 
-### 4.8 通知で隠す件数は、隠れる行が何かで決める
+### 4.8 人の判断はルールの外側でかぶせる
+
+`decideNotification_` は 2 段になっている。
+
+```
+decideNotification_(row, assets)
+  ├ decideByRules_()      ツールのルールで判定する（従来の中身そのまま）
+  └ applyHumanDecision_() 判断記録があれば上書きする
+```
+
+人の判断をルールの中へ混ぜない。混ぜると判定根拠を読んでも、それがツール由来か
+人由来か分からなくなる。分けておけば「ツールはこう判定し、人がこう覆した」が追える。
+
+上書きした行は AI を呼ばない（`needsDisplayAi = false` / `needsCodeDisplay = true`）。
+人が結論を出した行の影響機能を分類しても結論は変わらない。ただし表示列は空にせず、
+コードのフォールバックで埋める。
+
+**判断記録の読み込みは効かせない側に倒す。**語彙にない判断と、対象時点が空の行は
+捨ててログに出す。とくに対象時点が無いと改訂の有無を判定できず、分からないまま
+「対応不要」を効かせると見逃しになる。捨てられた行はツールの判定のまま台帳に
+出続けるので、間違いに気づける。
+
+### 4.9 通知で隠す件数は、隠れる行が何かで決める
 
 Slack に出るのは `あり（対応検討）` と `あり（影響調査）` だけで、`なし` は台帳止まり。
 つまり **表示上限で隠れる行は、すべて人が見る必要のある行**になる。
@@ -357,7 +408,7 @@ Cisco の複数 CVE アドバイザリが 1 本あるだけで旧値の 5 を超
 
 ## 5. ファイル構成
 
-単一 GAS ファイル `fortinet_psirt_watcher_v7.gs`（5,393行・211関数）。
+単一 GAS ファイル `fortinet_psirt_watcher_v7.gs`（5,639行・219関数）。
 
 ```
 設定定数   AI_PROVIDER / GEMINI_MODEL(+FALLBACKS) / CLAUDE_MODEL(Haiku)
@@ -366,8 +417,10 @@ Cisco の複数 CVE アドバイザリが 1 本あるだけで旧値の 5 を超
            SLACK_MAX_ITEMS=15 / NOTIFY_WHEN_NO_HITS=false
            SLACK_TARGETS{personal,team} / SLACK_TARGET_DEFAULT='personal'
            LEDGER_HEADERS(13) / STATE_HEADERS(10) / RUNLOG_HEADERS(11) / ASSET_HEADERS(9)
+           DECISION_HEADERS(7) / DECISION_VERDICT / decisions_
            STATE_VERSION_UNAVAILABLE='未取得' / aiRequestCount_ / runStats_
 エントリ   setup() / migrateLedgerHeaders() / migrateAssetHeaders() / clearRunData()
+           ensureDecisionSheet_() / createDecisionFromLedger()
            createDailyTrigger() / main() / reprocessFortinet() / reprocessCisco()
            countByMonth() / countByMonthVendor()
 取得       fetchRssItems_() / slugifyTitle_() / csafUrlFor_() / fetchCsaf_() / fetchAllCsaf_()
@@ -380,6 +433,7 @@ Cisco の複数 CVE アドバイザリが 1 本あるだけで旧値の 5 を超
 バージョン parseVersion_() / compareVersion_() / matchesSpec_() / judgeVersions_()
            judgeCiscoVersions_() / narrowFixVersion_()
 判定       readAssets_() / normProduct_() / assetsForProduct_() / isLedgerRow_()
+           decideByRules_() / applyHumanDecision_() / readDecisions_() / lookupDecision_()
            decideNotification_() / judgeOsApplicability_() / ruleGate_() / finalizeVerdict_()
            needsAdvisoryProcessing_() / ownershipJudgement_() / judgeReasonText_()
            isKevListed_() / fetchKevCatalog_()
@@ -404,8 +458,7 @@ AI         enrichWithAI_() / buildEnrichPrompt_() / callGemini_() / callGeminiMo
 
 1. **テスト約540行を別ファイルへ分離** — GAS は複数ファイル可でグローバルスコープを共有する。
    取得層を次に触るときに、§4.5 の非対称の解消と一緒にやる
-2. **判断記録シート** — 人の判断を残す（上位文書 2.2）
-3. **JPCERT/CC 別シート** — RDF パーサを別実装。判定には混ぜない
+2. **JPCERT/CC 別シート** — RDF パーサを別実装。判定には混ぜない
 
 ### 追わないと決めたもの
 

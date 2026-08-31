@@ -428,6 +428,38 @@ const RUNLOG_HEADERS = ['実行日時', '結果', '確認件数', '差分なし'
                         '対象以外', '失敗', '所要秒', 'AI呼び出し', '備考'];
 
 /**
+ * 人が下した対応の判断を残すシート。ツールは書かない。人だけが書く。
+ *
+ * 台帳に列を足す案は成立しない。removeRowsFor_ がアドバイザリの改訂ごとに
+ * 台帳の行を消して書き直すので、人が書いた内容が消える。台帳は再生成できる
+ * ツールの出力、ここは再生成できない人の記録、と役割を分ける。
+ *
+ * 列は「いつ・何に対して・どう決めたか・なぜ・誰が」の順。
+ * 対象時点は改訂検知用で、メニューから起こせば自動で入る（下記）。
+ */
+const SHEET_DECISION = '判断記録';
+const DECISION_HEADERS = ['判断日', 'アドバイザリID', 'CVE', '判断', '根拠', '判断者', '対象時点'];
+
+/**
+ * 人の判断と、それが自社影響をどう上書きするか。
+ *
+ * null は「判定を変えない」。保留はツールの判定をそのまま残すための語で、
+ * 記録だけ先に置きたいときに使う。
+ *
+ * 新しい判定値は作らない。「なし」に落とせば台帳には残り Slack からは外れる、
+ * という既存の仕組みがそのまま監査要件（判断した記録を残す）を満たす。
+ */
+const DECISION_VERDICT = {
+  '対応不要（定期更新枠）': V_NONE,
+  '対応済み':               V_NONE,
+  '対応する（実施待ち）':   V_ACT,
+  '保留':                   null
+};
+
+/** 1 実行のあいだ判断記録を読み直さないための入れ物。実行ごとに空から始まる。 */
+let decisions_ = null;
+
+/**
  * 1 回の実行（main）で集めた統計。
  *
  * 履歴は「1 日 1 実行 = 1 行」で読めるのが理想なので、ベンダーごとの処理は
@@ -472,10 +504,102 @@ function onOpen() {
     .addItem('データ削除（台帳・処理済み）', 'clearRunData')
     .addItem('Ciscoだけ再取得', 'reprocessCisco')
     .addSeparator()
+    .addItem('選択行から判断記録を作る', 'createDecisionFromLedger')
+    .addSeparator()
     .addSubMenu(ui.createMenu('Slack テスト送信')
       .addItem('個人検証チャンネルへ', 'sendSlackTestToPersonal')
       .addItem('会社テストチャンネルへ', 'sendSlackTestToTeam'))
     .addToUi();
+}
+
+/**
+ * 判断記録シートを用意する。既にあれば何もしない（人が書いた行を触らない）。
+ * 判断列にはプルダウンを付ける。語彙から外れた値は readDecisions_ が捨てるので、
+ * 入力の時点で外せないようにしておく。
+ */
+function ensureDecisionSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SHEET_DECISION);
+  if (sh) return sh;
+
+  sh = ss.insertSheet(SHEET_DECISION);
+  sh.appendRow(DECISION_HEADERS);
+  sh.setFrozenRows(1);
+  sh.setColumnWidth(DECISION_HEADERS.indexOf('根拠') + 1, 380);
+  sh.setColumnWidth(DECISION_HEADERS.indexOf('判断') + 1, 180);
+  applyDecisionValidation_(sh, 2, 200);
+  Logger.log('「判断記録」シートを作成しました。');
+  return sh;
+}
+
+/** 判断列のプルダウン。語彙は DECISION_VERDICT のキーがそのまま正。 */
+function applyDecisionValidation_(sh, startRow, numRows) {
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(Object.keys(DECISION_VERDICT), true)
+    .setAllowInvalid(false)
+    .build();
+  sh.getRange(startRow, DECISION_HEADERS.indexOf('判断') + 1, numRows, 1)
+    .setDataValidation(rule);
+}
+
+/**
+ * 台帳で選んだ行から判断記録の行を起こす。
+ *
+ * 対象時点（改訂検知に使う）を人に手で書かせない。台帳の最終更新日をそのまま
+ * 写す。ここを人任せにすると空欄や打ち間違いが出て、readDecisions_ がその行を
+ * 捨てる。捨てられたことは気づきにくいので、機械が埋められる欄は機械が埋める。
+ *
+ * 判断と根拠は空のまま作る。そこは人が決めることで、既定値を置くと
+ * 選ばれないまま残る。
+ */
+function createDecisionFromLedger() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getActiveSheet();
+  if (sh.getName() !== SHEET_LEDGER) {
+    ss.toast('「台帳」シートで、判断を記録したい行を選んでから実行してください。', '判断記録', 8);
+    return;
+  }
+
+  const sel = sh.getActiveRange();
+  const first = Math.max(sel.getRow(), 2);          // 見出し行は対象外
+  const last = sel.getRow() + sel.getNumRows() - 1;
+  if (last < first) {
+    ss.toast('データ行が選ばれていません。', '判断記録', 8);
+    return;
+  }
+
+  const n = last - first + 1;
+  const text = sh.getRange(first, 1, n, LEDGER_HEADERS.length).getDisplayValues();
+  const vals = sh.getRange(first, 1, n, LEDGER_HEADERS.length).getValues();
+  const cId = COL['アドバイザリ'] - 1;
+  const cCve = COL['CVE'] - 1;
+  const cUpd = COL['最終更新日'] - 1;
+
+  const today = new Date();
+  const by = Session.getActiveUser().getEmail() || '';
+  const rows = [];
+  text.forEach(function (t, i) {
+    const id = String(t[cId] || '').trim();
+    if (!id) return;
+    rows.push([today, id, String(t[cCve] || '').trim(), '', '', by, vals[i][cUpd] || '']);
+  });
+
+  if (!rows.length) {
+    ss.toast('アドバイザリID を読める行がありませんでした。', '判断記録', 8);
+    return;
+  }
+
+  const dst = ensureDecisionSheet_();
+  const start = dst.getLastRow() + 1;
+  dst.getRange(start, 1, rows.length, DECISION_HEADERS.length).setValues(rows);
+  dst.getRange(start, 1, rows.length, 1).setNumberFormat('yyyy/mm/dd');
+  dst.getRange(start, DECISION_HEADERS.indexOf('対象時点') + 1, rows.length, 1)
+     .setNumberFormat('yyyy/mm/dd');
+  applyDecisionValidation_(dst, start, rows.length);
+
+  ss.toast(rows.length + ' 行を作りました。判断記録シートで「判断」と「根拠」を埋めてください。',
+           '判断記録', 8);
+  Logger.log('判断記録: 台帳から ' + rows.length + ' 行を起こしました。');
 }
 
 function setup() {
@@ -502,6 +626,8 @@ function setup() {
   } else {
     Logger.log('「資産」シートは既にあります。migrateAssetHeaders() で列を更新できます。');
   }
+
+  ensureDecisionSheet_();
 
   let state = ss.getSheetByName(SHEET_STATE);
   if (!state) {
@@ -3172,7 +3298,127 @@ function finalizeVerdict_(row, opts) {
  *
  * ベンダーで分岐しない（Cisco も設定次第の機能を持つので同じ扱いにする）。
  */
+/**
+ * 自社影響を決める。ツールのルールで判定してから、人の判断があれば上書きする。
+ *
+ * 2 段に分けているのは「ツールがどう判定し、人がどう覆したか」を分けて
+ * 追えるようにするため。人の判断をルールの中へ混ぜると、判定根拠を読んでも
+ * それがツール由来か人由来か分からなくなる。
+ */
 function decideNotification_(row, assets) {
+  decideByRules_(row, assets);
+  applyHumanDecision_(row);
+}
+
+/** 判断記録を 1 実行につき 1 回だけ読む。 */
+function getDecisions_() {
+  if (!decisions_) decisions_ = readDecisions_();
+  return decisions_;
+}
+
+/**
+ * 判断記録シートを読み、`アドバイザリID|CVE` で引けるようにする。
+ * CVE 欄が空の行はそのアドバイザリ全体に効く（キーは `ID|`）。
+ *
+ * 語彙にない判断と、対象時点が空の行は捨ててログに出す。
+ * とくに対象時点が無い行は改訂の有無を判定できない。分からないまま
+ * 「対応不要」を効かせると見逃しになるので、効かせない側に倒す。
+ * 捨てた行はツールの判定のまま台帳に出続けるので、間違いに気づける。
+ */
+function readDecisions_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_DECISION);
+  if (!sh || sh.getLastRow() < 2) return {};
+
+  const n = sh.getLastRow() - 1;
+  const range = sh.getRange(2, 1, n, DECISION_HEADERS.length);
+  const text = range.getDisplayValues();   // ID は =HYPERLINK() のことがある
+  const vals = range.getValues();          // 日付は Date のまま欲しい
+
+  const map = {};
+  let dropped = 0;
+  for (let i = 0; i < n; i++) {
+    const id = String(text[i][1] || '').trim();
+    if (!id) continue;
+
+    const action = String(text[i][3] || '').trim();
+    if (!DECISION_VERDICT.hasOwnProperty(action)) {
+      Logger.log('判断記録: ' + id + ' の判断「' + action + '」は語彙に無いので無視します。');
+      dropped++;
+      continue;
+    }
+
+    const asOf = vals[i][6];
+    if (!(asOf instanceof Date) || isNaN(asOf.getTime())) {
+      Logger.log('判断記録: ' + id + ' は対象時点が空なので無視します。' +
+                 '改訂されたかどうかを判定できません。');
+      dropped++;
+      continue;
+    }
+
+    map[id + '|' + String(text[i][2] || '').trim().toUpperCase()] = {
+      decidedAt: vals[i][0],
+      action: action,
+      note: String(text[i][4] || '').trim(),
+      by: String(text[i][5] || '').trim(),
+      asOf: asOf
+    };
+  }
+  const kept = Object.keys(map).length;
+  if (kept || dropped) Logger.log('判断記録: 有効 ' + kept + ' 件 / 無視 ' + dropped + ' 件');
+  return map;
+}
+
+/**
+ * この行に効く判断を引く。CVE 指定があればそれを優先し、無ければアドバイザリ全体の判断。
+ *
+ * 判断はそのアドバイザリの「その時点の内容」に対して下したもの。改訂で影響範囲や
+ * 修正版が変わったのに前回の「対応不要」が効き続けたら見逃しになる。
+ * 最終更新日が対象時点より新しければ判断は無効にし、ツールの判定へ戻す。
+ * 既読判定を current_release_date と版で行っているのと同じ考え方。
+ */
+function lookupDecision_(row) {
+  const id = String(row.advisoryId || '').trim();
+  if (!id) return null;
+
+  const all = getDecisions_();
+  const d = all[id + '|' + String(row.cve || '').trim().toUpperCase()] || all[id + '|'];
+  if (!d) return null;
+
+  if (row.pubDate instanceof Date && ymd_(row.pubDate) > ymd_(d.asOf)) {
+    Logger.log('判断記録: ' + id + ' は ' + ymd_(d.asOf) + ' 以降に改訂されたため、' +
+               '判断「' + d.action + '」を無効にしました。');
+    return null;
+  }
+  return d;
+}
+
+/**
+ * ツールの判定に人の判断をかぶせる。
+ *
+ * AI は呼ばない。人が結論を出した行の影響機能を分類しても結論は変わらない。
+ * ただし表示列は空にせず、コードのフォールバックで埋める（needsCodeDisplay）。
+ */
+function applyHumanDecision_(row) {
+  const d = lookupDecision_(row);
+  if (!d) return;
+
+  const verdict = DECISION_VERDICT[d.action];
+  if (verdict) row.verdict = verdict;
+
+  row.humanDecision = d.action;
+  row.reasonPhrase = ymd_(d.decidedAt) + ' に ' + (d.by || '記名なし') +
+                     ' が「' + d.action + '」と判断' +
+                     (d.note ? '（' + truncateJa_(d.note, 60) + '）' : '');
+  row.reason = buildDecisionReason_(row);
+
+  row._lockedVerdict = true;
+  row.needsVerdict = false;
+  row.needsDisplayAi = false;
+  row.needsFortinetAi = false;
+  row.needsCodeDisplay = true;
+}
+
+function decideByRules_(row, assets) {
   if (row._lockedVerdict) return;
 
   initDecisionFields_(row);
