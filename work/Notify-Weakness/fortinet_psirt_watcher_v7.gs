@@ -2911,8 +2911,16 @@ function fetchKevCatalog_() {
   const body = JSON.parse(res.getContentText());
   const set = {};
   (body.vulnerabilities || []).forEach(function (v) {
-    if (v.cveID) set[String(v.cveID).toUpperCase()] = true;
+    // 値は true ではなく登録主体（vendorProject）。KEV の登録が別ベンダーの
+    // 製品に対するものかを判定根拠に書くために要る（kevVendor_ 参照）。
+    // 空文字は入れない。!!set[cve] で掲載を見ているので偽になってしまう。
+    if (v.cveID) {
+      set[String(v.cveID).toUpperCase()] = String(v.vendorProject || '').trim() || '登録元不明';
+    }
   });
+  // product まで持つと 78KB になり、CacheService の 100KB 上限まで 470 件しか
+  // 余裕が無くなる。vendorProject だけなら 47.6KB で、あと 1,800 件は入る
+  // （2026-08-31 版 1,687 件で実測）。
   cache.put('kev_catalog', JSON.stringify(set), 21600);
   return set;
 }
@@ -2925,6 +2933,22 @@ function isKevListed_(cve) {
   } catch (e) {
     Logger.log('KEV 照合失敗: ' + e);
     return false;
+  }
+}
+
+/**
+ * KEV でその CVE を登録している主体（vendorProject）。分からなければ空。
+ *
+ * 値が文字列でないときは空を返す。値を true で入れていた頃のキャッシュが
+ * 最大 6 時間残るので、その間に落ちないようにする。
+ */
+function kevVendor_(cve) {
+  if (!cve) return '';
+  try {
+    const v = fetchKevCatalog_()[String(cve).toUpperCase()];
+    return (typeof v === 'string') ? v : '';
+  } catch (e) {
+    return '';
   }
 }
 
@@ -3090,12 +3114,19 @@ function finalizeVerdict_(row, opts) {
   // KEV は件数が稀すぎて主軸にならないが、悪用実績があるものを
   // 「使っていないはず」で流すとルール全体の信頼性が崩れる。最低ラインを調査に固定する。
   if (row.kev === KEV_YES) {
+    // KEV の登録主体が、このアドバイザリのベンダーと違うことがある。
+    // FG-IR-26-139 の CVE-2026-31431 は Fortinet の告知だが、KEV の登録は
+    // Linux / Kernel で、FortiGate 上で悪用された実績ではない。
+    // 判定は変えない（悪用実績を「使っていないはず」で流さない）が、
+    // 根拠に由来を書かないと「悪用が確認されている」が言い過ぎになる。
+    const src = kevVendor_(row.cve);
+    const note = (src && src !== row.vendor) ? '（KEV登録: ' + src + '）' : '';
     if (exposure === 'always' && gate.pass && isSevereImpact_(row)) {
       row.verdict = V_ACT;
-      row.reasonPhrase = '悪用が確認されており外部から到達するため';
+      row.reasonPhrase = '悪用が確認されており外部から到達するため' + note;
     } else {
       row.verdict = V_INVEST;
-      row.reasonPhrase = '悪用が確認されているため';
+      row.reasonPhrase = '悪用が確認されているため' + note;
     }
     row.reason = buildDecisionReason_(row);
     return;
