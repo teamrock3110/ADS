@@ -307,7 +307,23 @@ v7 で意図的に残している非対称と、その根拠。
 メニューからのテスト送信（`sendSlackTest_`）はサンプル行を使い、先頭に「テスト送信」の印を足す。
 印は `buildSlackPayload_` ではなく送信側で `unshift` する。**本番の見た目を作るコードは変えない。**
 
-### 4.7 通知で隠す件数は、隠れる行が何かで決める
+### 4.7 フォールバック行の製品はベンダーで絞る
+
+`primaryAssetProduct_(assets, vendor, fallback)` は必ずベンダーを渡す。
+絞らないと資産シートの先頭行（`Fortinet / FortiOS`）がどのベンダーにも返り、
+Cisco のフォールバック行が「ベンダー Cisco・製品 FortiOS」になる。
+Slack の機器名は `vendor` から引くので、台帳と Slack で違う製品が出ることにもなる。
+
+`ツール対象=いいえ` の資産も外す。判定に使わないと決めた機器の製品名を判定行に
+載せると、その行が何を指しているのか説明できない。
+
+ベンダー名の表記が資産シート側で揺れている場合（`cisco` など）は一致せず
+fallback（`IOS-XE` / `FortiOS`）へ落ちるが、それは元々そのベンダーの主力製品なので害はない。
+
+**これは「どの製品か」を当てる仕組みではない。**CSAF が無い以上、自社が持っていない
+製品のアドバイザリでもここで製品が付く。その解決は §6-1。
+
+### 4.8 通知で隠す件数は、隠れる行が何かで決める
 
 Slack に出るのは `あり（対応検討）` と `あり（影響調査）` だけで、`なし` は台帳止まり。
 つまり **表示上限で隠れる行は、すべて人が見る必要のある行**になる。
@@ -327,7 +343,7 @@ Cisco の複数 CVE アドバイザリが 1 本あるだけで旧値の 5 を超
 
 ## 5. ファイル構成
 
-単一 GAS ファイル `fortinet_psirt_watcher_v7.gs`（5,371行・212関数）。
+単一 GAS ファイル `fortinet_psirt_watcher_v7.gs`（5,387行・212関数）。
 
 ```
 設定定数   AI_PROVIDER / GEMINI_MODEL(+FALLBACKS) / CLAUDE_MODEL(Haiku)
@@ -372,8 +388,20 @@ AI         enrichWithAI_() / buildEnrichPrompt_() / callGemini_() / callGeminiMo
 
 ## 6. 次にやること（優先順）
 
-1. **フォールバック行の製品名** — 現在は資産シートの先頭製品を充てている。
-   本来はアドバイザリの内容から絞りたいが、RSS のタイトルに製品名が無い
+1. **フォールバック行が自社非保有の製品まで台帳に載せる** — ベンダー絞り込みは入れたが
+   （§4.7）、CSAF が読めない以上「どの製品か」は分からないままで、
+   `primaryAssetProduct_` はそのベンダーの主力製品を機械的に充てている。
+   RoomOS や BroadWorks のアドバイザリも `IOS-XE` として「あり（影響調査）」で載る。
+   CSAF が取れたときは `ciscoAdvisoryTargetsAssets_` が弾いているのに、取れないと素通りする。
+
+   使える情報がベンダーで違う（2026-09-01 実測）。Cisco の人向け RSS のタイトルには
+   製品名が入る（`Cisco RoomOS Stack Overflow Vulnerability`）が、Fortinet の RSS には
+   無い（`UI DoS attack` / `Vulnerability in OpenSSL library`）。
+   Cisco だけタイトルで絞ると、`ClamAV Vulnerabilities Affecting Cisco Products` のように
+   製品名を書かない題名を見逃す。
+
+   正しくは「分からない」を書けるようにすること。ただし `isLedgerRow_` が
+   製品なし・非保有の行を落とすので、判定の中核に例外を足すことになる。単独で時間を取る
 2. **テスト約540行を別ファイルへ分離** — GAS は複数ファイル可でグローバルスコープを共有する。
    取得層を次に触るときに、§4.5 の非対称の解消と一緒にやる
 3. **KEV 連携の基準承認** — 実装済みだが「KEV掲載＋機能使用中のとき対応」の

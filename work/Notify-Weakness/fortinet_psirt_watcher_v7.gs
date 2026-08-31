@@ -1669,10 +1669,26 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
  * CSAF が読めない以上こちらで製品を決めるしかないので、自社が持っているものを充てて
  * 人の目に入れる。直書きにすると資産構成が変わったときに追随しない。
  * 資産が取れない場合だけ、これまでの既定値に落とす。
+ *
+ * ベンダーで絞ること。絞らないと資産シートの先頭行（Fortinet / FortiOS）が
+ * どのベンダーにも返り、Cisco のフォールバック行が「ベンダー Cisco・製品 FortiOS」
+ * という矛盾した行になる。Slack の機器名は vendor から引くので、
+ * 台帳とSlackで違う製品が出ることにもなる。
+ *
+ * ツール対象が「いいえ」の資産も外す。判定に使わないと決めた機器の製品名を
+ * 判定行に載せると、その行が何を指しているのか説明できない。
+ *
+ * ベンダー名の表記が資産シート側で揺れている場合（cisco / CISCO など）は
+ * 一致せず fallback に落ちるが、fallback は元々そのベンダーの主力製品なので害はない。
+ *
+ * なお、これは「どの製品か」を当てる仕組みではない。CSAF が無い以上
+ * 自社が持っていない製品のアドバイザリでもここで製品が付いてしまう
+ * （RoomOS や BroadWorks の件が IOS-XE として載る）。その解決は別件（§6）。
  */
-function primaryAssetProduct_(assets, fallback) {
+function primaryAssetProduct_(assets, vendor, fallback) {
   const hit = (assets || []).filter(function (a) {
-    return a.product && a.product !== '—';
+    return a.product && a.product !== '—' &&
+           a.vendor === vendor && a.toolTarget !== 'いいえ';
   });
   return hit.length ? hit[0].product : fallback;
 }
@@ -1691,7 +1707,7 @@ function extractCiscoRowFallback_(item, assets) {
     initialDate: item.pubDate,
     title: item.title,
     cve: meta.cves[0] || extractCveFromText_(item.title + ' ' + item.description),
-    product: primaryAssetProduct_(assets, 'IOS-XE'),
+    product: primaryAssetProduct_(assets, VENDOR_CISCO, 'IOS-XE'),
     cvss: meta.cvss,
     severity: meta.severity,
     vector: '', unauthRemote: '',
@@ -2373,7 +2389,7 @@ function extractFortinetRowFallback_(item, assets) {
     initialDate: item.pubDate,
     title: item.title,
     cve: cves.length ? cves[0].toUpperCase() : '',
-    product: primaryAssetProduct_(assets, 'FortiOS'),
+    product: primaryAssetProduct_(assets, VENDOR_FORTINET, 'FortiOS'),
     cvss: cvss ? cvss[1] : '',
     severity: '',
     vector: '', unauthRemote: '',
