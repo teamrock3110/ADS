@@ -1560,6 +1560,14 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
   }
 
   return vulns.map(function (v) {
+    // 行の題名は CVE ごとの title を優先する。Cisco は vulnerabilities[].title に
+    // CVE 単位の名前を持ち、1 アドバイザリに複数 CVE がある 11 件のうち 8 件で
+    // 行ごとに違う名前が出る（ClamAV の 7 行が ZIP・PDF・Mach-O と分かれる）。
+    // アドバイザリ全体の題名を全行に並べると、どの行が何の脆弱性か読めない。
+    // 無いときだけ全体の題名に落とす。Fortinet には持ち込まない
+    // （あちらの CVE ごとの title は 'FortiOS - LOW - FG-IR-…' で中身が無い）。
+    const rowTitle = String(v.title || '').trim() || vulnName;
+
     let score = '', severity = '', vector = '';
     (v.scores || []).forEach(function (s) {
       const c = s.cvss_v4 || s.cvss_v3 || {};
@@ -1589,7 +1597,7 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
       advisoryUrl: item.link,
       pubDate: updatedAt,
       initialDate: initialAt,
-      title: vulnName,
+      title: rowTitle,
       cve: v.cve || '',
       product: product,
       cvss: score,
