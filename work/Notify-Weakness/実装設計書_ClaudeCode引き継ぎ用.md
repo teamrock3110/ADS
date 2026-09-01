@@ -305,9 +305,20 @@ v7 で意図的に残している非対称と、その根拠。
 |---|---|---|---|
 | CSAF の取得 | 全件 | 差分のみ | フィードの日付が CSAF を反映するか（§1.2） |
 | 取得の並列度 | `fetchAll` 並列 | 直列＋300ms | Cisco は API 側の作法に合わせている |
-| 失敗時の CSAF 取得 | `lastSeenDate_` | `it.pubDate` | Cisco は `revisedOn` を持たないので結果が同じ。**設計ではなく成り行き。次に取得層を触るとき揃える** |
+| 失敗時の扱い | `lastSeenDate_` ＋ `hasError` を渡す | 同じ | 2026-09-01 に揃えた（下記） |
 
 根拠を書けない非対称は残さない。
+
+**2026-09-01 に揃えた 2 点**（どちらも動作は変わらない。読み比べたときに
+「なぜ違うのか」を考えさせないための統一）。
+
+- 失敗時の日付を Cisco も `lastSeenDate_` に通す。Cisco の item は `revisedOn` を
+  持たないので `it.pubDate` と同値（実測で確認済み）
+- `needsAdvisoryProcessing_` に Cisco 側も `hasError` を渡す。渡さないと、記録済みなのに
+  CSAF が取れなかった件で版の比較（記録は `未取得`／取得結果は空）が永久に一致せず、
+  毎日その件を作り直して Slack にも出し続ける。**いまは `selectRssCsafCandidates_` が
+  手前で弾くので表面化しないが、それは偶然**で、この関数自身が両ベンダーで同じ答えを
+  返せなければ揃っているとは言えない。設計書に記録の無かった非対称
 
 ### 4.6 Slack の宛先はテーブルに置き、呼び出し側に持たせない
 
@@ -408,7 +419,21 @@ Cisco の複数 CVE アドバイザリが 1 本あるだけで旧値の 5 を超
 
 ## 5. ファイル構成
 
-単一 GAS ファイル `fortinet_psirt_watcher_v7.gs`（5,639行・219関数）。
+GAS ファイル 2 枚。Apps Script は全ファイルでグローバルスコープを共有するので、
+確認用から本体の関数も定数もそのまま呼べる。
+
+| ファイル | 行数 | 関数 | 中身 |
+|---|---|---|---|
+| `fortinet_psirt_watcher_v7.gs` | 5,111 | 197 | 本体 |
+| `fortinet_psirt_watcher_v7_tests.gs` | 558 | 22 | 動作確認用 |
+
+**確認用ファイルはトップレベルで `const` / `let` を宣言しない。**宣言すると評価順に
+依存し、GAS のファイルの並び順で壊れる。宣言が無ければ並び順は関係ない
+（両方の順で実行して確認済み）。
+
+分けた理由は本体を短くすること以上に**貼り替えの回数を減らすこと**。デプロイは
+GAS エディタへの手貼りで、確認用の関数はほとんど変わらない。分けておけば
+普段は本体だけを貼れば済む。
 
 ```
 設定定数   AI_PROVIDER / GEMINI_MODEL(+FALLBACKS) / CLAUDE_MODEL(Haiku)
@@ -445,20 +470,29 @@ AI         enrichWithAI_() / buildEnrichPrompt_() / callGemini_() / callGeminiMo
            writeRunLog_() / startRunStats_() / addVendorStats_() / notifySlack_()
            slackWebhookUrl_() / operationalSlackTarget_() / postSlack_()
            sendOpsMail_() / notifyMainFailure_() / notifyFetchFailures_()
-テスト     testVersion() / testRuleGate() / testJudge() / testCheckSteps() / testRss()
-           testCsafUrls() / testCsaf() / testCiscoRss() / testAi() ほか（約540行）
-           sampleSlackRows_() / testSlackBlocks() / sendSlackTest_()
+           sampleSlackRows_() / sendSlackTest_()（メニュー用。確認用ではない）
 ```
 
-テスト関数は本体と同居している。**別ファイルへの分離は未着手**（§6-1）。
+`_tests.gs` 側（22 関数）:
+
+```
+testProps() / testRss() / testCsafUrls() / testCsaf() / testCiscoRss()
+testVersion() / testJudge() / testRuleGate() / testGateBeforeAi()
+testFeatureExposure() / testStripCheckLabels() / testCiscoWorkaround()
+testCheckSteps() / testCiscoInformationalSkip() / testImpactJaFromVector()
+testTitleJaFromAdvisory() / testCiscoFeatureNormalize_() / testExternalSurface_()
+testSlackBlocks() / testAi() ほか
+```
+
+**`sampleSlackRows_()` と `sendSlackTest_()` は本体に残した。**メニューから呼ばれる
+運用の機能であって、動作確認用ではない。`testSlackBlocks()` は確認用側にあり、
+本体の `sampleSlackRows_()` を呼ぶ（同一スコープなので動く）。
 
 ---
 
 ## 6. 次にやること（優先順）
 
-1. **テスト約540行を別ファイルへ分離** — GAS は複数ファイル可でグローバルスコープを共有する。
-   取得層を次に触るときに、§4.5 の非対称の解消と一緒にやる
-2. **JPCERT/CC 別シート** — RDF パーサを別実装。判定には混ぜない
+1. **JPCERT/CC 別シート** — RDF パーサを別実装。判定には混ぜない
 
 ### 追わないと決めたもの
 
