@@ -186,6 +186,29 @@ const V_NONE = 'なし';
 /** SSL-VPN を外面から除外する（無効化済みの場合は false） */
 const SSL_VPN_ENABLED = false;
 
+/**
+ * JPCERT/CC の RDF。注意喚起（/at/）だけ拾い、Weekly Report（/wr/）は捨てる。
+ *
+ * **判定には混ぜない。**注意喚起は CVE 単位ではなく「いま日本で問題になっている事象」で、
+ * CVE を持たない回がある（実例: at260019「Fortinet製品に関連する認証情報の漏えい」は
+ * CVE の記載が無い）。台帳の行と機械的に突き合わせられないので、緊急度の指標にはならない。
+ *
+ * それでも拾うのは、ツールの守備範囲（FortiOS / IOS-XE の CVE）の外に自社へ効く情報が
+ * あるため。上の FortiBleed は Fortinet PSIRT のアドバイザリではないので RSS にも CSAF にも
+ * 出てこず、版の突き合わせという判定の軸にも乗らない。構造的に拾えない種類の情報を、
+ * 判定を通さず人に見せるだけの経路で補う。
+ *
+ * 頻度は年約 29 件（2023〜2026 の 4 年分 106 件を全数確認）。そのうち
+ * Fortinet / Cisco 系は 6 件＝年 1.5 件なので、Slack に足しても埋もれない。
+ */
+const JPCERT_RSS_URL = 'https://www.jpcert.or.jp/rss/jpcert.rdf';
+
+/** 通知済みの注意喚起 ID。スクリプトプロパティにカンマ区切りで置く。 */
+const JPCERT_SEEN_PROP = 'JPCERT_SEEN_AT';
+
+/** 既読 ID の保持上限。年 30〜40 件なので 200 あれば 5 年分。 */
+const JPCERT_SEEN_MAX = 200;
+
 const KEV_FEED_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
 
 /** Fortinet AI が選ぶ影響機能（外面判定の統制語彙） */
@@ -965,8 +988,18 @@ function main() {
     const fortinetRows = runFortinet_();
     const ciscoRows = runCisco_();
     const notifyRows = fortinetRows.concat(ciscoRows);
-    if (notifyRows.length) notifySlack_(notifyRows);
-    else backfillAiColumns_();
+
+    // JPCERT の注意喚起は判定に混ぜない。取得して通知へ渡すだけ。
+    const alerts = newJpcertAlerts_(readAssets_());
+    runStats_.jpcert = alerts.length;
+
+    if (notifyRows.length || alerts.length) {
+      // 送れた分だけ既読にする。先に印を付けると、Webhook が失効していた日の
+      // 注意喚起が誰にも届かないまま消える。
+      if (notifySlack_(notifyRows, '', alerts)) markJpcertSeen_(alerts);
+    } else {
+      backfillAiColumns_();
+    }
     Logger.log('main() 完了（Fortinet 台帳 ' + fortinetRows.length +
                ' 行 / Cisco 台帳 ' + ciscoRows.length + ' 行）');
   } catch (e) {
@@ -4271,6 +4304,107 @@ function countLabel_(counts, label) {
 }
 
 /**
+ * JPCERT/CC の注意喚起のうち、自社ベンダーに当たり、まだ知らせていないものを返す。
+ *
+ * 落ちても main() は止めない。JPCERT は補助の経路で、これが取れないことで
+ * 本体の日次処理を落とすのは本末転倒。
+ */
+function newJpcertAlerts_(assets) {
+  try {
+    const alerts = fetchJpcertAlerts_();
+    const words = jpcertKeywords_(assets);
+    const seen = jpcertSeenIds_();
+
+    const hit = alerts.filter(function (a) {
+      if (seen[a.id]) return false;
+      const t = a.title.toLowerCase();
+      return words.some(function (w) { return t.indexOf(w) !== -1; });
+    });
+
+    Logger.log('JPCERT 注意喚起: ' + alerts.length + ' 件中 ' + hit.length + ' 件が自社ベンダー該当・未通知');
+    return hit;
+  } catch (e) {
+    Logger.log('JPCERT 取得に失敗しました（本体は続行）: ' + e);
+    return [];
+  }
+}
+
+/**
+ * RDF から注意喚起（/at/）だけ取り出す。Weekly Report は定常報告なので捨てる。
+ * RSS 1.0 なので item は channel の下ではなく rdf:RDF の直下にある。
+ */
+function fetchJpcertAlerts_() {
+  const res = UrlFetchApp.fetch(JPCERT_RSS_URL, { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) {
+    throw new Error('JPCERT RDF 取得失敗 HTTP ' + res.getResponseCode());
+  }
+  const root = XmlService.parse(res.getContentText()).getRootElement();
+  const rss = XmlService.getNamespace('http://purl.org/rss/1.0/');
+  const dc = XmlService.getNamespace('http://purl.org/dc/elements/1.1/');
+
+  return root.getChildren('item', rss).map(function (it) {
+    const link = String(it.getChildText('link', rss) || '').trim();
+    return {
+      id: String(it.getChildText('identifier', dc) || '').trim(),
+      title: String(it.getChildText('title', rss) || '').trim(),
+      link: link,
+      date: parsePubDate_(it.getChildText('date', dc))
+    };
+  }).filter(function (a) {
+    return a.id && a.link.indexOf('/at/') !== -1;
+  });
+}
+
+/**
+ * 注意喚起の題名に当てる語。資産シートのベンダーと製品から起こす。
+ *
+ * 機種名（C9200-24PXG-E など）は題名に出ないので使わない。ツール対象外の資産は除く。
+ *
+ * 社名だけで当てる。製品名まで絞ってはいけない。4 年分の Fortinet / Cisco 系 6 件のうち
+ * 3 件は題名に製品名が入っておらず、その中に at260019
+ * 「Fortinet製品に関連する認証情報の漏えい」（FortiBleed）が含まれる。
+ * 絞るとこの経路を作るきっかけになった 1 件が落ちる。
+ *
+ * 絞らないことで増えるのは 4 年で 2 件（FortiManager と ASA/FTD の非保有製品）。
+ * 落とすのは年 1 件の当たり、拾いすぎるのは年 0.5 件のハズレ。割に合わない。
+ */
+function jpcertKeywords_(assets) {
+  const words = [];
+  (assets || []).forEach(function (a) {
+    if (a.toolTarget === 'いいえ') return;
+    [a.vendor, a.product].forEach(function (v) {
+      const w = String(v || '').trim().toLowerCase();
+      if (w && w !== '—') pushUnique_(words, w);
+    });
+  });
+  // 題名が製品ブランドで書かれることがある（「Fortinet製FortiGate」など）。
+  ['fortigate', 'fortios', 'catalyst', 'ios xe', 'ios-xe'].forEach(function (w) {
+    pushUnique_(words, w);
+  });
+  return words;
+}
+
+function jpcertSeenIds_() {
+  const raw = PropertiesService.getScriptProperties().getProperty(JPCERT_SEEN_PROP) || '';
+  const map = {};
+  raw.split(',').forEach(function (s) { const t = s.trim(); if (t) map[t] = true; });
+  return map;
+}
+
+/**
+ * 通知できた分だけ既読にする。送る前に印を付けると、Webhook が失効していた日の
+ * 注意喚起が誰にも届かないまま消える。
+ */
+function markJpcertSeen_(alerts) {
+  if (!alerts || !alerts.length) return;
+  const seen = Object.keys(jpcertSeenIds_());
+  alerts.forEach(function (a) { if (seen.indexOf(a.id) === -1) seen.push(a.id); });
+  const keep = seen.slice(-JPCERT_SEEN_MAX);
+  PropertiesService.getScriptProperties().setProperty(JPCERT_SEEN_PROP, keep.join(','));
+  Logger.log('JPCERT 注意喚起 ' + alerts.length + ' 件を通知済みにしました。');
+}
+
+/**
  * 実行を 1 行残す。通知は増やさない。main() から 1 実行につき 1 回だけ呼ぶ。
  *
  * 記録に失敗しても本体は止めない。履歴のために日次処理を落とすのは本末転倒。
@@ -4297,7 +4431,11 @@ function writeRunLog_(errorText) {
     // 内訳は「見るべきことがあった日」だけ書く。平常日（更新も失敗もエラーも無い日）は
     // 毎日同じ文字列が並ぶだけで読む価値がなく、空欄にしておけば
     // 「何か書いてある行＝見るべき行」として拾える。
-    const worthWriting = !!errorText || sum('processed') > 0 || sum('failed') > 0 || !!targetNote;
+    // JPCERT の注意喚起は出た日だけ書く。CVE の件数とは別枠なので数字に混ぜない。
+    const jpNote = runStats_.jpcert ? 'JPCERT注意喚起 ' + runStats_.jpcert + ' 件' : '';
+
+    const worthWriting = !!errorText || sum('processed') > 0 || sum('failed') > 0 ||
+                         !!targetNote || !!jpNote;
 
     // ベンダー別の数字は 1 列にまとめる。異常時に切り分けられればよく、
     // ベンダーごとに行を分けると「今日動いたか」が 1 行で読めなくなる。
@@ -4386,7 +4524,7 @@ function writeRunLog_(errorText) {
       aiRequestCount_ - runStats_.aiAtStart,
       [errorText ? 'エラー: ' + errorText : '',
        worthWriting ? detail : '',
-       targetNote].filter(function (t) { return t; }).join('  /  ')
+       jpNote, targetNote].filter(function (t) { return t; }).join('  /  ')
     ]]);
     sh.getRange(row, 1).setNumberFormat('yyyy/mm/dd hh:mm');
   } catch (e) {
@@ -4677,32 +4815,41 @@ function backfillAiColumns_() {
  * targetKey を渡すとその宛先へ送る（メニューからのテスト送信）。
  * 省略すると運用宛先（SLACK_TARGET）になるので、main / reprocess の 3 箇所は
  * 宛先を知らないまま呼べる。宛先が増えても呼び出し側は変わらない。
+ *
+ * alerts は JPCERT の注意喚起。**判定を通っていない情報**なので、CVE のカードとは
+ * 混ぜず末尾に別枠で出す。該当 0 件でも注意喚起があれば送る（そうしないと
+ * 「CVE の該当が無い日」に注意喚起が消える）。
+ *
+ * @return {boolean} 実際に送ったか。呼び出し側が既読を進めてよいかの判断に使う。
  */
-function notifySlack_(rows, targetKey) {
+function notifySlack_(rows, targetKey, alerts) {
   const key = targetKey || operationalSlackTarget_();
   const url = slackWebhookUrl_(key);
-  if (!url) return;
+  if (!url) return false;
 
   const hits = rows
     .filter(function (r) { return r.verdict === V_ACT || r.verdict === V_INVEST; })
     .sort(slackHitSort_);
+  const notes = alerts || [];
 
-  if (!hits.length && !NOTIFY_WHEN_NO_HITS) {
+  if (!hits.length && !notes.length && !NOTIFY_WHEN_NO_HITS) {
     Logger.log('OS 更新の可能性がある新着なし。Slack 通知はスキップします。');
-    return;
+    return false;
   }
 
   const sheetUrl = SpreadsheetApp.getActiveSpreadsheet().getUrl();
   const shown = hits.slice(0, SLACK_MAX_ITEMS);
-  const payload = buildSlackPayload_(shown, sheetUrl, hits);
+  const payload = buildSlackPayload_(shown, sheetUrl, hits, notes);
 
   // 実際に送った宛先だけ実行履歴に残す。ここより上で戻る日は何も送っていないので
   // 記録しない。切り替えたまま戻し忘れた日は、送った実行に必ず印が残る。
   if (runStats_) runStats_.slackTarget = key;
 
-  postSlack_(url, payload);
+  const code = postSlack_(url, payload);
   Logger.log('Slack 通知を送信しました（' + SLACK_TARGETS[key].label + '）: ' +
-             '全 ' + hits.length + ' 件のうち ' + shown.length + ' 件を表示');
+             '全 ' + hits.length + ' 件のうち ' + shown.length + ' 件を表示' +
+             (notes.length ? ' / JPCERT 注意喚起 ' + notes.length + ' 件' : ''));
+  return code === 200;
 }
 
 /**
@@ -4775,7 +4922,7 @@ function slackHitSort_(a, b) {
  *   1行目: 新しい脆弱性が発表されました🔍
  *   2行目: FortiGate:1件 Cisco:2件
  */
-function buildSlackPayload_(shown, sheetUrl, all) {
+function buildSlackPayload_(shown, sheetUrl, all, alerts) {
   // サマリは表示分ではなく全件で数える。ここを shown で数えると、
   // 2 行目の内訳とカードの枚数が一致してしまい、切られた事実がどこにも出ない。
   // 読む人は 2 行目を「今日の該当件数」として読むので、そこが表示件数だと
@@ -4800,6 +4947,19 @@ function buildSlackPayload_(shown, sheetUrl, all) {
     formatSlackItemBlocks_(r).forEach(function (b) { blocks.push(b); });
   });
 
+  // JPCERT の注意喚起は CVE のカードと混ぜない。判定を通っていないので、
+  // 同じ見た目で並べると「ツールが自社影響ありと判断した」と読まれる。
+  // 見出しを付けて別枠にし、リンクだけ渡して判断は人に委ねる。
+  (alerts || []).forEach(function (a, i) {
+    if (i === 0) {
+      blocks.push({ type: 'divider' });
+      blocks.push({ type: 'section', text: { type: 'mrkdwn',
+        text: ':loudspeaker: *JPCERT/CC 注意喚起*（自社ベンダー該当・判定はしていません）' } });
+    }
+    blocks.push({ type: 'section', text: { type: 'mrkdwn',
+      text: '<' + a.link + '|' + jpcertShortTitle_(a.title) + '>' } });
+  });
+
   const foot = [];
   // 「は台帳」とは書かない。直下のリンクが台帳を指しているので重複する。
   // ここが担うのは「全部は出していない」という事実と、その分母だけ。
@@ -4819,6 +4979,12 @@ function buildSlackPayload_(shown, sheetUrl, all) {
     text: title,
     blocks: blocks
   };
+}
+
+/** 注意喚起の題名。先頭の「注意喚起: 」と末尾の「(公開)」「(更新)」を落として読みやすくする。 */
+function jpcertShortTitle_(s) {
+  const t = String(s || '').replace(/^注意喚起:\s*/, '').replace(/\s*\((公開|更新)\)\s*$/, '').trim();
+  return t.length > 70 ? t.slice(0, 70) + '…' : t;
 }
 
 function slackDeviceSummary_(rows) {

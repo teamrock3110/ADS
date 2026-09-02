@@ -556,3 +556,35 @@ function testAi() {
   enrichWithAI_(dummy);
   Logger.log(JSON.stringify(dummy[0], null, 2));
 }
+
+/**
+ * JPCERT の注意喚起を取得し、どれが自社ベンダー該当になるか見る。
+ * 既読は進めない（markJpcertSeen_ を呼ばない）ので何度でも実行できる。
+ */
+function testJpcertAlerts() {
+  const alerts = fetchJpcertAlerts_();
+  const assets = readAssets_();
+  const words = jpcertKeywords_(assets);
+  const seen = jpcertSeenIds_();
+
+  Logger.log('注意喚起（/at/）: ' + alerts.length + ' 件');
+  Logger.log('当てる語: ' + words.join(' / '));
+  Logger.log('通知済み: ' + Object.keys(seen).length + ' 件');
+  Logger.log('---');
+
+  let hit = 0;
+  alerts.forEach(function (a) {
+    const t = a.title.toLowerCase();
+    const match = words.some(function (w) { return t.indexOf(w) !== -1; });
+    if (match) hit++;
+    Logger.log([
+      match ? '該当  ' : '対象外',
+      seen[a.id] ? '通知済' : '未通知',
+      a.id,
+      ymd_(a.date),
+      jpcertShortTitle_(a.title)
+    ].join(' | '));
+  });
+  Logger.log('---');
+  Logger.log('自社ベンダー該当: ' + hit + ' / ' + alerts.length + ' 件');
+}

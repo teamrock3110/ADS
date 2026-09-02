@@ -377,7 +377,52 @@ CSAF が取れなかった行の `product` は空にする。**知らないも�
 Fortinet のタイトルには製品名自体が無い（`UI DoS attack`）。CSAF が無い状態で製品を
 断定するのは、ここで直したのと同じ誤りになる。
 
-### 4.8 人の判断はルールの外側でかぶせる
+### 4.8 JPCERT の注意喚起は判定に混ぜず、別枠で見せるだけ
+
+拾うのは注意喚起（`/at/`）だけ。Weekly Report（`/wr/`）は定常報告なので捨てる。
+
+**判定には混ぜない。**注意喚起は CVE 単位ではなく「いま日本で問題になっている事象」で、
+CVE を持たない回がある。実例（2026-09-03 実測）:
+
+```
+at260019  Fortinet製品に関連する認証情報の漏えいに関する注意喚起（FortiBleed）
+          CVE の記載: なし
+```
+
+CVE が無いので台帳の行と機械的に突き合わせられない。KEV のような緊急度指標にはならない。
+
+**それでも拾う理由**は、ツールの守備範囲（FortiOS / IOS-XE の CVE）の外に自社へ効く情報が
+あるため。上の件は Fortinet PSIRT のアドバイザリではないので RSS にも CSAF にも出てこず、
+版の突き合わせという判定の軸にも乗らない。**構造的に拾えない種類の情報**を、判定を通さず
+人に見せるだけの経路で補う。
+
+- 頻度は **年約 29 件**（2023〜2026 の 4 年分 106 件を全数確認）。
+  そのうち Fortinet / Cisco 系は **6 件＝年 1.5 件**
+- 当てる語は資産シートのベンダーと製品から起こす（`ツール対象=いいえ` は除く）。
+  機種名は題名に出ないので使わない
+
+**社名だけで当てる。製品名まで絞ってはいけない。**4 年分の Fortinet / Cisco 系 6 件の
+題名の書かれ方は次のとおりで、**製品名が入らない回がある**。
+
+| 書かれ方 | 件数 | 例 |
+|---|---|---|
+| 製品名あり | 3 | `Cisco IOS XE のWeb UI の脆弱性`／`Fortinet製FortiOS の境域外書き込み` |
+| 社名のみ | 3 | **`Fortinet製品に関連する認証情報の漏えい`**（FortiBleed）／`Fortinet製FortiManager`／`Cisco ASA および FTD` |
+
+製品名（FortiOS / FortiGate / IOS XE / Catalyst）まで絞ると **FortiBleed が落ちる**。
+この経路を作るきっかけになった 1 件そのものである。
+
+絞らないことで増えるノイズは **4 年で 2 件**（FortiManager と ASA/FTD。どちらも非保有製品）。
+**落とすのは年 1 件の当たり、拾いすぎるのは年 0.5 件のハズレ。**割に合わない。
+- Slack では CVE のカードと混ぜず、見出し付きの別枠に出す。同じ見た目で並べると
+  「ツールが自社影響ありと判断した」と読まれる
+- **該当 0 件の日でも注意喚起があれば送る。**そうしないと「CVE の該当が無い日」に
+  注意喚起が消える
+- 既読は送れた分だけ進める（`markJpcertSeen_` は `notifySlack_` が true を返したときだけ）。
+  先に印を付けると、Webhook が失効していた日の注意喚起が誰にも届かないまま消える
+- 取得に失敗しても main() は止めない。補助の経路で本体の日次処理を落とすのは本末転倒
+
+### 4.9 人の判断はルールの外側でかぶせる
 
 `decideNotification_` は 2 段になっている。
 
@@ -399,7 +444,7 @@ decideNotification_(row, assets)
 「対応不要」を効かせると見逃しになる。捨てられた行はツールの判定のまま台帳に
 出続けるので、間違いに気づける。
 
-### 4.9 通知で隠す件数は、隠れる行が何かで決める
+### 4.10 通知で隠す件数は、隠れる行が何かで決める
 
 Slack に出るのは `あり（対応検討）` と `あり（影響調査）` だけで、`なし` は台帳止まり。
 つまり **表示上限で隠れる行は、すべて人が見る必要のある行**になる。
@@ -424,8 +469,8 @@ GAS ファイル 2 枚。Apps Script は全ファイルでグローバルスコ�
 
 | ファイル | 行数 | 関数 | 中身 |
 |---|---|---|---|
-| `fortinet_psirt_watcher_v7.gs` | 5,111 | 197 | 本体 |
-| `fortinet_psirt_watcher_v7_tests.gs` | 558 | 22 | 動作確認用 |
+| `fortinet_psirt_watcher_v7.gs` | 5,271 | 203 | 本体 |
+| `fortinet_psirt_watcher_v7_tests.gs` | 590 | 23 | 動作確認用 |
 
 **確認用ファイルはトップレベルで `const` / `let` を宣言しない。**宣言すると評価順に
 依存し、GAS のファイルの並び順で壊れる。宣言が無ければ並び順は関係ない
@@ -437,7 +482,7 @@ GAS エディタへの手貼りで、確認用の関数はほとんど変わら�
 
 ```
 設定定数   AI_PROVIDER / GEMINI_MODEL(+FALLBACKS) / CLAUDE_MODEL(Haiku)
-           RSS_URL / CSAF_BASE / CISCO_CSAF_RSS_URL / KEV_FEED_URL
+           RSS_URL / CSAF_BASE / CISCO_CSAF_RSS_URL / KEV_FEED_URL / JPCERT_RSS_URL
            MAX_ADVISORIES_PER_RUN=50 / AI_CHUNK_SIZE=10 / KEEP_OUT_OF_SCOPE_MONTHS=3
            SLACK_MAX_ITEMS=15 / NOTIFY_WHEN_NO_HITS=false
            SLACK_TARGETS{personal,team} / SLACK_TARGET_DEFAULT='personal'
@@ -458,6 +503,7 @@ GAS エディタへの手貼りで、確認用の関数はほとんど変わら�
 バージョン parseVersion_() / compareVersion_() / matchesSpec_() / judgeVersions_()
            judgeCiscoVersions_() / narrowFixVersion_()
 判定       readAssets_() / normProduct_() / assetsForProduct_() / isLedgerRow_()
+           newJpcertAlerts_() / fetchJpcertAlerts_() / jpcertKeywords_() / markJpcertSeen_()
            decideByRules_() / applyHumanDecision_() / readDecisions_() / lookupDecision_()
            decideNotification_() / judgeOsApplicability_() / ruleGate_() / finalizeVerdict_()
            needsAdvisoryProcessing_() / ownershipJudgement_() / judgeReasonText_()
@@ -492,7 +538,8 @@ testSlackBlocks() / testAi() ほか
 
 ## 6. 次にやること（優先順）
 
-1. **JPCERT/CC 別シート** — RDF パーサを別実装。判定には混ぜない
+コードの残課題は無い。次は 10 月の新運用（設計書v3 §2.3）に向けた
+基準と運用ルールの側。**ツールが先ではなく、基準が先。**
 
 ### 追わないと決めたもの
 
@@ -502,6 +549,10 @@ testSlackBlocks() / testAi() ほか
 - **条件付きGET（ETag / Last-Modified）** — ファイルの更新であってアドバイザリの改訂ではない
 - **Cisco を Fortinet と同じ全件取得にする** — フィードが 50/50 で一致するので不要。
   直列取得のため30〜50秒かかる
+- **JPCERT/CC を判定に混ぜる／別シートを作る** — 2026-09-01 に見送りと決定。
+  ただし**注意喚起（/at/）だけは 2026-09-03 に取得するようにした**（§4.8）。
+  判定には一切入れず、Slack の末尾に別枠でリンクを出すだけ。
+  シートは作らない。**それ以上に広げないこと**
 - **clasp（ローカルから GAS へ push）** — 2026-09-01 に見送りと決定。
   デプロイは今後も `.gs` を GAS エディタへ手貼り＋保存で行う。
   技術的には `npx @google/clasp@3` で動くことを確認済みだが、有効化・ログイン・
