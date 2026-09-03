@@ -528,6 +528,7 @@ function onOpen() {
     .addItem('Ciscoだけ再取得', 'reprocessCisco')
     .addSeparator()
     .addItem('選択行から判断記録を作る', 'createDecisionFromLedger')
+    .addItem('月次サマリ草案を作る（先月分）', 'buildMonthlyReport')
     .addSeparator()
     .addSubMenu(ui.createMenu('Slack テスト送信')
       .addItem('個人検証チャンネルへ', 'sendSlackTestToPersonal')
@@ -4569,6 +4570,309 @@ function countByMonth() {
     Logger.log(k + '  公表 ' + m[k] + ' 件');
   });
   if (skipped) Logger.log('※ 情報通知 ' + skipped + ' 件を除く（公開一覧のお知らせで、実体は個別アドバイザリ側にある）');
+}
+
+// ============================================================
+// 8. 月次サマリ（Google ドキュメント）
+// ============================================================
+
+/**
+ * 月次報告の草案を Google ドキュメントに書き出す。
+ *
+ * いま人がやっているのは、処理済み（分母）・台帳（対象行）・判断記録（人の決定）・
+ * 実行履歴（欠測の有無）の 4 か所を突き合わせて 1 つの報告にまとめる作業。
+ * その突き合わせだけを機械にやらせる。**文章は書かない。**AI も呼ばない。
+ * 数字と行を並べるところまでで、読み手に何を言うかは人が書く。
+ *
+ * 「草案」と名前に入れるのはそのため。これをそのまま提出する物として作っていない。
+ *
+ * @param {string=} yyyymm 対象月（'2026-08'）。省略すると先月。
+ */
+function buildMonthlyReport(yyyymm) {
+  const month = yyyymm || prevMonthKey_();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  const state = readSheetRows_(SHEET_STATE, STATE_HEADERS);
+  const ledger = readSheetRows_(SHEET_LEDGER, LEDGER_HEADERS);
+  const decisions = readSheetRows_(SHEET_DECISION, DECISION_HEADERS);
+  const runlog = readSheetRows_(SHEET_RUNLOG, RUNLOG_HEADERS);
+
+  const doc = DocumentApp.create('脆弱性対応 月次サマリ草案 ' + month);
+  const b = doc.getBody();
+  b.appendParagraph('脆弱性対応 月次サマリ草案 ' + month).setHeading(DocumentApp.ParagraphHeading.TITLE);
+  b.appendParagraph('自動生成: ' + ymd_(new Date()) +
+                    '｜台帳・処理済み・判断記録・実行履歴から機械的に集めた数字と行です。' +
+                    '文章と結論は人が書いてください。');
+
+  monthlyOverview_(b, month, state, ledger);
+  monthlyActionRows_(b, month, ledger);
+  monthlyDecisions_(b, month, decisions);
+  monthlyNoActionRows_(b, month, ledger);
+  monthlyRunHealth_(b, month, runlog);
+
+  doc.saveAndClose();
+  const url = doc.getUrl();
+  Logger.log('月次サマリ草案を作成しました: ' + url);
+  ss.toast('月次サマリ草案 ' + month + ' を作成しました。', '月次サマリ', 8);
+  return url;
+}
+
+/** 先月を 'yyyy-mm' で返す。月初に前月分を作るのが定例なので既定はこれ。 */
+function prevMonthKey_() {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
+}
+
+/** シートを見出し名で引ける形に読む。列順が変わっても添字を書き直さずに済む。 */
+function readSheetRows_(name, headers) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+  if (!sh || sh.getLastRow() < 2) return [];
+  const n = sh.getLastRow() - 1;
+  const range = sh.getRange(2, 1, n, headers.length);
+  const vals = range.getValues();
+  const text = range.getDisplayValues();
+  return vals.map(function (r, i) {
+    const o = { _text: {} };
+    headers.forEach(function (h, c) { o[h] = r[c]; o._text[h] = text[i][c]; });
+    return o;
+  });
+}
+
+/** その行が対象月のものか。日付列で判定する。 */
+function inMonth_(d, month) {
+  if (!(d instanceof Date) || isNaN(d.getTime())) return false;
+  return (d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2)) === month;
+}
+
+/**
+ * 概要。分母（公表件数）は処理済みから、対象は台帳から数える。
+ * 分母を台帳から数えてはいけない。台帳には自社製品の行しか無く、
+ * 「他社製品だけのアドバイザリ」が落ちて水増しになる。
+ */
+function monthlyOverview_(b, month, state, ledger) {
+  b.appendParagraph('1. 今月の全体像').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+
+  const pub = state.filter(function (r) {
+    return inMonth_(r['最終更新日'], month) && r['自社判定'] !== STATE_JUDGE_INFO;
+  });
+  const byVendor = {};
+  pub.forEach(function (r) {
+    const v = String(r['ベンダー'] || '').trim() || '不明';
+    byVendor[v] = (byVendor[v] || 0) + 1;
+  });
+  const target = pub.filter(function (r) { return String(r['自社判定']).trim() === '対象'; });
+
+  const rows = ledger.filter(function (r) { return inMonth_(r['最終更新日'], month); });
+  const cnt = { act: 0, invest: 0, none: 0 };
+  rows.forEach(function (r) {
+    const v = String(r['自社影響']).trim();
+    if (v === V_ACT) cnt.act++;
+    else if (v === V_INVEST) cnt.invest++;
+    else if (v === V_NONE) cnt.none++;
+  });
+
+  b.appendParagraph('公表されたアドバイザリ: ' + pub.length + ' 件（' +
+    Object.keys(byVendor).sort().map(function (k) { return k + ' ' + byVendor[k]; }).join(' / ') +
+    '）※情報通知を除く');
+  b.appendParagraph('うち自社の資産に当たると判定: ' + target.length + ' 件');
+  b.appendParagraph('台帳に載った行: ' + rows.length + ' 行 ／ ' +
+    V_ACT + ' ' + cnt.act + ' ／ ' + V_INVEST + ' ' + cnt.invest + ' ／ ' + V_NONE + ' ' + cnt.none);
+
+  // 影響機能が特定できていない行の割合は隠さない。「影響調査」の中身が
+  // 「確認すべきことがある」なのか「分からない」なのかで報告の意味が変わる。
+  const vague = rows.filter(function (r) {
+    const v = String(r['自社影響']).trim();
+    if (v !== V_ACT && v !== V_INVEST) return false;
+    const f = String(r['影響機能'] || '').trim();
+    return !f || f === 'その他' || f === '不明' || f === '—';
+  });
+  const denom = cnt.act + cnt.invest;
+  if (denom) {
+    b.appendParagraph('※ 対象 ' + denom + ' 行のうち ' + vague.length + ' 行（' +
+      Math.round(vague.length / denom * 100) + '%）は影響機能を特定できておらず、' +
+      '「懸念があるから調査」ではなく「分からないから調査」に分類されています。' +
+      '確認の手がかりが無い行なので、報告では分けて扱ってください。');
+  }
+}
+
+/** 対応検討・影響調査の行。人が動く必要があるもの。 */
+function monthlyActionRows_(b, month, ledger) {
+  b.appendParagraph('2. 対応の検討・調査が要る行').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  const rows = ledger.filter(function (r) {
+    const v = String(r['自社影響']).trim();
+    return inMonth_(r['最終更新日'], month) && (v === V_ACT || v === V_INVEST);
+  });
+  if (!rows.length) { b.appendParagraph('該当なし。'); return; }
+
+  appendMonthlyTable_(b,
+    ['自社影響', '製品', 'CVE', 'CVSS', 'KEV', '影響機能', '判定根拠', '公式推奨対応'],
+    rows.map(function (r) {
+      return ['自社影響', '製品', 'CVE', 'CVSS', 'KEV', '影響機能', '判定根拠', '公式推奨対応']
+        .map(function (h) { return oneLine_(r._text[h]); });
+    }));
+}
+
+/** 人がどう決めたか。ツールの判定ではなくこちらが監査で読まれる。 */
+function monthlyDecisions_(b, month, decisions) {
+  b.appendParagraph('3. 人が下した判断').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  const rows = decisions.filter(function (r) { return inMonth_(r['判断日'], month); });
+  if (!rows.length) {
+    b.appendParagraph('この月に記録された判断はありません。' +
+      '台帳で行を選び、メニュー「選択行から判断記録を作る」で残せます。');
+    return;
+  }
+  appendMonthlyTable_(b,
+    ['判断日', 'アドバイザリID', 'CVE', '判断', '根拠', '判断者'],
+    rows.map(function (r) {
+      return [ymd_(r['判断日']), oneLine_(r._text['アドバイザリID']), oneLine_(r._text['CVE']),
+              oneLine_(r._text['判断']), oneLine_(r._text['根拠']), oneLine_(r._text['判断者'])];
+    }));
+}
+
+/**
+ * 「なし」と判定した行とその根拠。
+ * 設計書v3 §5 のとおり、これは報告の主要部分。対応しないと言い切る根拠そのもの。
+ */
+function monthlyNoActionRows_(b, month, ledger) {
+  b.appendParagraph('4. 対応不要と判定した行とその根拠').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  const rows = ledger.filter(function (r) {
+    return inMonth_(r['最終更新日'], month) && String(r['自社影響']).trim() === V_NONE;
+  });
+  if (!rows.length) { b.appendParagraph('該当なし。'); return; }
+  appendMonthlyTable_(b,
+    ['製品', 'CVE', 'CVSS', '判定根拠'],
+    rows.map(function (r) {
+      return ['製品', 'CVE', 'CVSS', '判定根拠'].map(function (h) { return oneLine_(r._text[h]); });
+    }));
+}
+
+/**
+ * その月にツールが動いていたか。
+ * 報告の数字は「取れた範囲」でしかないので、欠測日があるならそう書く必要がある。
+ */
+function monthlyRunHealth_(b, month, runlog) {
+  b.appendParagraph('5. ツールの稼働状況').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  const rows = runlog.filter(function (r) { return inMonth_(r['実行日時'], month); });
+  if (!rows.length) {
+    b.appendParagraph('実行履歴がありません。この月の数字は根拠が確認できません。');
+    return;
+  }
+  const days = {};
+  let ng = 0;
+  rows.forEach(function (r) {
+    days[ymd_(r['実行日時'])] = true;
+    if (String(r['結果']).trim() !== '正常') ng++;
+  });
+  const n = Object.keys(days).length;
+  b.appendParagraph('実行: ' + rows.length + ' 回 ／ ' + n + ' 日 ／ ' +
+                    '正常以外 ' + ng + ' 回');
+  const [y, m] = month.split('-').map(Number);
+  const inMonthDays = new Date(y, m, 0).getDate();
+  if (n < inMonthDays) {
+    b.appendParagraph('※ ' + inMonthDays + ' 日中 ' + n + ' 日しか実行記録がありません。' +
+      '実行されなかった日の公表は拾えていない可能性があります。');
+  }
+}
+
+/** ドキュメントに表を1つ足す。見出し行を太字にする。 */
+function appendMonthlyTable_(b, headers, rows) {
+  const t = b.appendTable([headers].concat(rows));
+  const head = t.getRow(0);
+  for (let i = 0; i < headers.length; i++) {
+    head.getCell(i).editAsText().setBold(true);
+  }
+  return t;
+}
+
+/** セル内の改行を潰す。表の中で折り返すと読めなくなる。 */
+function oneLine_(s) {
+  return String(s === undefined || s === null ? '' : s).replace(/\s*\n\s*/g, ' / ').trim();
+}
+
+/**
+ * 台帳の「影響機能」の分布を出す。月次サマリを作るかどうかの判断材料。
+ *
+ * 設計書v3 は月次サマリを保留した理由に「影響機能名の表記ゆれが大きく、実測で
+ * `不明` が約3割」を挙げている。その後に統制語彙（FORTINET_AI_FEATURES /
+ * FEATURE_CONFIG_DEPENDENT）を入れたので、いまも3割なのかを測る。
+ *
+ * 見るのは最後の 1 行「不明・その他・空欄の合計」。ここが 3 割のままなら、
+ * 月次サマリは毎月「影響機能: 不明 3割」という文書を自動生成することになり、
+ * 報告に使えない。1 割を切っていれば作れる。
+ *
+ * 全行と「対象のみ」の 2 本立てで出す。月次報告が扱うのは対象の行なので、
+ * 全体の分布より対象だけの分布の方が実態に近い。
+ */
+function countFeatures() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LEDGER);
+  if (!sh || sh.getLastRow() < 2) { Logger.log('台帳が空です。'); return; }
+
+  const values = sh.getRange(2, 1, sh.getLastRow() - 1, LEDGER_HEADERS.length).getValues();
+  const cFeature = COL['影響機能'] - 1;
+  const cVerdict = COL['自社影響'] - 1;
+
+  report(values, '台帳の全行');
+  report(values.filter(function (r) {
+    const v = String(r[cVerdict]).trim();
+    return v === V_ACT || v === V_INVEST;
+  }), '対象の行だけ（' + V_ACT + ' / ' + V_INVEST + '）');
+
+  function report(rows, label) {
+    if (!rows.length) { Logger.log('--- ' + label + ': 0 行'); return; }
+    const m = {};
+    rows.forEach(function (r) {
+      const f = String(r[cFeature] || '').trim() || '(空欄)';
+      m[f] = (m[f] || 0) + 1;
+    });
+    const keys = Object.keys(m).sort(function (a, b) { return m[b] - m[a]; });
+
+    Logger.log('--- ' + label + '（' + rows.length + ' 行）');
+    keys.forEach(function (k) {
+      const pct = Math.round(m[k] / rows.length * 100);
+      Logger.log('  ' + padRight_(k, 22) + padLeft_(m[k], 4) + ' 件  (' + padLeft_(pct, 3) + '%)');
+    });
+
+    // 「不明」「その他」「空欄」は、機能を特定できなかった行。月次サマリで
+    // 使い物になるかはこの合計で決まる。
+    const vague = ['不明', 'その他', '(空欄)', '—'].reduce(function (a, k) {
+      return a + (m[k] || 0);
+    }, 0);
+    Logger.log('  → 機能を特定できていない行（不明・その他・空欄）: ' +
+               vague + ' 件 (' + Math.round(vague / rows.length * 100) + '%)');
+  }
+}
+
+/**
+ * 表示幅で右に詰める。日本語は 1 文字が 2 桁ぶんの幅を持つので、
+ * 文字数で詰めると「管理GUI」と「IOS XE 基盤」で桁が揃わない。
+ * 分布を読むときに数字が縦に並んでいないと比較できない。
+ */
+function padRight_(s, n) {
+  let t = String(s);
+  while (displayWidth_(t) < n) t += ' ';
+  return t;
+}
+
+/** 全角（CJK・かな・全角記号）を 2 桁として数えた表示幅。 */
+function displayWidth_(s) {
+  let w = 0;
+  String(s).split('').forEach(function (ch) {
+    const c = ch.charCodeAt(0);
+    const wide = (c >= 0x1100 && c <= 0x115F) || (c >= 0x2E80 && c <= 0xA4CF) ||
+                 (c >= 0xAC00 && c <= 0xD7A3) || (c >= 0xF900 && c <= 0xFAFF) ||
+                 (c >= 0xFE30 && c <= 0xFE6F) || (c >= 0xFF00 && c <= 0xFF60) ||
+                 (c >= 0xFFE0 && c <= 0xFFE6);
+    w += wide ? 2 : 1;
+  });
+  return w;
+}
+
+function padLeft_(s, n) {
+  let t = String(s);
+  while (t.length < n) t = ' ' + t;
+  return t;
 }
 
 function countByMonthVendor() {
