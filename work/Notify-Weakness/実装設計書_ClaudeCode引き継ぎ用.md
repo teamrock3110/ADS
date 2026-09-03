@@ -513,7 +513,7 @@ GAS ファイル 2 枚。Apps Script は全ファイルでグローバルスコ�
 
 | ファイル | 行数 | 関数 | 中身 |
 |---|---|---|---|
-| `fortinet_psirt_watcher_v7.gs` | 5,691 | 220 | 本体 |
+| `fortinet_psirt_watcher_v7.gs` | 5,722 | 221 | 本体 |
 | `fortinet_psirt_watcher_v7_tests.gs` | 590 | 23 | 動作確認用 |
 
 **確認用ファイルはトップレベルで `const` / `let` を宣言しない。**宣言すると評価順に
@@ -550,7 +550,7 @@ GAS エディタへの手貼りで、確認用の関数はほとんど変わら�
            monthlyOverview_() / monthlyActionRows_() / monthlyDecisions_()
            monthlyNoActionRows_() / monthlyRunHealth_() / readSheetRows_()
            countFeatures() / countByMonth() / countByMonthVendor()
-判定       readAssets_() / normProduct_() / assetsForProduct_() / isLedgerRow_()
+判定       readAssets_() / normProduct_() / assetsForProduct_() / isLedgerRow_() / ciscoDocCveClasses_()
            newJpcertAlerts_() / fetchJpcertAlerts_() / jpcertKeywords_() / markJpcertSeen_()
            decideByRules_() / applyHumanDecision_() / readDecisions_() / lookupDecision_()
            decideNotification_() / judgeOsApplicability_() / ruleGate_() / finalizeVerdict_()
@@ -587,6 +587,22 @@ testSlackBlocks() / testAi() ほか
 ## 6. 次にやること（優先順）
 
 1. **影響機能の 67% が「その他」** — 2026-09-03 に `countFeatures()` で実測。
+   **原因は 2026-09-04 に特定した。分類器の失敗でも語彙の不足でもない。**
+   `その他` の 6 行はすべて 1 本のアドバイザリ（`cisco-sa-hardening-iosxe`
+   ＝ Security Hardening Release）から出ていて、その CSAF は
+   `vulnerabilities[].title` が 7 件とも同一、`notes` は `Complete.` だけで、
+   **CVE 側に分類できる材料が何も無い。**情報は `document.notes` の
+   「CVE ごとの CWE 分類表」にあり、そこを読んでいなかった
+   → `ciscoDocCveClasses_()` で読んで `summary` を補うようにした（判定は変えていない）。
+
+   残るのは **B: 設定非依存の記述を読んで `IOS XE 基盤` に分類するか**。同じ
+   `document.notes` に `regardless of device configuration` と書かれており、
+   これは `FEATURE_ALWAYS_ON` そのもの。ただし素直に入れると `featureExposure_` が
+   `always` を返して判定が `isSevereImpact_` に委ねられ、**あの関数は
+   `remote code|code execution|command injection|denial of service` の語しか見ないので、
+   CWE 表現の 6 件（CVSS 8.6〜9.8）が黙って「なし」に落ちる。**
+   B をやるなら `isSevereImpact_` の語彙も一緒に直すこと。判定を変えるので
+   KEV と同じく承認が要る。
    台帳の対象 9 行のうち 6 行が `その他` で、`featureExposure_` が `unknown` を返し
    「影響機能を特定できないため → あり（影響調査）」に固定されている。
    **いま並んでいる「影響調査」の 3 分の 2 は、懸念があるからではなくツールが

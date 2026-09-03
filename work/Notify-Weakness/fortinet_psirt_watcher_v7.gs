@@ -1761,6 +1761,7 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
   const vulnName = String(doc.title || item.title || '').trim();
   const idMap = ciscoProductMap_(csaf);
   const configHints = ciscoConfigHints_(csaf);
+  const docClasses = ciscoDocCveClasses_(csaf);
   const vulns = csaf.vulnerabilities || [];
   const product = targetProducts[0];
 
@@ -1801,8 +1802,13 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
       if (r.category === 'vendor_fix' && r.details) pushUnique_(fixes, r.details);
     });
 
+    // CVE 側に何も書かれていないアドバイザリがある。Security Hardening Release は
+    // vulnerabilities[].title が全件同一で notes も「Complete.」だけ（実測）。
+    // その場合でも document.notes に CVE ごとの CWE 分類表が載っているので、
+    // そこから補う。無いと確認する人に手がかりが 1 つも渡らない。
     const summary = [
       noteText_(v, function (n) { return n.category === 'summary'; }),
+      docClasses[String(v.cve || '').toUpperCase()] || '',
       configHints
     ].filter(function (s) { return s; }).join('\n\n');
 
@@ -1872,6 +1878,31 @@ function extractCiscoRowFallback_(item, assets) {
     selfVersion: '', fixVersion: '',
     feature: '', impactJa: '', howToCheck: '', plan: ''
   };
+}
+
+/**
+ * document.notes に載っている「CVE ごとの脆弱性クラス」の表を読む。
+ *
+ * Security Hardening Release のように、CVE 側のフィールドが空でここにしか
+ * 中身が無いアドバイザリがある。表はプレーンテキストで
+ *   CVE-2026-20267 9.0 CWE-284 Improper access control (covers ...)
+ * のように 1 行ずつ並ぶので、CVE の直前で区切って読む。
+ *
+ * 表が無ければ空を返す。無理に拾わない（誤った説明を付けるくらいなら何も付けない）。
+ */
+function ciscoDocCveClasses_(csaf) {
+  const out = {};
+  (((csaf || {}).document || {}).notes || []).forEach(function (n) {
+    const t = String(n.text || '').replace(/\s+/g, ' ');
+    if (t.indexOf('CWE-') === -1 || t.indexOf('CVE-') === -1) return;
+    const re = /(CVE-\d{4}-\d{4,})\s+([\d.]+)\s+(CWE-\d+)\s+(.*?)(?=CVE-\d{4}-\d{4,}|$)/g;
+    let m;
+    while ((m = re.exec(t)) !== null) {
+      const text = (m[3] + ' ' + m[4]).replace(/\s+/g, ' ').trim();
+      if (text) out[m[1].toUpperCase()] = text;
+    }
+  });
+  return out;
 }
 
 /**
