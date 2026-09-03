@@ -42,7 +42,7 @@ Slack で1通通知する。**目的は「対応要否の自動決定」では�
 
 buildMonthlyReport()  ← 日次とは別。メニューか手実行で月に1回
   処理済み（分母）・台帳（対象行）・判断記録（人の決定）・実行履歴（欠測）を
-  突き合わせて Google ドキュメントに草案を書き出す（§4.9）
+  突き合わせて「月次サマリ」シートへ草案を書く（§4.9）
 ```
 
 ### 1.2 ベンダーで取得方法が違う理由（v7 の中核）
@@ -117,7 +117,7 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
 
 ---
 
-## 2. スプレッドシート（5シート）
+## 2. スプレッドシート（6シート）
 
 ### 2.1 台帳（13列・左6列固定）— 対応要否を判断する作業リスト
 
@@ -427,9 +427,10 @@ CVE が無いので台帳の行と機械的に突き合わせられない。KEV 
   先に印を付けると、Webhook が失効していた日の注意喚起が誰にも届かないまま消える
 - 取得に失敗しても main() は止めない。補助の経路で本体の日次処理を落とすのは本末転倒
 
-### 4.9 月次サマリは突き合わせだけやる。文章は書かない
+### 4.9 月次サマリは突き合わせだけやる。文章は書かない・面を増やさない
 
-`buildMonthlyReport(yyyymm)`（省略時は先月）。いま人がやっているのは
+`buildMonthlyReport(yyyymm)`（省略時は先月）。出力先は同じスプレッドシートの
+**「月次サマリ」シート**で、毎回まるごと上書きする。いま人がやっているのは
 処理済み（分母）・台帳（対象行）・判断記録（人の決定）・実行履歴（欠測の有無）の
 4 か所を突き合わせて 1 つの報告にまとめる作業で、**その突き合わせだけを機械にやらせる**。
 文章は書かない。AI も呼ばない。数字と行を並べるところまでで、読み手に何を言うかは人が書く。
@@ -443,6 +444,20 @@ CVE が無いので台帳の行と機械的に突き合わせられない。KEV 
   そこを隠すと数字が嘘になる
 - **影響機能を特定できていない行の割合を概要に出す。**隠すと「影響調査 N 件」が
   全部中身のある調査に見える。実態は「分からないから調査」が混ざっている（§6-1）
+
+**Google ドキュメントには出さない。**最初 `DocumentApp` で実装したが、
+「データはスプレッドシート、通知は Slack」の 2 面に閉じる方針に反していた
+（ユーザー指摘、2026-09-04）。面が増え、権限も増え、`DocumentApp.create()` は
+実行のたびに新しいファイルを作るので年 12 個がドライブに溜まる（消す仕組みが要る）。
+同じシートを毎回上書きすれば溜まらない。
+
+節の組み立ては `monthlyWriter_()` に溜めて、書き出しは `writeMonthlySheet_()` が
+まとめて行う。**「何を書くか」と「どこへ書くか」を分けてある**ので、
+ドキュメントからシートへ移したときに節の中身は 1 行も変えずに済んだ。
+
+説明文の行は横に結合する。結合しないとその長い文が列 A の幅を決めてしまい、
+同じ列 A を使う表（自社影響・製品）が読めなくなる。列幅は節をまたいで共通なので、
+どの節でも破綻しない中庸な値を置き、全セルを折り返す。
 
 ### 4.10 人の判断はルールの外側でかぶせる
 
@@ -491,7 +506,7 @@ GAS ファイル 2 枚。Apps Script は全ファイルでグローバルスコ�
 
 | ファイル | 行数 | 関数 | 中身 |
 |---|---|---|---|
-| `fortinet_psirt_watcher_v7.gs` | 5,581 | 218 | 本体 |
+| `fortinet_psirt_watcher_v7.gs` | 5,642 | 219 | 本体 |
 | `fortinet_psirt_watcher_v7_tests.gs` | 590 | 23 | 動作確認用 |
 
 **確認用ファイルはトップレベルで `const` / `let` を宣言しない。**宣言すると評価順に
@@ -524,9 +539,10 @@ GAS エディタへの手貼りで、確認用の関数はほとんど変わら�
            ciscoCsafProductNames_() / csafCveList_()
 バージョン parseVersion_() / compareVersion_() / matchesSpec_() / judgeVersions_()
            judgeCiscoVersions_() / narrowFixVersion_()
-出力(月次)  buildMonthlyReport() / monthlyOverview_() / monthlyActionRows_()
-           monthlyDecisions_() / monthlyNoActionRows_() / monthlyRunHealth_()
-           readSheetRows_() / countFeatures() / countByMonth() / countByMonthVendor()
+出力(月次)  buildMonthlyReport() / monthlyWriter_() / writeMonthlySheet_()
+           monthlyOverview_() / monthlyActionRows_() / monthlyDecisions_()
+           monthlyNoActionRows_() / monthlyRunHealth_() / readSheetRows_()
+           countFeatures() / countByMonth() / countByMonthVendor()
 判定       readAssets_() / normProduct_() / assetsForProduct_() / isLedgerRow_()
            newJpcertAlerts_() / fetchJpcertAlerts_() / jpcertKeywords_() / markJpcertSeen_()
            decideByRules_() / applyHumanDecision_() / readDecisions_() / lookupDecision_()
