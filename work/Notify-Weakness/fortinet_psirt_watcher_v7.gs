@@ -4605,6 +4605,9 @@ function buildMonthlyReport(yyyymm) {
   const decisions = readSheetRows_(SHEET_DECISION, DECISION_HEADERS);
   const runlog = readSheetRows_(SHEET_RUNLOG, RUNLOG_HEADERS);
 
+  // CSAF版は台帳に無いので処理済みから引いて台帳の行へ付ける。
+  attachCsafVersion_(ledger, state);
+
   const w = monthlyWriter_();
   w.title('脆弱性対応 月次サマリ草案  ' + month);
   w.text('自動生成: ' + ymd_(new Date()) +
@@ -4680,8 +4683,14 @@ function writeMonthlySheet_(w, month) {
   // 切り詰めると判定根拠が読めなくなり、報告の材料として使えない。
   all.setWrap(true);
 
-  // 幅は節をまたいで共通なので、どの節でも破綻しない中庸な値にする。
-  [200, 140, 130, 220, 70, 140, 320, 200].slice(0, width)
+  // 幅は節をまたいで共通。§2 と §4 は同じ列にしてあるので、あとは §3 の
+  // 「根拠」（F 列）が読める幅を確保すればよい。
+  //  A 最終更新日/判断日   B CSAF版/アドバイザリID   C 自社影響/CVE   D 製品/判断
+  //  E CVE/判断者   F CVSS/根拠   G KEV   H 影響機能   I 判定根拠   J 公式推奨対応
+  //
+  // F は §3 の「根拠」（長い自由記述）に合わせて広く取る。台帳の表では CVSS が
+  // そこに来るので余白が出るが、狭くして根拠が読めなくなる方が困る。
+  [100, 80, 150, 120, 150, 260, 70, 130, 300, 240].slice(0, width)
     .forEach(function (px, i) { sh.setColumnWidth(i + 1, px); });
 
   Logger.log('月次サマリ草案（' + month + '）を「' + SHEET_MONTHLY + '」シートに書きました。');
@@ -4709,6 +4718,25 @@ function readSheetRows_(name, headers) {
     const o = { _text: {} };
     headers.forEach(function (h, c) { o[h] = r[c]; o._text[h] = text[i][c]; });
     return o;
+  });
+}
+
+/**
+ * 台帳の行に処理済みの CSAF版 を付ける。アドバイザリID で突き合わせる。
+ *
+ * 台帳の ID は =HYPERLINK() なので値ではなく表示文字列で引く（どちらの
+ * シートも _text 側に ID の文字列が入っている）。
+ * 引けなかった行は空にする。「0」と書くと未取得と取り違える（§4.1）。
+ */
+function attachCsafVersion_(ledger, state) {
+  const byId = {};
+  state.forEach(function (r) {
+    const id = String(r._text['アドバイザリID'] || '').trim();
+    if (id) byId[id] = String(r._text['CSAF版'] || '').trim();
+  });
+  ledger.forEach(function (r) {
+    const id = String(r._text['アドバイザリ'] || '').trim();
+    r._text['CSAF版'] = (id && byId[id] !== undefined) ? byId[id] : '';
   });
 }
 
@@ -4770,11 +4798,30 @@ function monthlyOverview_(w, month, state, ledger) {
   }
 }
 
+/**
+ * 台帳の行を報告に出すときの列。§2 と §4 で同じにする。
+ *
+ * 節ごとに列を変えると、同じ列 A に「自社影響」と「製品」が来て、
+ * 列幅がどちらかに合わなくなる。どちらも台帳の行で形は同じなので、
+ * 揃えておけば幅を 1 通り決めれば済む。
+ *
+ * 先頭 2 列は「その判定が、いつ時点のどの情報に基づくか」。
+ * 最終更新日は CSAF の current_release_date、CSAF版は tracking.version で、
+ * 既読判定がこの 2 つで改訂を見ているのと同じ組。報告を読む人が
+ * 「この結論は古い情報のままではないか」を確かめられるようにする。
+ *
+ * とくに CSAF版 が「未取得」の行は、**アドバイザリ本体を読めないまま RSS の
+ * 情報だけで判定した行**。結論の確からしさが他の行と違うので、報告で
+ * 見えないままにしてはいけない。
+ */
+const MONTHLY_LEDGER_COLS = ['最終更新日', 'CSAF版', '自社影響', '製品', 'CVE', 'CVSS',
+                             'KEV', '影響機能', '判定根拠', '公式推奨対応'];
+
 /** 対応検討・影響調査の行。人が動く必要があるもの。 */
 function monthlyActionRows_(w, month, ledger) {
   w.blank();
   w.heading('2. 対応の検討・調査が要る行');
-  const cols = ['自社影響', '製品', 'CVE', 'CVSS', 'KEV', '影響機能', '判定根拠', '公式推奨対応'];
+  const cols = MONTHLY_LEDGER_COLS;
   const rows = ledger.filter(function (r) {
     const v = String(r['自社影響']).trim();
     return inMonth_(r['最終更新日'], month) && (v === V_ACT || v === V_INVEST);
@@ -4795,10 +4842,12 @@ function monthlyDecisions_(w, month, decisions) {
       '台帳で行を選び、メニュー「選択行から判断記録を作る」で残せます。');
     return;
   }
-  w.table(['判断日', 'アドバイザリID', 'CVE', '判断', '根拠', '判断者'],
+  // 「根拠」を最後（F 列）に置く。ここだけ列の意味が台帳の表とずれるので、
+  // 長い自由記述が幅を取ってある列に来るように並べる。
+  w.table(['判断日', 'アドバイザリID', 'CVE', '判断', '判断者', '根拠'],
     rows.map(function (r) {
       return [ymd_(r['判断日']), oneLine_(r._text['アドバイザリID']), oneLine_(r._text['CVE']),
-              oneLine_(r._text['判断']), oneLine_(r._text['根拠']), oneLine_(r._text['判断者'])];
+              oneLine_(r._text['判断']), oneLine_(r._text['判断者']), oneLine_(r._text['根拠'])];
     }));
 }
 
@@ -4809,7 +4858,7 @@ function monthlyDecisions_(w, month, decisions) {
 function monthlyNoActionRows_(w, month, ledger) {
   w.blank();
   w.heading('4. 対応不要と判定した行とその根拠');
-  const cols = ['製品', 'CVE', 'CVSS', '判定根拠'];
+  const cols = MONTHLY_LEDGER_COLS;
   const rows = ledger.filter(function (r) {
     return inMonth_(r['最終更新日'], month) && String(r['自社影響']).trim() === V_NONE;
   });
