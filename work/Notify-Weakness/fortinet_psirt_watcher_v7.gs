@@ -2983,20 +2983,35 @@ function normalizeCiscoFeature_(raw) {
   return s || 'IOS XE 基盤';
 }
 
-/** AI が返した英語切れ端・ID っぽい影響機能か */
+/**
+ * Cisco の影響機能の統制語彙。featureExposure_ が露出を引ける値だけを許す。
+ * ここに無い値が入ると exposure が unknown になり、判定が
+ * 「影響機能を特定できないため」に固定される。
+ */
+const CISCO_FEATURE_VOCAB = {
+  'WebUI': 1, 'BEEP': 1, 'XMCP Server': 1, 'SD-WAN': 1, 'SNMP': 1, 'SSH': 1,
+  'IOS XE 基盤': 1, 'データプレーン': 1, '管理GUI': 1, 'その他': 1
+};
+
+/**
+ * 統制語彙に無い影響機能か。語彙外ならタイトル由来の値へ落とす。
+ *
+ * 以前は英語の断片だけを弾いていたので、AI が返した日本語は何でも通っていた。
+ * 実測（2026-09-04）で「アクセス制御」「CLI処理」「メモリ管理」のような
+ * **脆弱性の種類**が影響機能の欄に入り、機能とは軸の違う値が台帳に並んだ。
+ *
+ * featureExposure_ はそれらを unknown としか読めないので判定は動かない一方、
+ * countFeatures() では別々のバケツに散るため「影響機能を特定できていない行の
+ * 割合」を過少に見せる。**判定は変わらないのに計測だけ壊れる**のが厄介で、
+ * 直したつもりになってしまう。
+ *
+ * Fortinet には isFortinetFeatureVocab_ で同じ強制がある。ベンダーで差を付ける
+ * 根拠が無いので揃える。
+ */
 function isJunkCiscoFeature_(feature) {
   const s = String(feature || '').trim();
   if (!s || s === '不明') return true;
-  if (/^cisco-sa-/i.test(s)) return true;
-  const known = {
-    'WebUI': 1, 'BEEP': 1, 'XMCP Server': 1, 'SD-WAN': 1,
-    'SNMP': 1, 'SSH': 1, 'IOS XE 基盤': 1
-  };
-  if (known[s]) return false;
-  // タイトル断片（英単語の切れ端）は統制語彙ではない
-  if (/^[A-Za-z]/.test(s) && /\s/.test(s)) return true;
-  if (/^[A-Za-z].{0,3}$/.test(s)) return true;
-  return false;
+  return !CISCO_FEATURE_VOCAB[s];
 }
 
 function lookupCheckSteps_(row) {
@@ -3249,12 +3264,45 @@ function featureExposure_(row) {
   return 'unknown';
 }
 
-/** 悪用されたとき機器掌握または業務停止に至るか（臨時更新条件4） */
+/**
+ * 悪用されたとき機器掌握または業務停止に至るか（臨時更新条件4）。
+ *
+ * summary も見る。Cisco の Security Hardening Release は title が全件同一で
+ * impact も空、脆弱性の中身は document.notes の CWE 分類表にしか無く、
+ * それを summary へ入れている（ciscoDocCveClasses_）。
+ *
+ * 足す CWE 語彙は掌握に至るものだけにする。DoS 系（無限ループ・NULL 参照）は
+ * 無理に足さない。CWE の分類は「その CWE で起きうる最悪」を指しているだけで、
+ * その機器で実際に業務停止まで行くかは書いていない。断定できないものは
+ * hasImpactEvidence_ 側で「判定できない」として調査へ回す。
+ */
 function isSevereImpact_(row) {
   if (row.takeover === 'total') return true;
   if (row.serviceStop === 'はい') return true;
-  const text = [row.impact, row.title].join(' ').toLowerCase();
-  return /remote code|code execution|\brce\b|arbitrary code|command injection|denial of service|\bdos\b/.test(text);
+  const text = [row.impact, row.title, row.summary].join(' ').toLowerCase();
+  if (/remote code|code execution|\brce\b|arbitrary code|command injection|denial of service|\bdos\b/.test(text)) {
+    return true;
+  }
+  // CWE 表現。ベンダーが平文で書く「remote code execution」と CWE 語彙の
+  // 「improper neutralization of special elements」は同じことを指しているのに、
+  // 後者だけ落ちるのは語彙の不足であって判定基準の差ではない。
+  return /improper access control|neutralization of special elements|argument injection|bounds of a memory buffer|buffer overflow|out-of-bounds/.test(text);
+}
+
+/**
+ * 深刻度を判定する材料がこの行にあるか。
+ *
+ * AI が影響の型を返している（takeover / serviceStop）か、影響・要約・題名に
+ * 何か書かれていれば材料はある。何も無ければ「至らない」とは言えない。
+ *
+ * 材料の有無だけを見て、内容の当否は見ない。当否は isSevereImpact_ の仕事で、
+ * ここは「そもそも判断できるか」を分ける。
+ */
+function hasImpactEvidence_(row) {
+  const known = ['total', 'partial', 'none'];
+  if (known.indexOf(String(row.takeover || '')) !== -1) return true;
+  if (String(row.serviceStop || '') === 'はい' || String(row.serviceStop || '') === 'いいえ') return true;
+  return !!String(row.impact || '').trim();
 }
 
 /**
@@ -3325,6 +3373,18 @@ function finalizeVerdict_(row, opts) {
   } else if (isSevereImpact_(row)) {
     row.verdict = V_ACT;
     row.reasonPhrase = '外部から無認証で' + row.feature + 'を悪用され機器掌握または業務停止に至るため';
+  } else if (!hasImpactEvidence_(row)) {
+    // 深刻度を判定する材料が無い行を「なし」にしない。
+    // 「掌握にも業務停止にも至らない」は断定であって、材料が無いときに
+    // 言ってよい言葉ではない。V_INVEST の定義（設定を見ていない以上、
+    // 確認前の正しい状態は影響調査）と同じ理由で、分からないものは調査へ回す。
+    //
+    // 実例: Cisco の Security Hardening Release は影響の種類が CWE 分類でしか
+    // 書かれておらず、CWE-691（無限ループ）や CWE-664（NULL参照）は業務停止に
+    // 至りうるのに語彙照合では拾えない。ここが無いと CVSS 8.6 が黙って
+    // 「なし」に落ち、Slack からも消える。
+    row.verdict = V_INVEST;
+    row.reasonPhrase = '影響の種類を特定できず深刻度を判定できないため';
   } else {
     row.verdict = V_NONE;
     row.reasonPhrase = '掌握にも業務停止にも至らないため';
