@@ -162,8 +162,25 @@ function testJudge() {
 
     // 常時有効な機能だけ、影響の重さで臨時更新まで判定する
     { name: '常時有効かつ掌握', vector: NET, feature: 'データプレーン', tech: 'total', expect: V_ACT },
-    { name: '常時有効だが軽微', vector: NET, feature: 'データプレーン', tech: 'partial',
+    // 2026-09-04: 条件4をベクターの C/I/A で判定するようにしたので、想定値を直した。
+    // 元は NET（C:H/I:H/A:H）を「軽微」と名付けて V_NONE を期待していたが、
+    // 読まれる・書き換えられる・止められるの全部が High なので軽微ではない。
+    // 旧ロジックがベクターを見ずタイトルの英文だけで判定していたため通っていた。
+    { name: '常時有効だが影響は部分的',
+      vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N',
+      feature: 'データプレーン', tech: 'partial',
       title: 'Information disclosure', impact: 'Information disclosure', expect: V_NONE },
+    // C:H だけの行は「なし」にしない。漏れるのが管理者の認証情報なら
+    // 制御を奪われる入口になるが、CVSS は何が漏れるかを区別しない（社内ルール §条件4の読み方）。
+    { name: '常時有効・情報漏えいのみ',
+      vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N',
+      feature: 'データプレーン', tech: 'partial',
+      title: 'Information disclosure', impact: 'Information disclosure', expect: V_INVEST },
+    // 書き換えられるだけでも条件4を満たす（制御を奪われる）。
+    { name: '常時有効・改ざんのみ',
+      vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N',
+      feature: 'データプレーン', tech: 'partial',
+      title: 'Improper input validation', impact: '', expect: V_ACT },
 
     // KEV は最低ライン。使っていない前提で流さない
     { name: 'KEVあり・設定次第', kev: KEV_YES, vector: NET, feature: 'Webフィルタ',

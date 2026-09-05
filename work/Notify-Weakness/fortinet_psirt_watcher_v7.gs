@@ -253,7 +253,11 @@ const LEDGER_HEADERS = [
   '判定根拠',     // 10 OS=… | KEV=… | ◯◯のため「結論」
   '確認方法',     // 11 確認ポイント／コマンド／判断
   '公式推奨対応', // 12 ベンダー公式（日本語）
-  'アドバイザリ'  // 13
+  'アドバイザリ', // 13
+  // 14 判定の検算用。条件3（AV/PR/UI）も条件4（C/I/A）もこの値から決まるのに、
+  //    台帳に無いと読む人が判定根拠の正しさを確かめられない（§4.4 と同じ理由）。
+  //    毎回スキャンする値ではないので末尾に置き、左6列固定の設計を崩さない。
+  'CVSSベクター'
 ];
 
 /**
@@ -3216,7 +3220,7 @@ function buildDecisionReason_(row) {
  * 社内ルールの「定期更新まで待つ根拠」のうち、CVSS ベクターだけで判定できる分。
  *
  * 深刻度では切らない。切るのは到達性と前提条件である。
- * 9.8 でも管理者権限が前提なら、悪用できる者は既に機器を掌握している。
+ * 9.8 でも管理者権限が前提なら、悪用できる者は既に機器の制御を持っている。
  *
  * @return {{pass: boolean, phrase: string}} pass=false なら定期更新で足りる
  */
@@ -3252,6 +3256,15 @@ const FEATURE_CONFIG_DEPENDENT = {
   'WebUI': true, 'BEEP': true, 'XMCP Server': true, 'SNMP': true, 'SD-WAN': true
 };
 
+/**
+ * 設定に関係なく常に有効な機能（社内ルール 条件5）。
+ *
+ * **ここに設定依存の機能を足さないこと。**この表に載る行だけが impactSeverity_ の
+ * 判定へ進み、そこでは A:H を「業務停止」と読んでいる。その読み方は
+ * 「基盤が止まれば業務が止まる」という前提に立っているので、管理画面のように
+ * 設定次第で止められる機能を足すと前提が崩れ、管理画面の DoS まで臨時更新に上がる
+ * （impactSeverity_ のコメント参照）。
+ */
 const FEATURE_ALWAYS_ON = {
   'データプレーン': true, 'IOS XE 基盤': true
 };
@@ -3265,44 +3278,71 @@ function featureExposure_(row) {
 }
 
 /**
- * 悪用されたとき機器掌握または業務停止に至るか（臨時更新条件4）。
+ * 臨時更新条件4（悪用されると機器の制御を奪われるか業務停止に至る）の判定。
  *
- * summary も見る。Cisco の Security Hardening Release は title が全件同一で
- * impact も空、脆弱性の中身は document.notes の CWE 分類表にしか無く、
- * それを summary へ入れている（ciscoDocCveClasses_）。
+ * **一次情報は CVSS ベクターの C/I/A。**条件3（AV:N / PR:N / UI:N）を
+ * ruleGate_ が同じベクターから読んでいるのに、条件4だけ英文のキーワード照合という
+ * 別の方法を使っていたのが誤りだった。ベンダーが記述文に何を書くかに依存せず、
+ * 構造化された値から読む。
  *
- * 足す CWE 語彙は掌握に至るものだけにする。DoS 系（無限ループ・NULL 参照）は
- * 無理に足さない。CWE の分類は「その CWE で起きうる最悪」を指しているだけで、
- * その機器で実際に業務停止まで行くかは書いていない。断定できないものは
- * hasImpactEvidence_ 側で「判定できない」として調査へ回す。
+ *   I:H  設定・データを高影響で書き換えられる    → 機器の制御を奪われる
+ *   A:H  可用性が完全に失われる                  → 業務停止（前提は下記）
+ *   C:H のみ（I/A は N か L）                    → 情報漏えい。条件4の文言には当たらないが、
+ *        漏れるのが管理者の認証情報なら制御を奪われる入口になる。CVSS は
+ *        「何が漏れるか」を区別しないので機械には判断できない → infoleak
+ *   すべて L 以下                                → 部分的な影響にとどまる → no
+ *
+ * **A:H を「業務停止」と読んでよいのは、この判定に来る行が限られているから。**
+ * CVSS の A:H の定義は「影響を受けるコンポーネントの可用性が完全に失われる」で、
+ * コンポーネント＝機器全体とは限らない。デーモン 1 本が落ちるだけでも A:H は付く。
+ * 実際このコードは ユーザ影響の文面では区別している（isReloadDos_ = 機器が再起動 /
+ * isMgmtPlaneDos_ = 管理画面が止まる）。
+ *
+ * それでも丸めてよいのは、finalizeVerdict_ がここへ来るのを exposure が always の行
+ * （FEATURE_ALWAYS_ON = データプレーン / IOS XE 基盤）だけに絞っているため。
+ * **基盤が止まれば業務が止まる**ので、そこでは A:H = 業務停止で正しい。
+ * 管理画面の DoS は WebUI / 管理GUI = config なので手前で「影響調査」になる。
+ *
+ * **FEATURE_ALWAYS_ON に設定依存の機能を足すと、この前提が崩れる。**
+ * 管理画面の DoS まで臨時更新に上がるので、足すときはここも見直すこと。
+ *
+ * Scope（S:U / S:C）は見ない。S:U でも基盤が止まれば業務は止まるので、
+ * S で絞ると見逃す方向に働く。
+ *
+ * A:L（性能低下）を業務停止に含めない。含めると軽微な劣化まで臨時更新に上がる。
+ * AC（攻撃の難しさ）は見ない。社内ルールの条件3が AV/PR/UI の 3 つだけで
+ * AC を含めていないため（2026-09-04 に現状維持で確認）。
+ *
+ * ベクターが無いときだけ記述文へ落ちる。CVSS v4（VC:H 形式）は parseCvssCia_ が
+ * 読めず null を返すので、この経路に来る。拾えなければ unknown（＝調査へ）。
+ *
+ * @return {'yes'|'infoleak'|'no'|'unknown'}
  */
-function isSevereImpact_(row) {
-  if (row.takeover === 'total') return true;
-  if (row.serviceStop === 'はい') return true;
-  const text = [row.impact, row.title, row.summary].join(' ').toLowerCase();
-  if (/remote code|code execution|\brce\b|arbitrary code|command injection|denial of service|\bdos\b/.test(text)) {
-    return true;
+function impactSeverity_(row) {
+  if (row.takeover === 'total') return 'yes';
+  if (row.serviceStop === 'はい') return 'yes';
+
+  const p = parseCvssCia_(row.vector);
+  if (p) {
+    if (p.I === 'H' || p.A === 'H') return 'yes';
+    if (p.C === 'H') return 'infoleak';
+    return 'no';
   }
-  // CWE 表現。ベンダーが平文で書く「remote code execution」と CWE 語彙の
-  // 「improper neutralization of special elements」は同じことを指しているのに、
-  // 後者だけ落ちるのは語彙の不足であって判定基準の差ではない。
-  return /improper access control|neutralization of special elements|argument injection|bounds of a memory buffer|buffer overflow|out-of-bounds/.test(text);
+
+  // ベクターが読めない行の保険。ベンダーが平文で書く「remote code execution」と
+  // CWE 語彙の「improper neutralization of special elements」は同じことを指すので
+  // 両方を見る。当てられなければ「無い」ではなく「分からない」を返す。
+  const text = [row.impact, row.title, row.summary].join(' ').toLowerCase();
+  if (/remote code|code execution|\brce\b|arbitrary code|command injection|denial of service|\bdos\b/.test(text) ||
+      /improper access control|neutralization of special elements|argument injection|bounds of a memory buffer|buffer overflow|out-of-bounds/.test(text)) {
+    return 'yes';
+  }
+  return 'unknown';
 }
 
-/**
- * 深刻度を判定する材料がこの行にあるか。
- *
- * AI が影響の型を返している（takeover / serviceStop）か、影響・要約・題名に
- * 何か書かれていれば材料はある。何も無ければ「至らない」とは言えない。
- *
- * 材料の有無だけを見て、内容の当否は見ない。当否は isSevereImpact_ の仕事で、
- * ここは「そもそも判断できるか」を分ける。
- */
-function hasImpactEvidence_(row) {
-  const known = ['total', 'partial', 'none'];
-  if (known.indexOf(String(row.takeover || '')) !== -1) return true;
-  if (String(row.serviceStop || '') === 'はい' || String(row.serviceStop || '') === 'いいえ') return true;
-  return !!String(row.impact || '').trim();
+/** 条件4を満たすか。KEV 分岐など真偽だけ要る場所から使う。 */
+function isSevereImpact_(row) {
+  return impactSeverity_(row) === 'yes';
 }
 
 /**
@@ -3370,24 +3410,25 @@ function finalizeVerdict_(row, opts) {
   } else if (exposure === 'unknown') {
     row.verdict = V_INVEST;
     row.reasonPhrase = '影響機能を特定できないため';
-  } else if (isSevereImpact_(row)) {
-    row.verdict = V_ACT;
-    row.reasonPhrase = '外部から無認証で' + row.feature + 'を悪用され機器掌握または業務停止に至るため';
-  } else if (!hasImpactEvidence_(row)) {
-    // 深刻度を判定する材料が無い行を「なし」にしない。
-    // 「掌握にも業務停止にも至らない」は断定であって、材料が無いときに
-    // 言ってよい言葉ではない。V_INVEST の定義（設定を見ていない以上、
-    // 確認前の正しい状態は影響調査）と同じ理由で、分からないものは調査へ回す。
-    //
-    // 実例: Cisco の Security Hardening Release は影響の種類が CWE 分類でしか
-    // 書かれておらず、CWE-691（無限ループ）や CWE-664（NULL参照）は業務停止に
-    // 至りうるのに語彙照合では拾えない。ここが無いと CVSS 8.6 が黙って
-    // 「なし」に落ち、Slack からも消える。
-    row.verdict = V_INVEST;
-    row.reasonPhrase = '影響の種類を特定できず深刻度を判定できないため';
   } else {
-    row.verdict = V_NONE;
-    row.reasonPhrase = '掌握にも業務停止にも至らないため';
+    // 条件4はベクターの C/I/A で決める（impactSeverity_）。
+    // 「至らない」と言い切れるのはベクターが読めたときだけ。
+    // 分からない行を「なし」にすると Slack からも消えて誰も気づけない。
+    const sev = impactSeverity_(row);
+    if (sev === 'yes') {
+      row.verdict = V_ACT;
+      row.reasonPhrase = '外部から無認証で' + row.feature +
+                         'を悪用され、機器の制御を奪われるか業務停止に至るため';
+    } else if (sev === 'infoleak') {
+      row.verdict = V_INVEST;
+      row.reasonPhrase = '読み取られる情報の範囲を確認する必要があるため';
+    } else if (sev === 'unknown') {
+      row.verdict = V_INVEST;
+      row.reasonPhrase = '影響の種類を特定できず深刻度を判定できないため';
+    } else {
+      row.verdict = V_NONE;
+      row.reasonPhrase = '機器の制御を奪われることも業務停止に至ることもないため';
+    }
   }
   row.reason = buildDecisionReason_(row);
 }
@@ -5127,7 +5168,8 @@ function toRowArray_(r) {
     r.reason || '',                   // 10 判定根拠
     stripCheckLabels_(r.howToCheck),  // 11 確認方法
     action,                           // 12 公式推奨対応
-    advisoryCell                      // 13 アドバイザリ
+    advisoryCell,                     // 13 アドバイザリ
+    r.vector || ''                    // 14 CVSSベクター
   ];
 }
 
