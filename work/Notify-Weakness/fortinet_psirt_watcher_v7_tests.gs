@@ -176,6 +176,14 @@ function testJudge() {
       vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N',
       feature: 'データプレーン', tech: 'partial',
       title: 'Information disclosure', impact: 'Information disclosure', expect: V_INVEST },
+    // 2026-09-06: ベクターは AI の出力より先に見る。ベンダーが公開した構造化データを
+    // 記述文からの推測より優先する。この 2 件が順序を守る。
+    { name: 'ベクターは軽微だが AI が total と言う',
+      vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L',
+      feature: 'データプレーン', tech: 'total', expect: V_NONE },
+    { name: 'ベクターが読めず AI が total と言う（v4 形式）',
+      vector: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H',
+      feature: 'データプレーン', tech: 'total', expect: V_ACT },
     // 書き換えられるだけでも条件4を満たす（制御を奪われる）。
     { name: '常時有効・改ざんのみ',
       vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N',

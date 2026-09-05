@@ -3313,15 +3313,20 @@ function featureExposure_(row) {
  * AC（攻撃の難しさ）は見ない。社内ルールの条件3が AV/PR/UI の 3 つだけで
  * AC を含めていないため（2026-09-04 に現状維持で確認）。
  *
- * ベクターが無いときだけ記述文へ落ちる。CVSS v4（VC:H 形式）は parseCvssCia_ が
- * 読めず null を返すので、この経路に来る。拾えなければ unknown（＝調査へ）。
+ * **ベクターを AI の出力より先に見る。**ベンダーが公開した構造化データより、
+ * 記述文から推測した値（takeover / serviceStop）を優先する理由が無い。
+ * ベクターが無いときだけ AI と記述文へ落ちる。CVSS v4（VC:H 形式）は
+ * parseCvssCia_ が読めず null を返すので、この経路に来る。
+ * 拾えなければ unknown（＝調査へ）。
  *
  * @return {'yes'|'infoleak'|'no'|'unknown'}
  */
 function impactSeverity_(row) {
-  if (row.takeover === 'total') return 'yes';
-  if (row.serviceStop === 'はい') return 'yes';
-
+  // ベクターが読めればそれが答え。**AI の出力より先に見る。**
+  // ベンダーが公開した構造化データより、記述文から推測した値を優先する理由が無い。
+  // 以前は takeover/serviceStop（AI の出力）を先に見ていたので、ベクターが
+  // C:N/I:N/A:L（軽微）でも AI が total と返せば「対応検討」になっていた。
+  // 「条件4はベクターで判定する」という決めと矛盾していた。
   const p = parseCvssCia_(row.vector);
   if (p) {
     if (p.I === 'H' || p.A === 'H') return 'yes';
@@ -3329,9 +3334,14 @@ function impactSeverity_(row) {
     return 'no';
   }
 
-  // ベクターが読めない行の保険。ベンダーが平文で書く「remote code execution」と
-  // CWE 語彙の「improper neutralization of special elements」は同じことを指すので
-  // 両方を見る。当てられなければ「無い」ではなく「分からない」を返す。
+  // ここから下はベクターが読めないときだけ。CVSS v4（VC:H 形式）や、
+  // CSAF が取れず RSS だけで作ったフォールバック行がこの経路に来る。
+  if (row.takeover === 'total') return 'yes';
+  if (row.serviceStop === 'はい') return 'yes';
+
+  // ベンダーが平文で書く「remote code execution」と CWE 語彙の
+  // 「improper neutralization of special elements」は同じことを指すので両方を見る。
+  // 当てられなければ「無い」ではなく「分からない」を返す。
   const text = [row.impact, row.title, row.summary].join(' ').toLowerCase();
   if (/remote code|code execution|\brce\b|arbitrary code|command injection|denial of service|\bdos\b/.test(text) ||
       /improper access control|neutralization of special elements|argument injection|bounds of a memory buffer|buffer overflow|out-of-bounds/.test(text)) {
