@@ -67,18 +67,23 @@ const AI_PROVIDER = 'gemini';
 /**
  * Gemini API のモデル ID。1日上限はモデル別に別枠。
  *
- * **モデル ID が正しいかは実行して確かめること**（`testAi()`）。ここを間違えても
- * 下のフォールバックで 1 つ前の世代へ退避するので AI 出力は全滅しないが、
- * ログに「モデルが見つからない」が出続ける。
+ * 2026-09-06 に ai.google.dev/gemini-api/docs/models で実在を確認した安定版。
+ * **モデル ID を変えるときは必ず同ページで確かめること。**推測で置かない。
  */
 const GEMINI_MODEL = 'gemini-3.8-flash';
 /**
  * 上のモデルが使えないときに順に試す。退避する条件は 2 つ（callGemini_ 参照）。
- *   - 無料枠（1日20回程度）を使い切った
+ *   - 無料枠（1日20回程度・実測）を使い切った
  *   - モデル ID が無効／提供終了になった
- * 新しい世代へ上げたら、1 つ前をここの先頭に残しておくこと。
+ *
+ * **1日上限はモデルごとに別勘定なので、段を増やすとその分だけ粘れる。**
+ * いずれも 2026-09-06 時点の安定版（同ページで確認）。新しい世代へ上げたときは
+ * 1 つ前を先頭に残す。無料枠の実際の回数は AI Studio のレート制限ページ
+ * （aistudio.google.com/rate-limit・要ログイン）でしか見られず、公開文書には無い。
  */
-const GEMINI_MODEL_FALLBACKS = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
+const GEMINI_MODEL_FALLBACKS = [
+  'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash'
+];
 /**
  * Claude のモデル ID。判定はコードが行い、AI は日本語生成だけなので Haiku で足りる。
  * 呼び出しには ANTHROPIC_API_KEY（スクリプト プロパティ）が要る。
