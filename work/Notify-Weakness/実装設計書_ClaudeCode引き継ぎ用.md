@@ -603,12 +603,28 @@ GAS ファイル 2 枚。Apps Script は全ファイルでグローバルスコ�
 
 | ファイル | 行数 | 関数 | 中身 |
 |---|---|---|---|
-| `fortinet_psirt_watcher_v7.gs` | 5,891 | 222 | 本体 |
-| `fortinet_psirt_watcher_v7_tests.gs` | 645 | 23 | 動作確認用 |
+| `fortinet_psirt_watcher_v7.gs` | 5,907 | 222 | 本体 |
+| `fortinet_psirt_watcher_v7_tests.gs` | 678 | 24 | 動作確認用 |
 
-**確認用ファイルはトップレベルで `const` / `let` を宣言しない。**宣言すると評価順に
-依存し、GAS のファイルの並び順で壊れる。宣言が無ければ並び順は関係ない
-（両方の順で実行して確認済み）。
+**確認用ファイルから参照する定数は、本体側で `const` ではなく `var` で宣言する。**
+
+Apps Script は全ファイルをグローバルスコープで実行するが、**別ファイルのトップレベル
+`const` は参照できないことがある**（2026-09-06 実測: `test.gs` の `testAi` から
+`V_INVEST` が `ReferenceError`）。関数と `var` はファイルをまたいで確実に共有される。
+
+対象は 13 個（`AI_PROVIDER` / `V_ACT` / `V_INVEST` / `V_NONE` / `VENDOR_FORTINET` /
+`VENDOR_CISCO` / `KEV_YES` / `KEV_NO` / `SLACK_TARGETS` / `SSL_VPN_ENABLED` /
+`CHECK_STEPS_FORTINET` / `CHECK_STEPS_NO_CSAF` / `CHECK_STEPS_CISCO_DEFAULT`）。
+確認用から新しい定数を参照したくなったら、その宣言も `var` へ変えて
+`testSharedConstants()` の一覧に足す。**`testSharedConstants()` を他のテストより先に
+実行する**。ここが通らない状態で他を動かしても ReferenceError で落ちるだけで原因が読めない。
+
+確認用ファイル自身はトップレベルで `const` / `let` を宣言しない（同じ理由で、
+本体から見えないものを作らないため）。
+
+**ローカルの node で 2 ファイルを連結して検証しても、この問題は再現しない。**
+連結すると 1 つのスコープになるので `const` が共有される。GAS のファイル分離は
+再現できないので、**分離が絡む変更は実機で確かめること。**
 
 分けた理由は本体を短くすること以上に**貼り替えの回数を減らすこと**。デプロイは
 GAS エディタへの手貼りで、確認用の関数はほとんど変わらない。分けておけば

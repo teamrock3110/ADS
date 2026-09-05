@@ -1,10 +1,17 @@
 /**
  * 脆弱性ウォッチャー v7 — 動作確認用の関数だけを集めたファイル。
  *
- * 本体（fortinet_psirt_watcher_v7.gs）とは Apps Script のグローバルスコープを
- * 共有するので、本体の関数も定数もそのまま呼べる。ファイルの並び順は関係ない
- * （このファイルはトップレベルで const/let を宣言しない。宣言すると評価順に
- * 依存するようになり、並び順で壊れる）。
+ * 本体（fortinet_psirt_watcher_v7.gs）とはグローバルスコープを共有するので、
+ * **本体の関数はそのまま呼べる。ただし定数はそうとは限らない。**
+ *
+ * 別ファイルのトップレベル const は参照できないことがある（2026-09-06 実測:
+ * testAi から V_INVEST が ReferenceError）。**このファイルから参照する定数は
+ * 本体側で var で宣言すること。**関数と var はファイルをまたいで確実に共有される。
+ * 新しい定数を使いたくなったら本体の宣言を var へ変え、下の
+ * testSharedConstants() の一覧にも足す。
+ *
+ * このファイル自身はトップレベルで const/let を宣言しない（同じ理由で、
+ * 本体から見えないものを作らないため）。
  *
  * ここに置くもの: ログを見て確かめるための関数。判定や取得の本体は置かない。
  * ここに置かないもの: メニューから呼ばれる sendSlackTest_ とその配下、および
@@ -642,4 +649,30 @@ function testJpcertAlerts() {
   });
   Logger.log('---');
   Logger.log('自社ベンダー該当: ' + hit + ' / ' + alerts.length + ' 件');
+}
+
+/**
+ * このファイルが参照している本体の定数が、実際に見えるかを確かめる。
+ *
+ * **他のテストより先に実行すること。**ここが通らない状態で他を動かすと
+ * ReferenceError で落ちるだけで、原因が分からない。
+ *
+ * globalThis に載っているかで見る。var で宣言された値だけが載るので、
+ * 本体側が const のままなら「見えない」と出る。これがこの検査の目的。
+ */
+function testSharedConstants() {
+  const names = [
+    'AI_PROVIDER', 'V_ACT', 'V_INVEST', 'V_NONE',
+    'VENDOR_FORTINET', 'VENDOR_CISCO', 'KEV_YES', 'KEV_NO',
+    'SLACK_TARGETS', 'SSL_VPN_ENABLED',
+    'CHECK_STEPS_FORTINET', 'CHECK_STEPS_NO_CSAF', 'CHECK_STEPS_CISCO_DEFAULT'
+  ];
+  let ng = 0;
+  names.forEach(function (n) {
+    const ok = typeof globalThis[n] !== 'undefined';
+    if (!ok) ng++;
+    Logger.log((ok ? 'OK  ' : 'NG  ') + n + (ok ? '' : ' … 本体の宣言を const から var に変える'));
+  });
+  Logger.log('本体の定数が見えるか: ' + (names.length - ng) + ' / ' + names.length + ' 件');
+  if (ng) Logger.log('※ 1 件でも NG なら、他のテストは ReferenceError で落ちます。');
 }

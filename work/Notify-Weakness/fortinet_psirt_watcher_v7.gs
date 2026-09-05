@@ -61,8 +61,24 @@
 // 設定
 // ============================================================
 
+/*
+ * ここから下、確認用ファイル（fortinet_psirt_watcher_v7_tests.gs）から参照する定数は
+ * const ではなく **var** で宣言する。
+ *
+ * Apps Script は全ファイルをグローバルスコープで実行するが、別ファイルのトップレベル
+ * const は参照できないことがある（2026-09-06 実測: test.gs の testAi から V_INVEST が
+ * ReferenceError）。var と関数はファイルをまたいで確実に共有される。
+ *
+ * 対象: AI_PROVIDER / V_ACT / V_INVEST / V_NONE / VENDOR_FORTINET / VENDOR_CISCO /
+ *       KEV_YES / KEV_NO / SLACK_TARGETS / SSL_VPN_ENABLED /
+ *       CHECK_STEPS_FORTINET / CHECK_STEPS_NO_CSAF / CHECK_STEPS_CISCO_DEFAULT
+ *
+ * 確認用ファイルから新しい定数を参照したくなったら、その宣言も var に変えること。
+ * 値を書き換えないという約束は var でも変わらない（機械が守らないだけ）。
+ */
+
 /** 'gemini' か 'claude' */
-const AI_PROVIDER = 'gemini';
+var AI_PROVIDER = 'gemini';
 
 /**
  * Gemini API のモデル ID。1日上限はモデル別に別枠。
@@ -108,8 +124,8 @@ const CISCO_CSAF_RSS_URL = 'https://sec.cloudapps.cisco.com/security/center/csaf
 const CISCO_RSS_URL = 'https://sec.cloudapps.cisco.com/security/center/psirtrss20/CiscoSecurityAdvisory.xml';
 const CSAF_BASE = 'https://filestore.fortinet.com/fortiguard/psirt/csaf_';
 
-const VENDOR_FORTINET = 'Fortinet';
-const VENDOR_CISCO = 'Cisco';
+var VENDOR_FORTINET = 'Fortinet';
+var VENDOR_CISCO = 'Cisco';
 
 const SHEET_LEDGER = '台帳';
 const SHEET_ASSET = '資産';
@@ -167,7 +183,7 @@ const SLACK_MAX_ITEMS = 15;
  * 改名した .gs を貼った瞬間、プロパティを直すまで日次通知が黙って止まり、
  * それは「該当が無くて静かな日」と見分けが付かない。
  */
-const SLACK_TARGETS = {
+var SLACK_TARGETS = {
   personal: { prop: 'SLACK_WEBHOOK_URL',      label: '個人検証' },
   team:     { prop: 'SLACK_WEBHOOK_URL_TEAM', label: '会社テスト' }
 };
@@ -195,12 +211,12 @@ const AI_CHUNK_SIZE = 10;
  * 「影響が partial だから待てる」のような結論をツールが勝手に出さないこと。
  * 設定を見ていない以上、確認前の正しい状態は V_INVEST である。
  */
-const V_ACT = 'あり（対応検討）';
-const V_INVEST = 'あり（影響調査）';
-const V_NONE = 'なし';
+var V_ACT = 'あり（対応検討）';
+var V_INVEST = 'あり（影響調査）';
+var V_NONE = 'なし';
 
 /** SSL-VPN を外面から除外する（無効化済みの場合は false） */
-const SSL_VPN_ENABLED = false;
+var SSL_VPN_ENABLED = false;
 
 /**
  * JPCERT/CC の RDF。注意喚起（/at/）だけ拾い、Weekly Report（/wr/）は捨てる。
@@ -235,8 +251,8 @@ const FORTINET_AI_FEATURES = [
 ];
 
 /** CISA KEV 掲載の有無（台帳表示用） */
-const KEV_YES = 'あり';
-const KEV_NO = 'なし';
+var KEV_YES = 'あり';
+var KEV_NO = 'なし';
 
 /**
  * 台帳 13 列。
@@ -280,7 +296,7 @@ const LEDGER_HEADERS = [
  * 機能別の確認手順（行動可能）。AI 出力が不合格のときこれで差し替える。
  * 書式: 確認ポイント / コマンド / 判断 の3行。
  */
-const CHECK_STEPS_FORTINET = {
+var CHECK_STEPS_FORTINET = {
   '管理GUI': [
     '確認ポイント：管理用インターフェースで HTTP/HTTPS 管理が許可されているか',
     'コマンド：show system interface',
@@ -399,7 +415,7 @@ const CHECK_STEPS_CISCO = [
   }
 ];
 
-const CHECK_STEPS_CISCO_DEFAULT = [
+var CHECK_STEPS_CISCO_DEFAULT = [
   '確認ポイント：版は対象済み（追加の版確認は不要）',
   'アクション：アドバイザリで更新先を確認し、定期更新枠に載せる',
   '判断：臨時対応は不要。次回メンテで更新すれば足りる'
@@ -3055,7 +3071,7 @@ function lookupCheckSteps_(row) {
  * 機器固有のコマンドを書かない。**まずアドバイザリ本体を開くのが最初の一歩**で、
  * 製品が分からないまま打つコマンドには意味がない。
  */
-const CHECK_STEPS_NO_CSAF = [
+var CHECK_STEPS_NO_CSAF = [
   '確認ポイント：アドバイザリ本体を開き、影響製品と影響範囲を確認する',
   'アクション：自社の保有製品に当たるかを判断し、当たるなら版を突き合わせる',
   '判断：当たらなければ対象外。当たるなら影響機能を特定して確認コマンドへ進む'
