@@ -64,10 +64,21 @@
 /** 'gemini' か 'claude' */
 const AI_PROVIDER = 'gemini';
 
-/** Gemini API のモデル ID。3.7 Flash は AI Studio 無料枠対象（2026-08 時点）。1日上限はモデル別に別枠 */
-const GEMINI_MODEL = 'gemini-3.7-flash';
-/** 3.7 の無料枠（1日20回程度）を使い切ったら、枠が残っているモデルへ順に退避する */
-const GEMINI_MODEL_FALLBACKS = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+/**
+ * Gemini API のモデル ID。1日上限はモデル別に別枠。
+ *
+ * **モデル ID が正しいかは実行して確かめること**（`testAi()`）。ここを間違えても
+ * 下のフォールバックで 1 つ前の世代へ退避するので AI 出力は全滅しないが、
+ * ログに「モデルが見つからない」が出続ける。
+ */
+const GEMINI_MODEL = 'gemini-3.8-flash';
+/**
+ * 上のモデルが使えないときに順に試す。退避する条件は 2 つ（callGemini_ 参照）。
+ *   - 無料枠（1日20回程度）を使い切った
+ *   - モデル ID が無効／提供終了になった
+ * 新しい世代へ上げたら、1 つ前をここの先頭に残しておくこと。
+ */
+const GEMINI_MODEL_FALLBACKS = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
 /**
  * Claude のモデル ID。判定はコードが行い、AI は日本語生成だけなので Haiku で足りる。
  * 呼び出しには ANTHROPIC_API_KEY（スクリプト プロパティ）が要る。
@@ -4056,15 +4067,26 @@ function callGemini_(prompt) {
       return text;
     } catch (e) {
       lastErr = e;
-      if (!isGeminiDailyQuotaError_(e) || i === models.length - 1) throw e;
-      Logger.log(model + ' の無料枠（1日上限）を使い切ったため ' + models[i + 1] + ' に切り替えます');
+      if (!shouldFallbackGeminiModel_(e) || i === models.length - 1) throw e;
+      Logger.log(model + ' が使えないため ' + models[i + 1] + ' に切り替えます: ' + e);
     }
   }
   throw lastErr;
 }
 
-function isGeminiDailyQuotaError_(err) {
-  return /PerDay/i.test(String(err && err.message ? err.message : err));
+/**
+ * 次のモデルへ退避すべきエラーか。
+ *
+ * 1. 日次上限（本文に PerDay）。503 は過負荷で別物なので退避しない
+ *    （待って再試行する方が正しく、退避すると枠の残る世代を無駄に消費する）
+ * 2. **モデル ID が無効・提供終了（404 / NOT_FOUND）。**モデルは世代交代で消える。
+ *    ID を書き換えたときの打ち間違いもここに来る。退避しないと AI 出力が全滅し、
+ *    台帳の 3 列がコードのフォールバック文言だけになる
+ */
+function shouldFallbackGeminiModel_(err) {
+  const msg = String(err && err.message ? err.message : err);
+  if (/PerDay/i.test(msg)) return true;
+  return /HTTP 404/.test(msg) || /NOT_FOUND/i.test(msg);
 }
 
 function callGeminiModel_(model, prompt) {
