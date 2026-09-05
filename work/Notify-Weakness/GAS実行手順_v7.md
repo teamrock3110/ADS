@@ -118,6 +118,13 @@ Key/Secret 自体は有効（手元 `curl` で確認済み）だが、`UrlFetchA
 | 12 | `testExternalSurface_()` | 外面判定が期待どおり |
 | 13 | `testSlackBlocks()` | 対応検討／影響調査／AI未生成のカード JSON がログに出る（Webhook には送らない） |
 | 14 | `testProps()` | 2つの Webhook が `OK`、`SLACK_TARGET` の解決先が出る |
+| 15 | `testGuessFortinetFeature()` | `影響機能の復元: 8 / 8 件が期待どおり` |
+| 16 | `countFeatures()` | 台帳の影響機能の分布。最後の行「機能を特定できていない行」を見る |
+
+> **`testSharedConstants()` を最初に実行してください。**`13 / 13 件` と出れば、
+> 確認用ファイルから本体の定数が見えています。1 件でも `NG` なら他のテストは
+> `ReferenceError` で落ちるだけで原因が読めません。その場合は本体側の宣言を
+> `const` から `var` に変えてください（理由は実装設計書 §5）。
 
 **ネットワークが必要**
 
