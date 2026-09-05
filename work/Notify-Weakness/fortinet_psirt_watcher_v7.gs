@@ -3033,8 +3033,30 @@ function lookupCheckSteps_(row) {
 }
 
 /** 確認方法が行動可能か検証し、不合格なら機能別テーブルで差し替える */
+/**
+ * CSAF が取れず製品を特定できなかった行の確認方法。
+ *
+ * 機器固有のコマンドを書かない。**まずアドバイザリ本体を開くのが最初の一歩**で、
+ * 製品が分からないまま打つコマンドには意味がない。
+ */
+const CHECK_STEPS_NO_CSAF = [
+  '確認ポイント：アドバイザリ本体を開き、影響製品と影響範囲を確認する',
+  'アクション：自社の保有製品に当たるかを判断し、当たるなら版を突き合わせる',
+  '判断：当たらなければ対象外。当たるなら影響機能を特定して確認コマンドへ進む'
+].join('\n');
+
 function normalizeHowToCheck_(row) {
   const raw = String(row.howToCheck || '').trim();
+
+  // 製品を特定できていない行に、機器固有のコマンドを出させない。
+  //
+  // 実例（2026-09-06 の実運用）: CSAF が取れなかった FG-IR-22-059
+  // （OpenSSL ライブラリの脆弱性）に、AI が「show vpn ssl settings」と書いた。
+  // 判定根拠は「製品も版も特定できない」なのに、確認方法は特定できている前提に
+  // なっていて矛盾する。打っても意味がないうえ、出力が無いと「影響なし」と
+  // 誤解される。AI は RSS の説明文から推測できてしまうので、ここで止める。
+  if (row.noCsaf || !String(row.product || '').trim()) return CHECK_STEPS_NO_CSAF;
+
   // 版該否は decideNotification_ 済み。対象行に「show version」を出さない。
   if (row.osStatus === '対象' && isVersionRecheckHowTo_(raw)) {
     return lookupCheckSteps_(row);
@@ -3803,10 +3825,17 @@ function migrateTarget_(row, branchLabel) {
  *   - どちらも無いとき（GAS では openVuln 不可）は「更新先はアドバイザリで確認」
  *   - 「回避策なし」は CSAF Workarounds の公式文 "There are no workarounds..." の訳
  */
+/**
+ * 台帳と Slack に出す「公式推奨対応」。**空文字を返さないこと。**
+ *
+ * 以前は Fortinet で修正版が取れないと空を返していた。台帳の列が空欄になると
+ * 入力漏れと区別が付かず（§4.1）、しかも Slack 側は slackActionLine_ が
+ * 「アドバイザリを確認」を補っていたので、同じ行が台帳と Slack で違って見えていた。
+ */
 function formatOfficialAction_(row) {
   if (row.vendor !== VENDOR_CISCO) {
     const fix = jpFix_(row);
-    return fix ? jpFixEnglishFallback_(fix) : '';
+    return fix ? jpFixEnglishFallback_(fix) : '更新先はアドバイザリで確認';
   }
 
   const lines = [];
@@ -5601,8 +5630,9 @@ function slackUpdatedLabel_(r) {
 }
 
 function slackActionLine_(r) {
+  // formatOfficialAction_ は空を返さないので、ここで補わない。
+  // 補うと台帳（補わない側）と Slack で文言が食い違う。
   const first = String(formatOfficialAction_(r) || '').split(/\n/)[0].trim();
-  if (!first) return 'アドバイザリを確認';
   return first.length > 40 ? first.slice(0, 40) + '…' : first;
 }
 

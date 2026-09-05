@@ -372,19 +372,25 @@ function testCheckSteps() {
   let total = 0;
   Object.keys(CHECK_STEPS_FORTINET).forEach(function (f) {
     total++;
+    // product を入れる。本番の行は必ず製品を持っており、持たないのは CSAF が
+    // 取れなかったフォールバック行だけ（そちらは下で別に検証する）。
     const row = {
-      vendor: VENDOR_FORTINET, feature: f, osStatus: '対象', verdict: V_NONE,
+      vendor: VENDOR_FORTINET, product: 'FortiOS', feature: f,
+      osStatus: '対象', verdict: V_NONE,
       howToCheck: 'アドバイザリの Affected Products を確認'
     };
     const got = normalizeHowToCheck_(row);
-    const ok = isActionableHowTo_(got) && !isVersionRecheckHowTo_(got);
+    // その機能の手順が出ていることまで見る。以前は「行動可能か」しか見ておらず、
+    // 別の定型に差し替わっても気づけなかった。
+    const ok = isActionableHowTo_(got) && !isVersionRecheckHowTo_(got) &&
+               got === CHECK_STEPS_FORTINET[f];
     if (ok) pass++;
     Logger.log((ok ? 'OK  ' : 'NG  ') + 'Fortinet ' + f);
   });
   ['WebUI', 'BEEP', 'XMCP Server', 'SD-WAN'].forEach(function (f) {
     total++;
     const row = {
-      vendor: VENDOR_CISCO, feature: f, title: f, osStatus: '対象',
+      vendor: VENDOR_CISCO, product: 'IOS-XE', feature: f, title: f, osStatus: '対象',
       verdict: V_NONE, howToCheck: ''
     };
     const got = normalizeHowToCheck_(row);
@@ -395,13 +401,37 @@ function testCheckSteps() {
 
   total++;
   const noneRow = {
-    vendor: VENDOR_CISCO, feature: 'IOS XE 基盤', title: 'Security Hardening',
-    osStatus: '対象', verdict: V_NONE, howToCheck: ''
+    vendor: VENDOR_CISCO, product: 'IOS-XE', feature: 'IOS XE 基盤',
+    title: 'Security Hardening', osStatus: '対象', verdict: V_NONE, howToCheck: ''
   };
   const noneGot = normalizeHowToCheck_(noneRow);
   const noneOk = isRegularUpdateHowTo_(noneGot);
   if (noneOk) pass++;
   Logger.log((noneOk ? 'OK  ' : 'NG  ') + 'なし → 定期更新定型');
+
+  // 2026-09-06: 製品を特定できていない行に機器固有のコマンドを出させない。
+  // 実運用で FG-IR-22-059（CSAF 取得失敗・OpenSSL）に AI が
+  // 「show vpn ssl settings」を書いた。判定根拠は「製品も版も特定できない」
+  // なのに確認方法は特定できている前提になっていて矛盾していた。
+  total++;
+  const noCsafRow = {
+    vendor: VENDOR_FORTINET, product: '', noCsaf: true, feature: 'その他',
+    title: 'Vulnerability in OpenSSL library', osStatus: '不明', verdict: V_INVEST,
+    howToCheck: '確認ポイント：SSL終端処理の利用有無\nアクション：show vpn ssl settings\n判断：有効なら対応が必要'
+  };
+  const noCsafGot = normalizeHowToCheck_(noCsafRow);
+  const noCsafOk = noCsafGot === CHECK_STEPS_NO_CSAF && !/show\s/.test(noCsafGot);
+  if (noCsafOk) pass++;
+  Logger.log((noCsafOk ? 'OK  ' : 'NG  ') + '製品不明 → 機器固有コマンドを出さない');
+
+  // 公式推奨対応は空を返さない。空欄だと入力漏れと区別が付かず、
+  // Slack 側だけ補っていたので同じ行が台帳と Slack で違って見えていた。
+  total++;
+  const noFix = { vendor: VENDOR_FORTINET, product: '', fixesRaw: '', fixVersion: '' };
+  const act = formatOfficialAction_(noFix);
+  const actOk = !!act && act === slackActionLine_(noFix);
+  if (actOk) pass++;
+  Logger.log((actOk ? 'OK  ' : 'NG  ') + '修正版なし → 台帳と Slack が同じ文言（' + act + '）');
 
   total++;
   const invRow = {
