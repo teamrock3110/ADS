@@ -652,6 +652,36 @@ function testJpcertAlerts() {
 }
 
 /**
+ * AI が影響機能を外したときに、コード側の保険で復元できるかを見る。
+ *
+ * AI は同じアドバイザリでも日によって違う答えを返す。復元できないと
+ * 「その他 → 影響機能を特定できないため」に落ち、確認の手がかりが消える。
+ * ここは **AI の出力を空にして**、題名だけから決まることを確かめる。
+ */
+function testGuessFortinetFeature() {
+  const cases = [
+    // 2026-09-06 実測。AI が 管理GUI を返さなかった日にここで落ちた
+    ['UI DoS attack', '管理GUI'],
+    ['FortiOS Web UI cross-site scripting', '管理GUI'],
+    ['Management interface authentication bypass', '管理GUI'],
+    ['SSL-VPN Reflected XSS', 'SSL-VPN'],
+    ['Header injection in Web Filter warning page', 'Webフィルタ'],
+    ['Buffer overread in authd and wad daemon', 'データプレーン'],
+    ['IPsec VPN denial of service', 'IPsec VPN'],
+    ['Header injection in captive portal authentication form', 'その他']
+  ];
+  let pass = 0;
+  cases.forEach(function (c) {
+    // feature を空にして、題名だけで決まるかを見る
+    const got = guessFortinetFeature_({ feature: '', title: c[0], summary: '', impact: '' });
+    const ok = got === c[1];
+    if (ok) pass++;
+    Logger.log((ok ? 'OK  ' : 'NG  ') + c[0] + ' → ' + got + '（期待 ' + c[1] + '）');
+  });
+  Logger.log('影響機能の復元: ' + pass + ' / ' + cases.length + ' 件が期待どおり');
+}
+
+/**
  * このファイルが参照している本体の定数が、実際に見えるかを確かめる。
  *
  * **他のテストより先に実行すること。**ここが通らない状態で他を動かすと

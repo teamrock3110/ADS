@@ -2884,7 +2884,12 @@ function guessFortinetFeature_(row) {
     [/\bips\b|intrusion\s*prevention/, 'IPSエンジン'],
     [/anti[- ]?virus|\bav\b|fortiguard/, 'アンチウイルスエンジン'],
     [/\bssh\b/, 'SSH'],
-    [/web.?ui|fortigate ui|\bgui\b|management\s*(interface|console)|admin\s*portal/, '管理GUI'],
+    // 単独の UI も拾う。Fortinet は管理画面の脆弱性を「UI DoS attack」のように
+    // 題名へ書くことがあり、web.?ui にも \bgui\b にも当たらない。
+    // 2026-09-06 実測: AI が 管理GUI を返した日は分類できたのに、返さなかった日は
+    // ここで復元できず「その他 → 影響機能を特定できないため」に落ちた。
+    // **同じアドバイザリの分類が日によって変わる**ので、保険側で決定的にする。
+    [/web.?ui|fortigate ui|\bgui\b|\bui\b|management\s*(interface|console)|admin\s*portal/, '管理GUI'],
     [/resource\s*exhaust/, '管理GUI'],
     [/data\s*plane|dataplane|\bwad\b|kernel|buffer\s*over/, 'データプレーン'],
     [/captive\s*portal/, 'その他']
