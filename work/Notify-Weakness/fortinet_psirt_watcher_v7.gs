@@ -207,17 +207,8 @@ var KEV_YES = 'あり';
 var KEV_NO = 'なし';
 
 /**
- * 台帳 13 列。
+ * 台帳の列。**14 列**で、順序は下の配列そのもの（README §2.1）。
  *
- * A 固定6列: 自社影響 → 製品 → CVE → 脆弱性名 → CVSS → 最終更新日
- * B 判定表示: 公式推奨対応 → KEV → 影響機能 → 判定根拠
- * C 人の確認: 確認方法 → ユーザ影響（AI）
- * D 参照: アドバイザリ
- *
- * OS該当は列に出さず、判定根拠の「OS=…」に含める。
- * 外面・掌握・停止は判定の内部入力のみ。
- */
-/*
  * 列は確認する人の思考順に並べる。
  *   いつ検知した何か → どれくらい危ないか → どんな影響か → なぜその判定か
  *   → 何を確認しどう直すか → 公式で裏を取る
@@ -1082,8 +1073,10 @@ function runFortinet_() {
   }
 
   const allItems = fetchRssItems_();
-  const known0 = getKnownState_(VENDOR_FORTINET);
-  warnIfFeedOverflowed_(allItems, known0.dates, function (it) { return it.ir; });
+  // 処理済みシートはこの実行の中で書き換わらない（間にあるのは外部取得とメールだけ）ので、
+  // 1 実行につき 1 回だけ読む。
+  const known = getKnownState_(VENDOR_FORTINET);
+  warnIfFeedOverflowed_(allItems, known.dates, function (it) { return it.ir; });
 
   // RSS の日付では CSAF の改訂を判断できないため、毎回すべて取得する。
   // 実測: RSS の pubDate / description の "Revised on" と CSAF の current_release_date は
@@ -1099,41 +1092,25 @@ function runFortinet_() {
   // 一度も処理できていない件の取得に失敗したときだけメールする。
   // 記録済みの件の一時的な失敗は、翌日取り直せば済むので通知しない。
   const unseenFailures = fetched.filter(function (f) {
-    return f.error && !known0.dates[f.item.ir];
+    return f.error && !known.dates[f.item.ir];
   });
   if (unseenFailures.length) notifyFetchFailures_(VENDOR_FORTINET, unseenFailures);
 
   let allLedgerRows = [];
-  let batchNum = 0;
   let processedCount = 0;
   const labelTotals = {};
-  // このバッチで扱い終えた ID。取得に失敗した件は処理済みに記録しないため、
-  // 記録の有無だけでループを回すと同じ件を選び続けてしまう。
-  const handled = {};
 
-  // 未処理がなくなるまで同一実行内で繰り返す（日次1回で全件処理）
-  while (true) {
-    const known = getKnownState_(VENDOR_FORTINET);
-    const pending = fetched.filter(function (f) {
-      if (handled[f.item.ir]) return false;
-      return needsAdvisoryProcessing_(f.item.ir, f.updatedAt, f.version, known, !!f.error);
-    });
+  // RSS は 50 件しか持たず MAX_ADVISORIES_PER_RUN も 50 なので、対象は必ず 1 回で捌ける。
+  // 以前はここを while で回してバッチ分割していたが、2 周目に入る条件が構造上存在しなかった。
+  const todo = fetched.filter(function (f) {
+    return needsAdvisoryProcessing_(f.item.ir, f.updatedAt, f.version, known, !!f.error);
+  });
 
-    if (!pending.length) {
-      if (!batchNum) Logger.log('Fortinet: 新着・改訂ともになし。');
-      break;
-    }
+  if (!todo.length) Logger.log('Fortinet: 新着・改訂ともになし。');
 
-    const todo = pending.slice(0, MAX_ADVISORIES_PER_RUN);
-    todo.forEach(function (f) { handled[f.item.ir] = true; });
+  if (todo.length) {
     processedCount += todo.length;
-    batchNum++;
-    if (pending.length > todo.length) {
-      Logger.log('Fortinet: 未処理 ' + pending.length + ' 件 → このバッチ ' + todo.length +
-                 ' 件（残りは同一実行内で続行）');
-    } else {
-      Logger.log('Fortinet: 処理対象 ' + todo.length + ' 件');
-    }
+    Logger.log('Fortinet: 処理対象 ' + todo.length + ' 件');
 
     const revised = todo.filter(function (f) { return known.dates[f.item.ir]; });
     if (revised.length) {
@@ -1164,7 +1141,7 @@ function runFortinet_() {
     const counts = countVerdicts_(rows);
     Logger.log('全 ' + rows.length + ' 行: ' + V_ACT + ' ' + counts[V_ACT] +
                ' / ' + V_INVEST + ' ' + counts[V_INVEST] + ' / ' + V_NONE + ' ' + counts[V_NONE]);
-    if (batchNum === 1) logUnownedProducts_(rows);
+    logUnownedProducts_(rows);
 
     // 取得に失敗した件も記録する（Cisco と同じ方針）。
     // 以前は記録せず翌日やり直していたが、それは失敗が台帳に出ず誰も気づけなかったため。
@@ -1196,8 +1173,6 @@ function runFortinet_() {
     mergeCounts_(labelTotals, writeState_(VENDOR_FORTINET, recordable, judgeRows, assets));
 
     allLedgerRows = allLedgerRows.concat(ledgerRows);
-
-    if (todo.length >= pending.length) break;
   }
 
   if (allLedgerRows.length) sortLedger_();
@@ -1322,10 +1297,10 @@ function runCisco_() {
   recoverCiscoIfLedgerEmpty_();
 
   const allItems = fetchCiscoCsafRssItems_();
-  const known0 = getKnownState_(VENDOR_CISCO);
-  warnIfFeedOverflowed_(allItems, known0.dates, function (it) { return it.id; });
+  const known = getKnownState_(VENDOR_CISCO);
+  warnIfFeedOverflowed_(allItems, known.dates, function (it) { return it.id; });
 
-  const candidates = selectRssCsafCandidates_(allItems, known0, function (it) { return it.id; },
+  const candidates = selectRssCsafCandidates_(allItems, known, function (it) { return it.id; },
     function (it) { return it.pubDate; });
   Logger.log('Cisco CSAF RSS: 全 ' + allItems.length + ' 件 → CSAF 取得 ' + candidates.length +
              ' 件（残りは前回から更新なし。Cisco はフィードの日付が CSAF と一致するため差分のみ取得）');
@@ -1333,31 +1308,24 @@ function runCisco_() {
   const fetched = fetchCiscoCsafBatch_(candidates);
 
   let allLedgerRows = [];
-  let batchNum = 0;
   let processedCount = 0;
   const labelTotals = {};
 
-  while (true) {
-    const known = getKnownState_(VENDOR_CISCO);
-    const pending = fetched.filter(function (f) {
-      // hasError を渡す。渡さないと、記録済みなのに CSAF が取れなかった件で
-      // 版の比較（記録は「未取得」／取得結果は空）が永久に一致せず、
-      // 毎日その件を作り直して Slack にも出し続ける。
-      // いまは selectRssCsafCandidates_ が手前で弾くので表面化しないが、
-      // それは偶然で、この関数自身が同じ答えを返せなければ揃っていない。
-      return needsAdvisoryProcessing_(f.item.id, f.updatedAt, f.version, known, !!f.error);
-    });
+  // 対象が必ず 1 回で捌ける理由は runFortinet_ の同じ箇所。
+  const todo = fetched.filter(function (f) {
+    // hasError を渡す。渡さないと、記録済みなのに CSAF が取れなかった件で
+    // 版の比較（記録は「未取得」／取得結果は空）が永久に一致せず、
+    // 毎日その件を作り直して Slack にも出し続ける。
+    // いまは selectRssCsafCandidates_ が手前で弾くので表面化しないが、
+    // それは偶然で、この関数自身が同じ答えを返せなければ揃っていない。
+    return needsAdvisoryProcessing_(f.item.id, f.updatedAt, f.version, known, !!f.error);
+  });
 
-    if (!pending.length) {
-      if (!batchNum) Logger.log('Cisco: 新着・改訂ともになし。');
-      break;
-    }
+  if (!todo.length) Logger.log('Cisco: 新着・改訂ともになし。');
 
-    const todo = pending.slice(0, MAX_ADVISORIES_PER_RUN);
+  if (todo.length) {
     processedCount += todo.length;
-    batchNum++;
-    Logger.log('Cisco 処理対象 ' + todo.length + ' 件' +
-               (pending.length > todo.length ? '（未処理 ' + pending.length + ' 件・続きあり）' : ''));
+    Logger.log('Cisco 処理対象 ' + todo.length + ' 件');
 
     // これから書く分は先に消す（理由は runFortinet_ の同じ箇所）。
     removeRowsFor_(VENDOR_CISCO, todo.map(function (f) { return f.item.id; }));
@@ -1393,9 +1361,7 @@ function runCisco_() {
     Logger.log('Cisco 全 ' + rows.length + ' 行: ' + V_ACT + ' ' + counts[V_ACT] +
                ' / ' + V_INVEST + ' ' + counts[V_INVEST] + ' / ' + V_NONE + ' ' + counts[V_NONE]);
 
-    // 取得に失敗した件も記録する。Fortinet は記録しない（＝翌日やり直す）が、
-    // Cisco は失敗時にフォールバック行を台帳へ出し Slack でも知らせるため、
-    // 記録しないと毎日同じ行を作り直すことになる。人に渡した時点で自動リトライは要らない。
+    // 取得に失敗した件も記録する（理由は runFortinet_ の同じ箇所。両ベンダー同じ方針）。
     // ただし版を空のままにすると selectRssCsafCandidates_ の「版が空なら再取得」に
     // 毎回引っかかり、取得できない件を永久に取り続ける。印を書いてループを止める。
     const recordable = todo.map(function (f) {
@@ -1416,8 +1382,6 @@ function runCisco_() {
     mergeCounts_(labelTotals, writeState_(VENDOR_CISCO, recordable, judgeRows, assets));
 
     allLedgerRows = allLedgerRows.concat(ledgerRows);
-
-    if (todo.length >= pending.length) break;
   }
 
   if (allLedgerRows.length) {
@@ -2132,7 +2096,6 @@ function fetchCsaf_(item) {
  * つまり取りこぼしたかどうかを自力では判断できない状態である。
  */
 function warnIfFeedOverflowed_(items, knownDates, getId) {
-  getId = getId || function (it) { return it.ir; };
   if (!Object.keys(knownDates).length) return;
 
   const overlap = items.filter(function (it) { return knownDates[getId(it)]; }).length;
@@ -2144,9 +2107,8 @@ function warnIfFeedOverflowed_(items, knownDates, getId) {
   } else if (overlap < 5) {
     Logger.log('注意: 前回との重なりが ' + overlap + ' 件しかありません（50 件中）。');
     Logger.log('  実行間隔が空きすぎています。取りこぼす前に実行頻度を上げてください。');
-  } else {
-    Logger.log('前回との重なり: ' + overlap + ' / ' + items.length + ' 件（連続性あり）');
   }
+  // 正常時は何も出さない。毎日 2 行出していたので警告が埋もれていた。
 }
 
 /** Date を 'yyyy-mm-dd' にする。既読判定の突合キーに使うため文字列で揃える。 */
@@ -3831,15 +3793,9 @@ function countVerdicts_(rows) {
 // AI による機能分類・確認方法（台帳表示列）
 // ============================================================
 
-function enrichWithAI_(rows) {
-  const targets = rows.filter(function (r) {
-    return r.needsVerdict || r.needsDisplayAi;
-  });
-  if (!targets.length) {
-    Logger.log('AI 対象の行がありません。');
-    return;
-  }
-
+function enrichWithAI_(targets) {
+  // 呼び出し元（fillLedgerDisplay_）が needsVerdict || needsDisplayAi で絞った
+  // 空でない配列だけを渡す。ここで同じ条件をもう一度書かない。
   let ok = 0;
 
   for (let i = 0; i < targets.length; i += AI_CHUNK_SIZE) {
