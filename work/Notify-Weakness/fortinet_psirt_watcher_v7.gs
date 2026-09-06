@@ -1,60 +1,21 @@
 /**
- * NW機器 脆弱性ウォッチャー for Google Apps Script  (v7 / マルチベンダー MVP)
+ * NW機器 脆弱性ウォッチャー for Google Apps Script（v7 / マルチベンダー）
  * ==================================================================
- * v6 からの変更点（詳細は 設計書_MVP_8h.md）:
+ * Fortinet / Cisco の脆弱性を日次で取得し、自社資産に当たる CVE だけを台帳へ書いて
+ * Slack へ 1 通で通知する。自社影響の判定はコード、LLM は日本語生成のみ（設計原則 §1.5）。
  *
- *   1. 資産シートを拡張（ベンダー・種別・機種・ツール対象）。
- *   2. 台帳 13 列（自社影響→製品→CVE→脆弱性名→…→アドバイザリ）。固定6列。
- *   3. Cisco PSIRT RSS → CSAF 版比較（資産シートの IOS-XE / 17.15.5 等で決め打ち判定）。
- *   4. main() = runFortinet_() + runCisco_()。Slack は「あり」2値のみ。
- *   5. 自社影響3値（あり（対応検討）/あり（影響調査）/なし）、社内ルールのゲート判定。
- *   6. Cisco 入口は CSAF RSS（csaf_20.xml）。通常 RSS は CSAF 失敗時の補助。
- *   7. Cisco 修正版の自動取得（openVuln）は GAS では使わない（id.cisco.com が UrlFetch を拒否）。
+ * 設計の根拠・シート構成・追わないと決めたものは `実装設計書_ClaudeCode引き継ぎ用.md`。
+ * 貼り替え・テスト・移行の手順は `GAS実行手順_v7.md`。判定ルールは `社内ルール案_OS更新基準.md`。
  *
- * 移行: migrateLedgerHeaders() → clearRunData() → main()
- *
- * ------------------------------------------------------------------
- * v5 からの変更点（v6、すべて実データ50件の検証にもとづく。詳細は設計書v3）:
- *
- *   1. 行の単位を「アドバイザリ1件」から「CVE × 対象製品 1件」に変更した。
- *      CSAF の vulnerabilities[] 要素がちょうどこの粒度で公開されているため、
- *      分割ロジックは不要で、v5 がやっていた「まとめる」処理をやめるだけでよい。
- *      これにより CVSS・深刻度・影響バージョン・修正版がどの CVE の
- *      どの製品のものか、セルを見ただけで確定する。
- *
- *   2. 通知判定をコードに戻した。v5 は AI にバージョン該非を判断させていたが、
- *      これは決定的な計算であり AI を使う理由がない。実測で 30 行中 20 行が
- *      「未判定」になっていた原因もここにある（AI 応答が落ちると判定ごと消える）。
- *      v6 は全行の通知判定をコードで確定させ、AI が落ちても判定は残る。
- *
- *   3. 自社利用バージョンを実際に数値比較するようにした。v5 の
- *      filterAffectedForAssets_() は製品名の前方一致だけで、バージョンを
- *      一切見ていなかった。つまり「自社該当バージョン」列は
- *      「自社が持っている製品の影響バージョン行」でしかなかった。
- *
- *   4. アドバイザリ HTML の取得をやめた。CSAF の URL は RSS のタイトルと
- *      FG-IR 番号から組み立てられる（実測 50/50 で成功）。
- *      取得先が filestore.fortinet.com だけになり、通信回数も半分になる。
- *
- *   5. 列構成を 17 列に整理した（レビュー指摘を反映）。
- *      優先度・CWE・CVSSベクター・取得日時などの根拠のない列や重複列を削除し、
- *      「利用有無の確認方法／確認コマンド」を追加した。
- *
- *   6. 未判定行の削除をやめた。v5 は判定できなかった行を消して再取得していたが、
- *      これは取得済みの事実まで捨てる。v6 は行を残し、AI 列が空の行だけを
- *      次回に埋め直す（backfillAiColumns_）。
- *
- * 列構成が変わるため、既存の台帳はデータ行を全削除してから使ってください。
- *   手順: migrateLedgerHeaders() → 2行目以降を全削除 → main()
- *
- * ------------------------------------------------------------------
  * スクリプト プロパティ:
- *   GEMINI_API_KEY / ANTHROPIC_API_KEY / SLACK_WEBHOOK_URL
+ *   GEMINI_API_KEY / ANTHROPIC_API_KEY / SLACK_WEBHOOK_URL / SLACK_WEBHOOK_URL_TEAM /
+ *   SLACK_TARGET（未設定なら個人）/ JPCERT_SEEN_AT（ツールが書く）
  *
  * CSAF とは:
- *   Fortinet が脆弱性情報を機械可読な JSON で公開しているファイルのこと。
- *   HTML を読み取る必要がなく、影響バージョン・修正版・CVSS・影響の種類が
- *   構造化された状態で入っている。
+ *   ベンダーが脆弱性情報を機械可読な JSON で公開しているファイル。Fortinet / Cisco とも
+ *   これが主経路で、影響バージョン・修正版・CVSS・影響の種類が構造化されて入っている。
+ *
+ * 列構成を変えたとき: migrateLedgerHeaders() → clearRunData() → main()
  */
 
 // ============================================================
@@ -93,9 +54,7 @@ const GEMINI_MODEL = 'gemini-3.8-flash';
  *   - モデル ID が無効／提供終了になった
  *
  * **1日上限はモデルごとに別勘定なので、段を増やすとその分だけ粘れる。**
- * いずれも 2026-09-06 時点の安定版（同ページで確認）。新しい世代へ上げたときは
- * 1 つ前を先頭に残す。無料枠の実際の回数は AI Studio のレート制限ページ
- * （aistudio.google.com/rate-limit・要ログイン）でしか見られず、公開文書には無い。
+ * いずれも 2026-09-06 時点の安定版。世代を上げたときは 1 つ前を先頭に残す。
  */
 const GEMINI_MODEL_FALLBACKS = [
   'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash'
@@ -161,27 +120,24 @@ const KEEP_OUT_OF_SCOPE_MONTHS = 3;
 /**
  * Slack に 1 通で個別表示する最大件数。超えた分は末尾に件数だけ出す。
  *
- * 通知に出るのは「あり（対応検討）」「あり（影響調査）」だけなので、
- * ここで隠れる行はすべて人が見る必要のある行になる。5 では足りない。
- * 数えているのは台帳の行数（CVE × 製品）で、Cisco の複数 CVE アドバイザリが
- * 1 本あるだけで超える（ClamAV は 1 本で 7 行）。
+ * 通知に出るのは「あり（対応検討）」「あり（影響調査）」だけなので、ここで隠れる行は
+ * すべて人が見る必要のある行になる。数えているのは台帳の行数（CVE × 製品）で、
+ * Cisco の複数 CVE アドバイザリが 1 本あるだけで超える（ClamAV は 1 本で 7 行）。
  *
- * 上限は Slack 側の制約から決めている。1 メッセージ 50 ブロック、
- * カード 1 枚が divider + section の 2 ブロック、ヘッダ・サマリ・末尾で 4 ブロック。
- * 15 枚なら 34 ブロックで収まる。計算上は 23 枚まで入るがそこまで上げないのは、
- * 読む側の限界がブロック上限より手前にあるため。
+ * 15 の根拠は Slack 側の制約。1 メッセージ 50 ブロック、カード 1 枚が divider +
+ * section の 2 ブロック、ヘッダ・サマリ・末尾で 4 ブロック。15 枚なら 34 ブロック。
+ * 計算上は 23 枚まで入るが、読む側の限界がブロック上限より手前にある。
  */
 const SLACK_MAX_ITEMS = 15;
 
 /**
  * Slack の宛先。キー → スクリプトプロパティ名と表示名。
  *
- * 宛先を増やすときはここに 1 行足すだけにする。送信側の関数は触らない。
+ * 増やすときはここに 1 行足すだけにする。送信側の関数は触らない。
  *
- * personal のプロパティ名を SLACK_WEBHOOK_URL のまま残しているのは、命名を
- * 揃えたい気持ちより「設定の欠落を沈黙にしない」を優先しているため。
- * 改名した .gs を貼った瞬間、プロパティを直すまで日次通知が黙って止まり、
- * それは「該当が無くて静かな日」と見分けが付かない。
+ * **personal のプロパティ名を SLACK_WEBHOOK_URL のまま残している。**改名した .gs を
+ * 貼った瞬間、プロパティを直すまで日次通知が黙って止まり、それは「該当が無くて
+ * 静かな日」と見分けが付かない。命名より「設定の欠落を沈黙にしない」を取る。
  */
 var SLACK_TARGETS = {
   personal: { prop: 'SLACK_WEBHOOK_URL',      label: '個人検証' },
@@ -222,13 +178,9 @@ var SSL_VPN_ENABLED = false;
  * JPCERT/CC の RDF。注意喚起（/at/）だけ拾い、Weekly Report（/wr/）は捨てる。
  *
  * **判定には混ぜない。**注意喚起は CVE 単位ではなく「いま日本で問題になっている事象」で、
- * CVE を持たない回がある（実例: at260019「Fortinet製品に関連する認証情報の漏えい」は
- * CVE の記載が無い）。台帳の行と機械的に突き合わせられないので、緊急度の指標にはならない。
- *
+ * CVE を持たない回がある。台帳の行と機械的に突き合わせられず、緊急度の指標にならない。
  * それでも拾うのは、ツールの守備範囲（FortiOS / IOS-XE の CVE）の外に自社へ効く情報が
- * あるため。上の FortiBleed は Fortinet PSIRT のアドバイザリではないので RSS にも CSAF にも
- * 出てこず、版の突き合わせという判定の軸にも乗らない。構造的に拾えない種類の情報を、
- * 判定を通さず人に見せるだけの経路で補う。
+ * あるため。判定を通さず人に見せるだけの経路で補う（詳細は設計書 §4.8）。
  *
  * 頻度は年約 29 件（2023〜2026 の 4 年分 106 件を全数確認）。そのうち
  * Fortinet / Cisco 系は 6 件＝年 1.5 件なので、Slack に足しても埋もれない。
@@ -476,11 +428,9 @@ const SHEET_RUNLOG = '実行履歴';
  * Fortinet は毎回全件、Cisco は差分のみという内部事情の数字で、合計すると
  * 「確認 100 なのに取得 50、残り 50 はどこへ？」という誤読を生むため、内訳へ回す。
  *
- * 「対象」「対象以外」はアドバイザリ件数で、台帳の行数ではない。
- * 以前は「台帳追加」「台帳追加なし」と呼んでいたが、実体と合っていなかった。
- * 台帳は 1 アドバイザリが CVE × 製品で複数行に開くうえ、古い「なし」を
- * isLedgerRow_ が落とすので、どう数えてもこの列とは一致しない。
- * ここが答えるのは「自社の資産に当たる公表がいくつあったか」であり、
+ * **「対象」「対象以外」はアドバイザリ件数で、台帳の行数ではない。**台帳は 1 アドバイザリが
+ * CVE × 製品で複数行に開くうえ、古い「なし」を isLedgerRow_ が落とすので、どう数えても
+ * この列とは一致しない。答えるのは「自社の資産に当たる公表がいくつあったか」であり、
  * 台帳に何行増えたかではない。
  */
 const RUNLOG_HEADERS = ['実行日時', '結果', '確認件数', '差分なし', '更新あり', '対象',
@@ -500,7 +450,9 @@ const SHEET_DECISION = '判断記録';
 
 /**
  * 月次報告の草案。毎回まるごと作り直すので、人はここに書き足さないこと。
- * データはスプレッドシート、通知は Slack の 2 面に閉じる（§4.9）。
+ * データはスプレッドシート、通知は Slack の 2 面に閉じる（§4.13）。Google ドキュメントに
+ * しないのは、面と権限が増えるうえ DocumentApp.create() が実行のたび新しいファイルを作り、
+ * 年 12 個がドライブに溜まるため（同じシートを毎回上書きすれば溜まらない）。
  */
 const SHEET_MONTHLY = '月次サマリ';
 const DECISION_HEADERS = ['判断日', 'アドバイザリID', 'CVE', '判断', '根拠', '判断者', '対象時点'];
@@ -732,7 +684,6 @@ function migrateLedgerHeaders() {
   formatLedger_(sh);
   Logger.log('台帳の見出しを ' + LEDGER_HEADERS.length + ' 列に更新しました。');
 
-  // 処理済みシートの見出しも合わせる。
   // 既読判定は列の位置で読むため、見出しが古いままだと
   // 「FG-IR」の位置にタイトルを読みに行き、既読が一切当たらなくなる。
   const state = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_STATE);
@@ -822,10 +773,6 @@ function clearRunData() {
 }
 
 /**
- * Cisco の処理済み・台帳だけ消して再取得する。
- * 処理済みに残っていると main() は Cisco を再取得しない。
- */
-/**
  * Fortinet の処理済みと台帳を消し、RSS 50 件を取り直す。
  * 列を増やしたときなど、既存行を新しい構成で埋め直したいときに手で実行する。
  *
@@ -847,6 +794,10 @@ function reprocessFortinet() {
   return rows;
 }
 
+/**
+ * Cisco の処理済み・台帳だけ消して再取得する。
+ * 処理済みに残っていると main() は Cisco を再取得しない。
+ */
 function reprocessCisco() {
   clearCiscoEmptyRetryMark_();
   const removedState = deleteVendorStateRows_(VENDOR_CISCO);
@@ -969,7 +920,7 @@ function deleteSheetRowSafe_(sh, row) {
   sh.deleteRow(row);
 }
 
-/** 資産シートを v7 列構成に更新する（既存データは消える）。 */
+/** 資産シートを v7 列構成に更新する（入力済みの資産は残す）。 */
 function migrateAssetHeaders() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(SHEET_ASSET);
@@ -1037,8 +988,6 @@ function main() {
     runStats_.jpcert = alerts.length;
 
     if (notifyRows.length || alerts.length) {
-      // 送れた分だけ既読にする。先に印を付けると、Webhook が失効していた日の
-      // 注意喚起が誰にも届かないまま消える。
       if (notifySlack_(notifyRows, '', alerts)) markJpcertSeen_(alerts);
     } else {
       backfillAiColumns_();
@@ -1211,7 +1160,7 @@ function runFortinet_() {
                    f.item.ir + ' / ' + f.error);
         // RSS に CVSS と説明文があるので、それだけで台帳の行にする。
         // 台帳から落とすと実行ログ以外に痕跡が残らない。
-        rows.push(extractFortinetRowFallback_(f.item, assets));
+        rows.push(extractFortinetRowFallback_(f.item));
         return;
       }
       rows = rows.concat(extractRows_(f.csaf, f.item));
@@ -1277,17 +1226,13 @@ function runFortinet_() {
 }
 
 /**
- * 台帳に載せる行かどうか。
+ * 台帳に載せる行かどうか。製品不明・非保有・OS対象外は出さない（処理済みには残る）。
  *
- * 載せるのは、自社が保有している製品で OS 該当が「対象」または「不明」の行。
- * 製品不明・非保有・OS対象外は台帳に出さない（処理済みシートには残る）。
+ * 自社影響が「なし」でも、版が影響範囲内なら台帳に残す。社内ルールで臨時更新しないと
+ * 判断した記録そのものが監査で必要になる。通知から外れるだけで台帳からは消えない。
  *
- * 自社影響が「なし」でも、版が影響範囲内なら台帳に残す。
- * 社内ルールで臨時更新しないと判断した記録そのものが監査で必要になる。
- * 通知から外れるだけで、台帳から消えるわけではない。
- *
- * ただし古い「なし」は落とす。定期更新で解消済みの行が積み上がると、
- * 判断が必要な行が埋もれて台帳を開かなくなる（KEEP_OUT_OF_SCOPE_MONTHS）。
+ * ただし古い「なし」は落とす。定期更新で解消済みの行が積み上がると、判断が必要な行が
+ * 埋もれて台帳を開かなくなる（KEEP_OUT_OF_SCOPE_MONTHS）。
  * 落としても処理済みシートには全件残るので、取得した事実は消えない。
  */
 function isLedgerRow_(row, assets) {
@@ -1368,7 +1313,7 @@ function isStaleOutOfScope_(pubDate) {
 }
 
 // ============================================================
-// 0b. Cisco CSAF RSS（主）→ CSAF JSON / 通常RSS（補助）
+// Cisco CSAF RSS（主）→ CSAF JSON / 通常RSS（補助）
 // ============================================================
 
 /** CSAF JSON の URL 組み立て保険。主経路は CSAF RSS の guid/link を使う */
@@ -1422,8 +1367,7 @@ function runCisco_() {
     Logger.log('Cisco 処理対象 ' + todo.length + ' 件' +
                (pending.length > todo.length ? '（未処理 ' + pending.length + ' 件・続きあり）' : ''));
 
-    // 記録の有無に関わらず、これから書く分は先に消す。前回の実行が台帳を書いた直後に
-    // 落ちていると記録が付いておらず、消さずに追記すると同じ行が二重に並ぶ。
+    // これから書く分は先に消す（理由は runFortinet_ の同じ箇所）。
     removeRowsFor_(VENDOR_CISCO, todo.map(function (f) { return f.item.id; }));
 
     let humanIndex = null;
@@ -1440,7 +1384,7 @@ function runCisco_() {
           description: human.description || '',
           pubDate: human.pubDate || f.item.pubDate
         };
-        const fb = extractCiscoRowFallback_(fallbackItem, assets);
+        const fb = extractCiscoRowFallback_(fallbackItem);
         if (fb) rows.push(fb);
         return;
       }
@@ -1802,7 +1746,6 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
   const product = targetProducts[0];
 
   // 修正版の自動取得（openVuln）は GAS では使わない。CSAF に版があれば使い、無ければ空。
-  // 回避策コマンドは CSAF Workarounds から取る。
   const workaround = ciscoWorkaround_(csaf);
 
   if (!vulns.length) {
@@ -1873,13 +1816,13 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
       fixesRaw: fixes.join('\n'),
       workaround: workaround.text,
       verdict: '', reason: '', selfVersion: '', fixVersion: '',
-      feature: '', impactJa: '', howToCheck: '', plan: ''
+      feature: '', impactJa: '', howToCheck: ''
     };
   });
 }
 
 /** CSAF 失敗時の保険（通常 RSS）。情報通知 ID は行にしない。 */
-function extractCiscoRowFallback_(item, assets) {
+function extractCiscoRowFallback_(item) {
   if (isCiscoInformationalAdvisory_(null, item)) {
     Logger.log('Cisco 情報通知のためフォールバック行も作らない: ' + (item && item.id));
     return null;
@@ -1912,7 +1855,7 @@ function extractCiscoRowFallback_(item, assets) {
     // 「OS=… | KEV=…」の見出しごと組み立て直すので、ここで書いても消える。
     reasonPhrase: 'CSAF を取得できず製品も版も特定できないため',
     selfVersion: '', fixVersion: '',
-    feature: '', impactJa: '', howToCheck: '', plan: ''
+    feature: '', impactJa: '', howToCheck: ''
   };
 }
 
@@ -2095,7 +2038,7 @@ function judgeCiscoVersions_(assetVersions, affectedVersions) {
 
 
 // ============================================================
-// 1. RSS 取得と CSAF の URL 導出
+// RSS 取得と CSAF の URL 導出
 // ============================================================
 
 /**
@@ -2105,7 +2048,6 @@ function judgeCiscoVersions_(assetVersions, affectedVersions) {
 function parsePubDate_(s) {
   if (!s) return '';
   const raw = String(s).trim();
-  // CSAF RSS: "2026-08-21 16:54:40.0"
   const cisco = /^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/.exec(raw);
   if (cisco) {
     const d = new Date(cisco[1] + 'T' + cisco[2] + 'Z');
@@ -2165,7 +2107,7 @@ function fetchRssItems_() {
 }
 
 // ============================================================
-// 2. CSAF の取得と行への展開
+// CSAF の取得と行への展開
 // ============================================================
 
 /**
@@ -2231,15 +2173,9 @@ function ymd_(d) {
  * Fortinet の ir.xml は成り立たないことが実測で分かったので、Fortinet はこの関数を
  * 使わず毎回全件を取得する（理由は runFortinet_ のコメント）。
  *
- * 取得する:
- *   - 処理済みに無い ID（初出。RSS に載っている限り古くても取得）
- *   - RSS 日付が処理済みの CSAF 最終更新日より新しい（改訂の可能性）
- *   - CSAF 版が空欄の既存行。取得に失敗した件には「未取得」の印を書くので、
- *     ここに引っかかるのは印が付く前に記録された古い行だけ。
- *     印を書かずに空欄のままにすると、取得できない件を毎日取り続けることになる
- *
- * スキップする:
- *   - 処理済みがあり、RSS 日付が CSAF 最終更新日以下（日次では変更なし）
+ * CSAF 版が空欄の既存行も取り直す。取得に失敗した件には「未取得」の印を書くので、
+ * ここに引っかかるのは印が付く前に記録された古い行だけ。**印を書かずに空欄のままに
+ * すると、取得できない件を毎日取り続けることになる。**
  */
 function selectRssCsafCandidates_(items, known, getId, getRssDate) {
   let skip = 0;
@@ -2453,7 +2389,7 @@ function extractRows_(csaf, item) {
   // 製品・バージョンの対応表が CSAF に載っていない（product_tree も空）。
   //
   // ここで空配列を返すと行が 1 つも作られない。行が無いということは
-  // 16 列目に FG-IR が残らないため既読にもならず、
+  // 処理済みシートに記録が残らないため既読にもならず、
   //   ・分母から永久に欠落する（本ツールの第一目的を壊す）
   //   ・毎回取得し直し、実行枠を食い続ける
   // という二重の実害になる。1 行立てて人に回す。
@@ -2512,9 +2448,8 @@ function extractRows_(csaf, item) {
         .join(', '),
       fixesRaw: fixes.join('\n'),
       workaround: (workaround && workaround.toUpperCase() !== 'N/A') ? workaround : '',
-      // 以下はこのあと埋める
       verdict: '', reason: '', selfVersion: '', fixVersion: '',
-      feature: '', impactJa: '', howToCheck: '', plan: ''
+      feature: '', impactJa: '', howToCheck: ''
     };
   });
 }
@@ -2541,7 +2476,7 @@ function noVulnRow_(item, advisoryId, pubDate, initialAt, vulnName) {
     verdict: V_INVEST,
     reason: 'この情報元だけでは自社への影響を自動判定できません。アドバイザリを人が読んで判定してください。',
     selfVersion: '', fixVersion: '',
-    feature: '', impactJa: '', howToCheck: '', plan: ''
+    feature: '', impactJa: '', howToCheck: ''
   };
 }
 
@@ -2562,11 +2497,10 @@ function guessProductFromAffected_(affected) {
  * 取れる情報があるのに台帳から落として通知だけにするのは、確認の手がかりを捨てている。
  * Cisco は以前からこの形（extractCiscoRowFallback_）で、Fortinet だけ無かった。
  *
- * 製品は資産シートのそのベンダーの対象製品を使う。RSS のタイトルに製品名が無く
- * 特定できないため、「自社に関係するかもしれない」側に倒して人の目に入れる。
- * 実際の影響製品はアドバイザリを開いて確認してもらう。
+ * 製品は名乗らない（空のまま）。RSS のタイトルに製品名が無く、主力製品を充てると
+ * 「分からない」が「FortiOS だと分かった」に化ける（§4.7）。詳細は本体のコメント。
  */
-function extractFortinetRowFallback_(item, assets) {
+function extractFortinetRowFallback_(item) {
   const text = decodeCiscoHtml_(item.description || '');
   const cvss = /CVSSv3 Score:\s*([\d.]+)/i.exec(text);
   const cves = text.match(/CVE-\d{4}-\d{4,}/gi) || [];
@@ -2594,11 +2528,10 @@ function extractFortinetRowFallback_(item, assets) {
     fixesRaw: '',
     workaround: '',
     verdict: V_INVEST,
-    // reason ではなく reasonPhrase に置く。reason は decideNotification_ が
-    // 「OS=… | KEV=…」の見出しごと組み立て直すので、ここで書いても消える。
+    // reasonPhrase に置く理由は extractCiscoRowFallback_ の同じ箇所。
     reasonPhrase: 'CSAF を取得できず製品も版も特定できないため',
     selfVersion: '', fixVersion: '',
-    feature: '', impactJa: '', howToCheck: '', plan: ''
+    feature: '', impactJa: '', howToCheck: ''
   };
 }
 
@@ -2617,7 +2550,7 @@ function uniqueStrings_(arr) {
 }
 
 // ============================================================
-// 3. バージョン比較（コードで実行・LLM 不使用）
+// バージョン比較（コードで実行・LLM 不使用）
 // ============================================================
 
 /** "7.4.5" → [7,4,5]。数値に解釈できない要素があれば null（＝比較不能）を返す。 */
@@ -2729,7 +2662,7 @@ function judgeVersions_(assetVersions, affectedEntries, product) {
 }
 
 // ============================================================
-// 4. 通知判定（コードで実行・LLM 不使用）
+// 通知判定（コードで実行・LLM 不使用）
 // ============================================================
 
 /**
@@ -2850,7 +2783,6 @@ function initDecisionFields_(row) {
   row.externalSurface = row.externalSurface || '';
   row.takeover = row.takeover || '';
   row.serviceStop = row.serviceStop || '';
-  row.vendorPath = row.vendorPath || '';
   row.aiTechImpact = row.aiTechImpact || '';
   row.aiServiceStop = row.aiServiceStop || '';
   row.aiConfidence = row.aiConfidence || '';
@@ -3069,7 +3001,6 @@ function lookupCheckSteps_(row) {
   return CHECK_STEPS_CISCO_DEFAULT;
 }
 
-/** 確認方法が行動可能か検証し、不合格なら機能別テーブルで差し替える */
 /**
  * CSAF が取れず製品を特定できなかった行の確認方法。
  *
@@ -3098,7 +3029,6 @@ function normalizeHowToCheck_(row) {
   if (row.osStatus === '対象' && isVersionRecheckHowTo_(raw)) {
     return lookupCheckSteps_(row);
   }
-  // 影響調査なのに定期更新定型だけ、は差し替え
   if (row.verdict === V_INVEST && isRegularUpdateHowTo_(raw)) {
     return lookupCheckSteps_(row);
   }
@@ -3147,7 +3077,7 @@ function stripCheckLabels_(text) {
 }
 
 // ============================================================
-// 3b. KEV カタログ
+// KEV カタログ
 // ============================================================
 
 function fetchKevCatalog_() {
@@ -3205,7 +3135,7 @@ function kevVendor_(cve) {
 }
 
 // ============================================================
-// 3c. OS 該当・ベンダー別判定
+// OS 該当・ベンダー別判定
 // ============================================================
 
 function judgeOsApplicability_(row, assets) {
@@ -3244,6 +3174,16 @@ function judgeOsApplicability_(row, assets) {
   return { os: 'out', label: '対象外', detail: detail };
 }
 
+/**
+ * 影響機能が外部から到達できる面に出ているか。
+ *
+ * **いまは判定に使っていない。**結果は row.externalSurface に入るだけで、台帳にも
+ * 処理済みにも Slack にも出ない。自社影響を決めているのは featureExposure_
+ * （FEATURE_ALWAYS_ON = 常時有効か、設定次第か）のほうで、社内ルールの条件と
+ * 直接対応するのはそちら。「外面」は社内ルールにも設計書にも無い概念。
+ *
+ * 将来の判定条件の候補として残している。使うなら社内ルール側に基準を作るのが先。
+ */
 function isOnExternalSurface_(feature) {
   const f = String(feature || '').trim();
   if (!f || f === '不明' || f === 'その他') return false;
@@ -3337,55 +3277,38 @@ function featureExposure_(row) {
 }
 
 /**
- * 臨時更新条件4（悪用されると機器の制御を奪われるか業務停止に至る）の判定。
+ * 臨時更新条件4（悪用されると機器の制御を奪われるか業務停止に至る）の判定。詳細は設計書 §4.9。
  *
- * **一次情報は CVSS ベクターの C/I/A。**条件3（AV:N / PR:N / UI:N）を
- * ruleGate_ が同じベクターから読んでいるのに、条件4だけ英文のキーワード照合という
- * 別の方法を使っていたのが誤りだった。ベンダーが記述文に何を書くかに依存せず、
- * 構造化された値から読む。
+ * **一次情報は CVSS ベクターの C/I/A。**条件3 を ruleGate_ が同じベクターから読んでいるので、
+ * 条件4も同じ構造化された値から読む（ベンダーが記述文に何を書くかに依存させない）。
+ * マッピングは直下のコードのとおり。
  *
- *   I:H  設定・データを高影響で書き換えられる    → 機器の制御を奪われる
- *   A:H  可用性が完全に失われる                  → 業務停止（前提は下記）
- *   C:H のみ（I/A は N か L）                    → 情報漏えい。条件4の文言には当たらないが、
- *        漏れるのが管理者の認証情報なら制御を奪われる入口になる。CVSS は
- *        「何が漏れるか」を区別しないので機械には判断できない → infoleak
- *   すべて L 以下                                → 部分的な影響にとどまる → no
+ * **C:H のみを「なし」にしない。**漏れるのが管理者の認証情報なら制御を奪われる入口に
+ * なるが、CVSS は「何が漏れるか」を区別しないので機械には判断できない → infoleak。
  *
  * **A:H を「業務停止」と読んでよいのは、この判定に来る行が限られているから。**
- * CVSS の A:H の定義は「影響を受けるコンポーネントの可用性が完全に失われる」で、
- * コンポーネント＝機器全体とは限らない。デーモン 1 本が落ちるだけでも A:H は付く。
- * 実際このコードは ユーザ影響の文面では区別している（isReloadDos_ = 機器が再起動 /
- * isMgmtPlaneDos_ = 管理画面が止まる）。
- *
+ * CVSS の A:H は「影響を受けるコンポーネントの可用性が完全に失われる」で、
+ * コンポーネント＝機器全体とは限らない（デーモン 1 本が落ちるだけでも付く）。
  * それでも丸めてよいのは、finalizeVerdict_ がここへ来るのを exposure が always の行
  * （FEATURE_ALWAYS_ON = データプレーン / IOS XE 基盤）だけに絞っているため。
- * **基盤が止まれば業務が止まる**ので、そこでは A:H = 業務停止で正しい。
- * 管理画面の DoS は WebUI / 管理GUI = config なので手前で「影響調査」になる。
+ * 基盤が止まれば業務が止まる。管理画面の DoS は config なので手前で「影響調査」になる。
  *
  * **FEATURE_ALWAYS_ON に設定依存の機能を足すと、この前提が崩れる。**
  * 管理画面の DoS まで臨時更新に上がるので、足すときはここも見直すこと。
  *
- * Scope（S:U / S:C）は見ない。S:U でも基盤が止まれば業務は止まるので、
- * S で絞ると見逃す方向に働く。
+ * Scope は見ない（S:U でも基盤が止まれば業務は止まるので、絞ると見逃す方向に働く）。
+ * A:L（性能低下）は業務停止に含めない。AC も見ない（社内ルールの条件3が AV/PR/UI の
+ * 3 つだけで AC を含めていないため。2026-09-04 に現状維持で確認）。
  *
- * A:L（性能低下）を業務停止に含めない。含めると軽微な劣化まで臨時更新に上がる。
- * AC（攻撃の難しさ）は見ない。社内ルールの条件3が AV/PR/UI の 3 つだけで
- * AC を含めていないため（2026-09-04 に現状維持で確認）。
- *
- * **ベクターを AI の出力より先に見る。**ベンダーが公開した構造化データより、
- * 記述文から推測した値（takeover / serviceStop）を優先する理由が無い。
- * ベクターが無いときだけ AI と記述文へ落ちる。CVSS v4（VC:H 形式）は
- * parseCvssCia_ が読めず null を返すので、この経路に来る。
+ * **ベクターを AI の出力より先に見る。**ベンダーが公開した構造化データより、記述文から
+ * 推測した値（takeover / serviceStop）を優先する理由が無い。読めないときだけ AI と
+ * 記述文へ落ちる（CVSS v4 は parseCvssCia_ が null を返すのでこの経路）。
  * 拾えなければ unknown（＝調査へ）。
  *
  * @return {'yes'|'infoleak'|'no'|'unknown'}
  */
 function impactSeverity_(row) {
-  // ベクターが読めればそれが答え。**AI の出力より先に見る。**
-  // ベンダーが公開した構造化データより、記述文から推測した値を優先する理由が無い。
-  // 以前は takeover/serviceStop（AI の出力）を先に見ていたので、ベクターが
-  // C:N/I:N/A:L（軽微）でも AI が total と返せば「対応検討」になっていた。
-  // 「条件4はベクターで判定する」という決めと矛盾していた。
+  // ベクターが読めればそれが答え（理由は上の JSDoc）。
   const p = parseCvssCia_(row.vector);
   if (p) {
     if (p.I === 'H' || p.A === 'H') return 'yes';
@@ -3423,7 +3346,6 @@ function isSevereImpact_(row) {
  * 判定の入口が2つあると、片方だけ直して食い違う。
  */
 function finalizeVerdict_(row, opts) {
-  row.vendorPath = row.vendor === VENDOR_CISCO ? 'Cisco' : 'Fortinet';
   if (!opts || !opts.skipKev) {
     row.kev = kevLabel_(row.cve);
   }
@@ -3502,20 +3424,6 @@ function finalizeVerdict_(row, opts) {
   row.reason = buildDecisionReason_(row);
 }
 
-/**
- * AI を呼ばずに結論が出る分をここで確定させる。
- *
- * 確定できるのは3種類。
- *   非保有・製品不明   資産シートだけで決まる
- *   版が影響範囲外     CSAF と資産シートの版比較だけで決まる
- *   ルールゲート落ち   CVSS ベクターだけで決まる（§3 の待てる根拠）
- *
- * ゲート落ちを AI の前に置くのは、影響機能を知る必要が無いから。
- * `PR:H` の行の影響機能を分類しても結論は変わらないので、その分の API を使わない。
- * 残った行（外部から無認証で悪用できる行）だけ AI へ回し、finalizeVerdict_ で確定する。
- *
- * ベンダーで分岐しない（Cisco も設定次第の機能を持つので同じ扱いにする）。
- */
 /**
  * 自社影響を決める。ツールのルールで判定してから、人の判断があれば上書きする。
  *
@@ -3623,7 +3531,6 @@ function applyHumanDecision_(row) {
   const verdict = DECISION_VERDICT[d.action];
   if (verdict) row.verdict = verdict;
 
-  row.humanDecision = d.action;
   row.reasonPhrase = ymd_(d.decidedAt) + ' に ' + (d.by || '記名なし') +
                      ' が「' + d.action + '」と判断' +
                      (d.note ? '（' + truncateJa_(d.note, 60) + '）' : '');
@@ -3636,6 +3543,20 @@ function applyHumanDecision_(row) {
   row.needsCodeDisplay = true;
 }
 
+/**
+ * AI を呼ばずに結論が出る分をここで確定させる。
+ *
+ * 確定できるのは3種類。
+ *   非保有・製品不明   資産シートだけで決まる
+ *   版が影響範囲外     CSAF と資産シートの版比較だけで決まる
+ *   ルールゲート落ち   CVSS ベクターだけで決まる（社内ルール §3 の待てる根拠）
+ *
+ * ゲート落ちを AI の前に置くのは、影響機能を知る必要が無いから。
+ * `PR:H` の行の影響機能を分類しても結論は変わらないので、その分の API を使わない。
+ * 残った行（外部から無認証で悪用できる行）だけ AI へ回し、finalizeVerdict_ で確定する。
+ *
+ * ベンダーで分岐しない（Cisco も設定次第の機能を持つので同じ扱いにする）。
+ */
 function decideByRules_(row, assets) {
   if (row._lockedVerdict) return;
 
@@ -3668,7 +3589,6 @@ function decideByRules_(row, assets) {
 
   const os = judgeOsApplicability_(row, assets);
   row.osStatus = os.label;
-  row.vendorPath = (row.vendor === VENDOR_CISCO) ? 'Cisco' : 'Fortinet';
 
   if (os.os === 'out') {
     row.verdict = V_NONE;
@@ -3764,7 +3684,6 @@ function narrowFixVersion_(row, assets) {
  * 対象外は普通読まれない。見逃しゼロが必須（設計書 6.4）なので、
  * 前提を毎回目に見える形にする。
  *
- * 現在のスコープは FortiOS のみ（設計書 3.1）。
  * ここに並ぶ製品名は本来すべて自社非保有のはずで、
  * 見覚えのある製品が出てきたら資産シートを疑う。
  */
@@ -3855,19 +3774,17 @@ function migrateTarget_(row, branchLabel) {
 }
 
 /**
- * 台帳の公式推奨対応列用。英語を残さない。プレーンテキストのみ（リンクは付けない）。
+ * 台帳と Slack に出す「公式推奨対応」。英語を残さない。プレーンテキストのみ
+ * （リンクは付けない）。**空文字を返さないこと。**
+ *
+ * 以前は Fortinet で修正版が取れないと空を返していた。台帳の列が空欄になると
+ * 入力漏れと区別が付かず（§4.1）、しかも Slack 側は slackActionLine_ が
+ * 「アドバイザリを確認」を補っていたので、同じ行が台帳と Slack で違って見えていた。
  *
  * Cisco:
  *   - 修正版（稀に CSAF にある）または回避策コマンドがあればそれを出す
  *   - どちらも無いとき（GAS では openVuln 不可）は「更新先はアドバイザリで確認」
  *   - 「回避策なし」は CSAF Workarounds の公式文 "There are no workarounds..." の訳
- */
-/**
- * 台帳と Slack に出す「公式推奨対応」。**空文字を返さないこと。**
- *
- * 以前は Fortinet で修正版が取れないと空を返していた。台帳の列が空欄になると
- * 入力漏れと区別が付かず（§4.1）、しかも Slack 側は slackActionLine_ が
- * 「アドバイザリを確認」を補っていたので、同じ行が台帳と Slack で違って見えていた。
  */
 function formatOfficialAction_(row) {
   if (row.vendor !== VENDOR_CISCO) {
@@ -3920,7 +3837,7 @@ function countVerdicts_(rows) {
 }
 
 // ============================================================
-// 5. AI による機能分類・確認方法（台帳表示列）
+// AI による機能分類・確認方法（台帳表示列）
 // ============================================================
 
 function enrichWithAI_(rows) {
@@ -4103,10 +4020,9 @@ function callGemini_(prompt) {
 /**
  * 次のモデルへ退避すべきエラーか。
  *
- * 1. 日次上限（本文に PerDay）。503 は過負荷で別物なので退避しない
- *    （待って再試行する方が正しく、退避すると枠の残る世代を無駄に消費する）
- * 2. **モデル ID が無効・提供終了（404 / NOT_FOUND）。**モデルは世代交代で消える。
- *    ID を書き換えたときの打ち間違いもここに来る。退避しないと AI 出力が全滅し、
+ * 1. 日次上限（本文に PerDay）。**503 は過負荷で別物なので退避しない**
+ *    （退避すると枠の残る世代を無駄に消費する）
+ * 2. モデル ID が無効・提供終了（404 / NOT_FOUND）。退避しないと AI 出力が全滅し、
  *    台帳の 3 列がコードのフォールバック文言だけになる
  */
 function shouldFallbackGeminiModel_(err) {
@@ -4207,7 +4123,7 @@ function callClaude_(prompt) {
 }
 
 // ============================================================
-// 6. 台帳への記録
+// 台帳への記録
 // ============================================================
 
 const COL = {};
@@ -4229,19 +4145,18 @@ function getKnownState_(vendor) {
   const cVendor = STATE_HEADERS.indexOf('ベンダー');
   const cUpd = STATE_HEADERS.indexOf('最終更新日');
   const cId = STATE_HEADERS.indexOf('アドバイザリID');
-  const cIrLegacy = STATE_HEADERS.indexOf('FG-IR');
   const cVer = STATE_HEADERS.indexOf('CSAF版');
 
   values.forEach(function (r) {
-    const rowVendor = cVendor >= 0 ? String(r[cVendor]).trim() : VENDOR_FORTINET;
+    const rowVendor = String(r[cVendor]).trim();
     if (vendor && rowVendor !== vendor) return;
-    const id = String(cId >= 0 ? r[cId] : r[cIrLegacy]).trim();
+    const id = String(r[cId]).trim();
     if (!id) return;
     dates[id] = ymd_(r[cUpd]);
     // r[cVer] が数値 0 でも保持する。Fortinet の CSAF は tracking.version が
     // 常に "0" で、セルに書くと数値 0 になる。`|| ''` だと falsy で空文字に化け、
     // CSAF 側の "0" と一致せず毎回「改訂」と誤判定して再通知していた。
-    versions[id] = cVer >= 0 && r[cVer] != null ? String(r[cVer]).trim() : '';
+    versions[id] = r[cVer] != null ? String(r[cVer]).trim() : '';
   });
   return { dates: dates, versions: versions };
 }
@@ -4288,10 +4203,6 @@ function removeRowsFor_(vendor, advisoryIds) {
   });
 }
 
-/**
- * 処理したアドバイザリを 1 件 1 行で記録する。
- * 「今月 Fortinet から公表：N 件」の分母はこのシートを数えて出す。
- */
 /**
  * 処理済みシートに残す自社判定。
  *
@@ -4422,7 +4333,7 @@ function sortState_(sh) {
   const formulas = range.getFormulas();
   const values = range.getValues();
   for (let i = 0; i < values.length; i++) {
-    if (cId >= 0 && formulas[i][cId]) values[i][cId] = formulas[i][cId];
+    if (formulas[i][cId]) values[i][cId] = formulas[i][cId];
   }
 
   values.sort(function (a, b) {
@@ -4586,13 +4497,10 @@ function fetchJpcertAlerts_() {
  *
  * 機種名（C9200-24PXG-E など）は題名に出ないので使わない。ツール対象外の資産は除く。
  *
- * 社名だけで当てる。製品名まで絞ってはいけない。4 年分の Fortinet / Cisco 系 6 件のうち
- * 3 件は題名に製品名が入っておらず、その中に at260019
- * 「Fortinet製品に関連する認証情報の漏えい」（FortiBleed）が含まれる。
- * 絞るとこの経路を作るきっかけになった 1 件が落ちる。
- *
- * 絞らないことで増えるのは 4 年で 2 件（FortiManager と ASA/FTD の非保有製品）。
- * 落とすのは年 1 件の当たり、拾いすぎるのは年 0.5 件のハズレ。割に合わない。
+ * **社名だけで当てる。製品名まで絞ってはいけない。**4 年分の Fortinet / Cisco 系 6 件の
+ * うち 3 件は題名に製品名が入っておらず、その中にこの経路を作るきっかけになった
+ * at260019「Fortinet製品に関連する認証情報の漏えい」（FortiBleed）が含まれる。
+ * 絞らないことで増えるハズレは 4 年で 2 件。落とすのは年 1 件の当たりで割に合わない。
  */
 function jpcertKeywords_(assets) {
   const words = [];
@@ -4711,7 +4619,6 @@ function writeRunLog_(errorText) {
       sh.appendRow(RUNLOG_HEADERS);
       sh.setFrozenRows(1);
     } else {
-      // 列構成を変えたときに見出しだけ差し替える。
       const cur = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getDisplayValues()[0];
       const same = cur.length === RUNLOG_HEADERS.length &&
                    RUNLOG_HEADERS.every(function (h, i) { return cur[i] === h; });
@@ -4758,12 +4665,6 @@ function writeRunLog_(errorText) {
   }
 }
 
-/**
- * 月ごとの公表件数を数える。月次サマリの分母。
- *
- * 台帳の行数は数えない。同じアドバイザリでも実行タイミングで行数が変わり、
- * 集計の意味が定まらないうえ、台帳を数えれば同じ数字が出る。
- */
 /** 集計の分母から外す行か。情報通知は Cisco が同じ内容を個別アドバイザリで出し直す重複で、
  *  脆弱性の公表件数として数えると水増しになる。記録自体は証跡として残す。 */
 const STATE_JUDGE_INFO = '対象外-情報通知';
@@ -4772,6 +4673,12 @@ function isCountableStateRow_(row, cJudge) {
   return !(cJudge >= 0 && String(row[cJudge]).trim() === STATE_JUDGE_INFO);
 }
 
+/**
+ * 月ごとの公表件数を数える。月次サマリの分母。
+ *
+ * 台帳の行数は数えない。同じアドバイザリでも実行タイミングで行数が変わり、
+ * 集計の意味が定まらないうえ、台帳を数えれば同じ数字が出る。
+ */
 function countByMonth() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_STATE);
   if (!sh || sh.getLastRow() < 2) { Logger.log('処理済みシートが空です。'); return; }
@@ -4798,21 +4705,16 @@ function countByMonth() {
 }
 
 // ============================================================
-// 8. 月次サマリ（同じスプレッドシートのシート）
+// 月次サマリ（同じスプレッドシートのシート）
 // ============================================================
 
 /**
  * 月次報告の草案を「月次サマリ」シートに書き出す。
  *
- * いま人がやっているのは、処理済み（分母）・台帳（対象行）・判断記録（人の決定）・
- * 実行履歴（欠測の有無）の 4 か所を突き合わせて 1 つの報告にまとめる作業。
- * その突き合わせだけを機械にやらせる。**文章は書かない。**AI も呼ばない。
+ * 処理済み（分母）・台帳（対象行）・判断記録（人の決定）・実行履歴（欠測の有無）の
+ * 4 か所を突き合わせる作業だけを機械にやらせる。**文章は書かない。**AI も呼ばない。
  * 数字と行を並べるところまでで、読み手に何を言うかは人が書く。
- *
- * 出力先を Google ドキュメントにしない。データはスプレッドシート、通知は Slack、
- * という 2 面に閉じる方針。ドキュメントにすると面が増え、権限も増え、
- * DocumentApp.create() は実行のたびに新しいファイルを作るので年 12 個が
- * ドライブに溜まる（消す仕組みが要る）。同じシートを毎回上書きすれば溜まらない。
+ * 出力先を Google ドキュメントにしない理由は SHEET_MONTHLY 側。
  *
  * @param {string=} yyyymm 対象月（'2026-08'）。省略すると先月。
  */
@@ -5020,18 +4922,13 @@ function monthlyOverview_(w, month, state, ledger) {
 /**
  * 台帳の行を報告に出すときの列。§2 と §4 で同じにする。
  *
- * 節ごとに列を変えると、同じ列 A に「自社影響」と「製品」が来て、
- * 列幅がどちらかに合わなくなる。どちらも台帳の行で形は同じなので、
- * 揃えておけば幅を 1 通り決めれば済む。
+ * 節ごとに列を変えると列幅を 2 通り決めることになるので揃える。
  *
- * 先頭 2 列は「その判定が、いつ時点のどの情報に基づくか」。
- * 最終更新日は CSAF の current_release_date、CSAF版は tracking.version で、
- * 既読判定がこの 2 つで改訂を見ているのと同じ組。報告を読む人が
- * 「この結論は古い情報のままではないか」を確かめられるようにする。
+ * 先頭 2 列は「その判定が、いつ時点のどの情報に基づくか」。最終更新日は CSAF の
+ * current_release_date、CSAF版は tracking.version で、既読判定が改訂を見ている組と同じ。
  *
- * とくに CSAF版 が「未取得」の行は、**アドバイザリ本体を読めないまま RSS の
- * 情報だけで判定した行**。結論の確からしさが他の行と違うので、報告で
- * 見えないままにしてはいけない。
+ * とくに **CSAF版 が「未取得」の行は、アドバイザリ本体を読めないまま RSS の情報だけで
+ * 判定した行**。結論の確からしさが他の行と違うので、報告で見えないままにしてはいけない。
  */
 const MONTHLY_LEDGER_COLS = ['最終更新日', 'CSAF版', '自社影響', '製品', 'CVE', 'CVSS',
                              'KEV', '影響機能', '判定根拠', '公式推奨対応'];
@@ -5220,7 +5117,7 @@ function countByMonthVendor() {
     const key = (d instanceof Date)
       ? d.getFullYear() + '/' + ('0' + (d.getMonth() + 1)).slice(-2)
       : '(公開日不明)';
-    const vendor = cVendor >= 0 ? String(r[cVendor]).trim() : VENDOR_FORTINET;
+    const vendor = String(r[cVendor]).trim();
     const bucket = m[key] || (m[key] = {});
     bucket[vendor] = (bucket[vendor] || 0) + 1;
   });
@@ -5359,8 +5256,7 @@ function backfillAiColumns_() {
     wanted[key] = {
       rowIndex: i + 2,
       advisoryId: advisoryId,
-      vendor: vendor,
-      title: ''
+      vendor: vendor
     };
     count++;
   }
@@ -5432,7 +5328,7 @@ function backfillAiColumns_() {
 }
 
 // ============================================================
-// 7. Slack 通知（日次1通ダイジェスト）
+// Slack 通知（日次1通ダイジェスト）
 // ============================================================
 
 /**
@@ -5444,15 +5340,11 @@ function backfillAiColumns_() {
  *   3. 公式アドバイザリで妥当性と対応を決める（主アクション）
  *   4. 必要なら台帳で詳細（任意）
  *
- * 「なし」は件数のみ。コミ猫風の画像添付はしない（Webhook のみ）。
+ * 「なし」は件数のみ。画像添付はしない（Webhook のみ）。
  *
- * targetKey を渡すとその宛先へ送る（メニューからのテスト送信）。
- * 省略すると運用宛先（SLACK_TARGET）になるので、main / reprocess の 3 箇所は
- * 宛先を知らないまま呼べる。宛先が増えても呼び出し側は変わらない。
- *
- * alerts は JPCERT の注意喚起。**判定を通っていない情報**なので、CVE のカードとは
- * 混ぜず末尾に別枠で出す。該当 0 件でも注意喚起があれば送る（そうしないと
- * 「CVE の該当が無い日」に注意喚起が消える）。
+ * targetKey を省略すると運用宛先（SLACK_TARGET）。呼び出し側は宛先を知らないでよい。
+ * alerts は JPCERT の注意喚起。**判定を通っていない情報**なので CVE のカードとは混ぜず
+ * 末尾に別枠で出す。該当 0 件でも注意喚起があれば送る（そうしないと消える）。
  *
  * @return {boolean} 実際に送ったか。呼び出し側が既読を進めてよいかの判断に使う。
  */
@@ -5686,7 +5578,7 @@ function slackActionLine_(r) {
 
 /** Slack の「内容」。AI の日本語要約。無ければ公式タイトルの日本語訳。 */
 function slackContentsJa_(r) {
-  const ai = String(r.cveSummaryJa || r.titleJa || '').trim();
+  const ai = String(r.cveSummaryJa || '').trim();
   const text = isUsableCveSummary_(ai) ? ai : titleJaFromAdvisory_(r);
   return text.length > 30 ? text.slice(0, 30) + '…' : text;
 }

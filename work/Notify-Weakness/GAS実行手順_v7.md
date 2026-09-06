@@ -79,7 +79,7 @@ Key/Secret 自体は有効（手元 `curl` で確認済み）だが、`UrlFetchA
 ## 3. 移行（列構成が変わった場合）
 
 ```
-① migrateLedgerHeaders()   ← 台帳13列 / 処理済み10列に見出しを更新
+① migrateLedgerHeaders()   ← 台帳14列 / 処理済み10列に見出しを更新
 ② migrateAssetHeaders()    ← 資産9列（更新日を含む）に見出しを更新
 ③ reprocessFortinet()      ← Fortinet の処理済み・台帳を作り直す（Slack 1通）
 ④ reprocessCisco()         ← Cisco の処理済み・台帳を作り直す（Slack 1通）
@@ -108,14 +108,14 @@ Key/Secret 自体は有効（手元 `curl` で確認済み）だが、`UrlFetchA
 | 2 | `testRuleGate()` | `ルールゲート: 8 / 8 件が期待どおり` |
 | 3 | `testGateBeforeAi()` | `ゲートの前置き: 2 / 2 件が期待どおり`（`なし` の行で AI を呼ばない） |
 | 4 | `testFeatureExposure()` | `機能の設定依存分類: 8 / 8 件が期待どおり` |
-| 5 | `testJudge()` | `自社影響3値: 13 / 13 件が期待どおり`（判定根拠が2行） |
+| 5 | `testJudge()` | `自社影響3値: 17 / 17 件が期待どおり`（判定根拠が2行） |
 | 6 | `testCheckSteps()` | `確認手順: N / N 件が期待どおり`（影響調査は定期更新定型を拒否） |
 | 7 | `testStripCheckLabels()` | `OK ラベル除去` |
 | 8 | `testCiscoWorkaround()` | `回避策の分解: 7 / 7 件が期待どおり` |
 | 9 | `testImpactJaFromVector()` | `ユーザ影響ベクター: 3 / 3 件が期待どおり` |
 | 10 | `testTitleJaFromAdvisory()` | `タイトル日本語訳: 3 / 3 件が期待どおり` |
 | 11 | `testCiscoInformationalSkip()` | `notice は台帳行 0` |
-| 12 | `testExternalSurface_()` | 外面判定が期待どおり |
+| 12 | `testExternalSurface()` | 外面判定が期待どおり |
 | 13 | `testSlackBlocks()` | 対応検討／影響調査／AI未生成のカード JSON がログに出る（Webhook には送らない） |
 | 14 | `testProps()` | 2つの Webhook が `OK`、`SLACK_TARGET` の解決先が出る |
 | 15 | `testGuessFortinetFeature()` | `影響機能の復元: 8 / 8 件が期待どおり` |
@@ -164,7 +164,7 @@ Cisco の `csaf_20.xml` は CSAF から生成されており50/50で一致する
 
 **台帳（14列・左6列固定）** — 対応要否を判断する作業リスト
 
-`最終更新日 | 自社影響 | 製品 | CVE | CVSS | KEV | 脆弱性名 | ユーザ影響 | 影響機能 | 判定根拠 | 確認方法 | 公式推奨対応 | アドバイザリ`
+`最終更新日 | 自社影響 | 製品 | CVE | CVSS | KEV | 脆弱性名 | ユーザ影響 | 影響機能 | 判定根拠 | 確認方法 | 公式推奨対応 | アドバイザリ | CVSSベクター`
 
 列は確認者の読み順に並んでいます。
 「いつ検知した何か → どれくらい危ないか → どんな影響か → なぜその判定か → 何を確認しどう直すか → 公式で裏を取る」。

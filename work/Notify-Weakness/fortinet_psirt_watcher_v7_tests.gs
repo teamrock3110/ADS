@@ -554,7 +554,7 @@ function testTitleJaFromAdvisory() {
 }
 
 /** Cisco 影響機能名の正規化テスト */
-function testCiscoFeatureNormalize_() {
+function testCiscoFeatureNormalize() {
   const cases = [
     ['Cisco IOS XE Software Security Hardening', 'IOS XE 基盤'],
     ['Cisco IOS XE Software Web-Based Management', 'WebUI'],
@@ -570,7 +570,7 @@ function testCiscoFeatureNormalize_() {
 }
 
 /** 外面判定の単体テスト */
-function testExternalSurface_() {
+function testExternalSurface() {
   const cases = [
     ['Webフィルタ', true],
     ['SSL-VPN', SSL_VPN_ENABLED],
@@ -613,7 +613,7 @@ function testAi() {
     affected: ['FortiOS >=7.4.0|<=7.4.8', 'FortiOS 7.2 all versions'],
     fixesRaw: 'FortiOS 7.6: Upgrade to 7.6.4 or above\nFortiOS 7.4: Upgrade to 7.4.9 or above',
     workaround: '',
-    feature: '', impactJa: '', howToCheck: '', plan: ''
+    feature: '', impactJa: '', howToCheck: ''
   }];
   enrichWithAI_(dummy);
   Logger.log(JSON.stringify(dummy[0], null, 2));

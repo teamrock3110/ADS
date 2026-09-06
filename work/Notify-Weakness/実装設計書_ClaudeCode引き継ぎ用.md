@@ -124,7 +124,7 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
 ### 2.1 台帳（14列・左6列固定）— 対応要否を判断する作業リスト
 
 ```
-最終更新日 | 自社影響 | 製品 | CVE | CVSS | KEV | 脆弱性名 | ユーザ影響 | 影響機能 | 判定根拠 | 確認方法 | 公式推奨対応 | アドバイザリ
+最終更新日 | 自社影響 | 製品 | CVE | CVSS | KEV | 脆弱性名 | ユーザ影響 | 影響機能 | 判定根拠 | 確認方法 | 公式推奨対応 | アドバイザリ | CVSSベクター
 └──── 固定表示 ────┘
 ```
 
@@ -629,7 +629,7 @@ GAS ファイル 2 枚。Apps Script は全ファイルでグローバルスコ�
 
 | ファイル | 行数 | 関数 | 中身 |
 |---|---|---|---|
-| `fortinet_psirt_watcher_v7.gs` | 5,912 | 222 | 本体 |
+| `fortinet_psirt_watcher_v7.gs` | 5,804 | 222 | 本体 |
 | `fortinet_psirt_watcher_v7_tests.gs` | 708 | 25 | 動作確認用 |
 
 **確認用ファイルから参照する定数は、本体側で `const` ではなく `var` で宣言する。**
@@ -662,7 +662,7 @@ GAS エディタへの手貼りで、確認用の関数はほとんど変わら�
            MAX_ADVISORIES_PER_RUN=50 / AI_CHUNK_SIZE=10 / KEEP_OUT_OF_SCOPE_MONTHS=3
            SLACK_MAX_ITEMS=15 / NOTIFY_WHEN_NO_HITS=false
            SLACK_TARGETS{personal,team} / SLACK_TARGET_DEFAULT='personal'
-           LEDGER_HEADERS(13) / STATE_HEADERS(10) / RUNLOG_HEADERS(11) / ASSET_HEADERS(9)
+           LEDGER_HEADERS(14) / STATE_HEADERS(10) / RUNLOG_HEADERS(11) / ASSET_HEADERS(9)
            DECISION_HEADERS(7) / DECISION_VERDICT / decisions_
            STATE_VERSION_UNAVAILABLE='未取得' / aiRequestCount_ / runStats_
 エントリ   setup() / migrateLedgerHeaders() / migrateAssetHeaders() / clearRunData()
@@ -706,7 +706,7 @@ testProps() / testRss() / testCsafUrls() / testCsaf() / testCiscoRss()
 testVersion() / testJudge() / testRuleGate() / testGateBeforeAi()
 testFeatureExposure() / testStripCheckLabels() / testCiscoWorkaround()
 testCheckSteps() / testCiscoInformationalSkip() / testImpactJaFromVector()
-testTitleJaFromAdvisory() / testCiscoFeatureNormalize_() / testExternalSurface_()
+testTitleJaFromAdvisory() / testCiscoFeatureNormalize() / testExternalSurface()
 testSlackBlocks() / testAi() ほか
 ```
 
