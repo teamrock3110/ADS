@@ -2,7 +2,7 @@
 
 **作成日**: 2026-08-23
 **対象機器**: 社内 NW 機器（FortiGate / Cisco Catalyst / Cisco WLC）
-**関連**: [設計書_MVP_8h.md](設計書_MVP_8h.md) / [fortinet_psirt_watcher_v7.gs](fortinet_psirt_watcher_v7.gs)
+**関連**: [README.md](README.md) / [fortinet_psirt_watcher_v7.gs](fortinet_psirt_watcher_v7.gs)
 
 ---
 
