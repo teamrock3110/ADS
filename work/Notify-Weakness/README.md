@@ -8,7 +8,7 @@
 **状態**: **プレ運用中**（2026-09-06 開始）。コードの残課題は無く、実データで信頼度を
 確かめている段階。次にやることは §6
 **実行環境**: Google Apps Script + スプレッドシート + Gemini API + Slack + JPCERT/CC
-**運用手順**: [GAS実行手順_v7.md](GAS実行手順_v7.md)（貼り替え・移行・テスト・トラブル対応）
+**運用手順**: [GAS実行手順_v7.md](GAS実行手順_v7.md)（貼り替え・テスト・トラブル対応）
 **判定基準**: [社内ルール案_OS更新基準.md](社内ルール案_OS更新基準.md)（何を臨時更新の対象とするか）
 ---
 
@@ -363,7 +363,7 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
 
 新しい判定値は作っていない。「なし」に落とせば台帳には残り Slack からは外れるという
 既存の仕組みが、そのまま「臨時更新しないと判断した記録を残す」監査要件を満たす。
-- `migrateAssetHeaders()` は**入力済みの資産を消さない**。台帳や処理済みと違い、
+- **資産シートの見出しを直すときは入力済みの行を消さないこと。**台帳や処理済みと違い、
   資産シートは人が手で維持している唯一の入力で、消すと復元できない
 
 ---
@@ -773,14 +773,13 @@ GAS エディタへの手貼りで、確認用の関数はほとんど変わら�
 ```
 設定定数   AI_PROVIDER / GEMINI_MODEL(+FALLBACKS) / CLAUDE_MODEL(Haiku)
            RSS_URL / CSAF_BASE / CISCO_CSAF_RSS_URL / KEV_FEED_URL / JPCERT_RSS_URL
-           MAX_ADVISORIES_PER_RUN=50 / AI_CHUNK_SIZE=10 / KEEP_OUT_OF_SCOPE_MONTHS=3
+           AI_CHUNK_SIZE=10 / KEEP_OUT_OF_SCOPE_MONTHS=3
            SLACK_MAX_ITEMS=15 / NOTIFY_WHEN_NO_HITS=false
            SLACK_TARGETS{personal,team} / SLACK_TARGET_DEFAULT='personal'
            LEDGER_HEADERS(14) / STATE_HEADERS(10) / RUNLOG_HEADERS(11) / ASSET_HEADERS(9)
            DECISION_HEADERS(7) / DECISION_VERDICT / decisions_
            STATE_VERSION_UNAVAILABLE='未取得' / aiRequestCount_ / runStats_
-エントリ   setup() / migrateLedgerHeaders() / migrateAssetHeaders() / clearRunData()
-           ensureDecisionSheet_() / createDecisionFromLedger()
+エントリ   setup() / clearRunData() / ensureDecisionSheet_()
            createDailyTrigger() / main() / reprocessFortinet() / reprocessCisco()
 取得       fetchRssItems_() / slugifyTitle_() / csafUrlFor_() / fetchCsaf_() / fetchAllCsaf_()
            fetchCiscoCsafRssItems_() / fetchCiscoCsafBatch_() / fetchCiscoHumanRssIndex_()

@@ -15,7 +15,6 @@
  *   ベンダーが脆弱性情報を機械可読な JSON で公開しているファイル。Fortinet / Cisco とも
  *   これが主経路で、影響バージョン・修正版・CVSS・影響の種類が構造化されて入っている。
  *
- * 列構成を変えたとき: migrateLedgerHeaders() → clearRunData() → main()
  */
 
 // ============================================================
@@ -98,12 +97,6 @@ const SHEET_ASSET = '資産';
  * 取得した事実はここに残し、台帳は判断に使う行だけに保つ。
  */
 const SHEET_STATE = '処理済み';
-
-/**
- * 1回の main() 内で処理するアドバイザリのチャンクサイズ。
- * 日次運用では通常 数件。6 分制限への保険として残す。
- */
-const MAX_ADVISORIES_PER_RUN = 50;
 
 /**
  * 自社影響「なし」の行を台帳に残す期間（か月）。0 で無制限。
@@ -401,8 +394,6 @@ const DEFAULT_ASSET_ROWS = [
 const STATE_HEADERS = ['最終更新日', '初回公表日', 'ベンダー', 'CVE', 'タイトル', '自社判定',
                        '判定根拠', '対象製品', 'アドバイザリID', 'CSAF版'];
 
-/** 過去の構成にあって今は使わない列。migrateLedgerHeaders() が名前で削除する。 */
-const REMOVED_STATE_COLUMNS = ['台帳の行数'];
 
 /**
  * 実行履歴。1 回の実行につき、ベンダーごとに 1 行。
@@ -505,7 +496,6 @@ function onOpen() {
     .addItem('データ削除（台帳・処理済み）', 'clearRunData')
     .addItem('Ciscoだけ再取得', 'reprocessCisco')
     .addSeparator()
-    .addItem('選択行から判断記録を作る', 'createDecisionFromLedger')
     .addSeparator()
     .addToUi();
 }
@@ -540,66 +530,6 @@ function applyDecisionValidation_(sh, startRow, numRows) {
     .setDataValidation(rule);
 }
 
-/**
- * 台帳で選んだ行から判断記録の行を起こす。
- *
- * 対象時点（改訂検知に使う）を人に手で書かせない。台帳の最終更新日をそのまま
- * 写す。ここを人任せにすると空欄や打ち間違いが出て、readDecisions_ がその行を
- * 捨てる。捨てられたことは気づきにくいので、機械が埋められる欄は機械が埋める。
- *
- * 判断と根拠は空のまま作る。そこは人が決めることで、既定値を置くと
- * 選ばれないまま残る。
- */
-function createDecisionFromLedger() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getActiveSheet();
-  if (sh.getName() !== SHEET_LEDGER) {
-    ss.toast('「台帳」シートで、判断を記録したい行を選んでから実行してください。', '判断記録', 8);
-    return;
-  }
-
-  const sel = sh.getActiveRange();
-  const first = Math.max(sel.getRow(), 2);          // 見出し行は対象外
-  const last = sel.getRow() + sel.getNumRows() - 1;
-  if (last < first) {
-    ss.toast('データ行が選ばれていません。', '判断記録', 8);
-    return;
-  }
-
-  const n = last - first + 1;
-  const text = sh.getRange(first, 1, n, LEDGER_HEADERS.length).getDisplayValues();
-  const vals = sh.getRange(first, 1, n, LEDGER_HEADERS.length).getValues();
-  const cId = COL['アドバイザリ'] - 1;
-  const cCve = COL['CVE'] - 1;
-  const cUpd = COL['最終更新日'] - 1;
-
-  const today = new Date();
-  const by = Session.getActiveUser().getEmail() || '';
-  const rows = [];
-  text.forEach(function (t, i) {
-    const id = String(t[cId] || '').trim();
-    if (!id) return;
-    rows.push([today, id, String(t[cCve] || '').trim(), '', '', by, vals[i][cUpd] || '']);
-  });
-
-  if (!rows.length) {
-    ss.toast('アドバイザリID を読める行がありませんでした。', '判断記録', 8);
-    return;
-  }
-
-  const dst = ensureDecisionSheet_();
-  const start = dst.getLastRow() + 1;
-  dst.getRange(start, 1, rows.length, DECISION_HEADERS.length).setValues(rows);
-  dst.getRange(start, 1, rows.length, 1).setNumberFormat('yyyy/mm/dd');
-  dst.getRange(start, DECISION_HEADERS.indexOf('対象時点') + 1, rows.length, 1)
-     .setNumberFormat('yyyy/mm/dd');
-  applyDecisionValidation_(dst, start, rows.length);
-
-  ss.toast(rows.length + ' 行を作りました。判断記録シートで「判断」と「根拠」を埋めてください。',
-           '判断記録', 8);
-  Logger.log('判断記録: 台帳から ' + rows.length + ' 行を起こしました。');
-}
-
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -611,7 +541,7 @@ function setup() {
     formatLedger_(ledger);
     Logger.log('「台帳」シートを作成しました。');
   } else {
-    Logger.log('「台帳」シートは既にあります。migrateLedgerHeaders() で列を更新してください。');
+    Logger.log('「台帳」シートは既にあります。列を変えたときはシートを手で直してください（README §2.1）。');
   }
 
   let asset = ss.getSheetByName(SHEET_ASSET);
@@ -622,7 +552,7 @@ function setup() {
     asset.setFrozenRows(1);
     Logger.log('「資産」シートを作成しました。');
   } else {
-    Logger.log('「資産」シートは既にあります。migrateAssetHeaders() で列を更新できます。');
+    Logger.log('「資産」シートは既にあります。列を変えたときはシートを手で直してください（README §2.4）。');
   }
 
   ensureDecisionSheet_();
@@ -643,58 +573,6 @@ function setup() {
   } else {
     Logger.log('「処理済み」シートは既にあります。');
   }
-}
-
-/** 台帳の見出し行を最新の構成に更新する。列順が変わったのでデータ行は削除してください。 */
-function migrateLedgerHeaders() {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LEDGER);
-  if (!sh) throw new Error('「台帳」シートがありません。setup() を実行してください。');
-
-  // 列数が減る移行では、見出しを上書きするだけでは足りない。
-  // v5 は 24 列だったため、18 列目以降に古い見出し（CWE / CVSSベクター /
-  // 影響機能 / 何が起きるか / 影響バージョン / URL / 判定AI）が残る。
-  const lastCol = sh.getLastColumn();
-  if (lastCol > LEDGER_HEADERS.length) {
-    sh.deleteColumns(LEDGER_HEADERS.length + 1, lastCol - LEDGER_HEADERS.length);
-    Logger.log('余分な ' + (lastCol - LEDGER_HEADERS.length) + ' 列（v5 の残骸）を削除しました。');
-  }
-
-  sh.getRange(1, 1, 1, LEDGER_HEADERS.length).setValues([LEDGER_HEADERS]);
-  sh.setFrozenRows(1);
-  formatLedger_(sh);
-  Logger.log('台帳の見出しを ' + LEDGER_HEADERS.length + ' 列に更新しました。');
-
-  // 既読判定は列の位置で読むため、見出しが古いままだと
-  // 「FG-IR」の位置にタイトルを読みに行き、既読が一切当たらなくなる。
-  const state = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_STATE);
-  if (state) {
-    const cur = state.getRange(1, 1, 1, Math.max(state.getLastColumn(), 1)).getDisplayValues()[0];
-    const same = cur.length === STATE_HEADERS.length &&
-                 STATE_HEADERS.every(function (h, i) { return cur[i] === h; });
-    if (!same) {
-      // 廃止した列は末尾からではなく名前で消す。末尾を落とすと右隣の列が
-      // 1つずれて残り、既読判定が「CSAF版」の位置で対象製品を読むようになる。
-      REMOVED_STATE_COLUMNS.forEach(function (name) {
-        const at = cur.indexOf(name);
-        if (at >= 0) {
-          state.deleteColumn(at + 1);
-          cur.splice(at, 1);
-          Logger.log('処理済みシートから「' + name + '」列を削除しました。');
-        }
-      });
-      if (state.getLastColumn() > STATE_HEADERS.length) {
-        state.deleteColumns(STATE_HEADERS.length + 1, state.getLastColumn() - STATE_HEADERS.length);
-      }
-      state.getRange(1, 1, 1, STATE_HEADERS.length).setValues([STATE_HEADERS]);
-      state.setFrozenRows(1);
-      Logger.log('処理済みシートの見出しを ' + STATE_HEADERS.length + ' 列に更新しました。');
-    }
-  } else {
-    Logger.log('※「処理済み」シートがありません。setup() を実行してください。');
-  }
-
-  Logger.log('※ 列構成が変わっています。台帳・処理済みとも 2 行目以降を削除してから main() を実行してください。');
-  Logger.log('  → clearRunData() で削除できます（確認ダイアログあり）。');
 }
 
 /**
@@ -900,53 +778,6 @@ function deleteSheetRowSafe_(sh, row) {
   sh.deleteRow(row);
 }
 
-/** 資産シートを v7 列構成に更新する（入力済みの資産は残す）。 */
-function migrateAssetHeaders() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName(SHEET_ASSET);
-  if (!sh) {
-    setup();
-    return;
-  }
-
-  if (sh.getMaxColumns() < ASSET_HEADERS.length) {
-    sh.insertColumnsAfter(sh.getMaxColumns(), ASSET_HEADERS.length - sh.getMaxColumns());
-  }
-
-  const cur = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getDisplayValues()[0];
-  const isV7 = cur.indexOf('ベンダー') !== -1;
-  const dataRows = Math.max(sh.getLastRow() - 1, 0);
-
-  // すでに v7 構成なら見出しを合わせるだけ。列を末尾に増やしたときはこちらを通る。
-  // ここで入力済みの資産を消してはいけない。台帳や処理済みと違い、
-  // 資産シートは人が手で維持している唯一の入力で、消すと復元できない。
-  if (isV7) {
-    sh.getRange(1, 1, 1, ASSET_HEADERS.length).setValues([ASSET_HEADERS]);
-    sh.setFrozenRows(1);
-    Logger.log('資産シートの見出しを ' + ASSET_HEADERS.length + ' 列に更新しました' +
-               '（入力済みの ' + dataRows + ' 行はそのまま残しています）。');
-    return;
-  }
-
-  // v6 構成（製品・バージョン・台数・—・備考の 5 列）からの移行。
-  // 列の意味が違うので並べ替えが要るが、入力済みの資産は捨てずに移し替える。
-  const old = dataRows ? sh.getRange(2, 1, dataRows, 5).getValues() : [];
-  const moved = old.filter(function (r) { return r[0]; }).map(function (r) {
-    return [VENDOR_FORTINET, '', String(r[0]).trim(), '', String(r[1] || '').trim(),
-            r[2], 'はい', String(r[4] || '').trim(), ''];
-  });
-
-  if (dataRows) clearSheetDataRows_(sh);
-  sh.getRange(1, 1, 1, ASSET_HEADERS.length).setValues([ASSET_HEADERS]);
-
-  const rows = moved.length ? moved : DEFAULT_ASSET_ROWS;
-  sh.getRange(2, 1, rows.length, ASSET_HEADERS.length).setValues(rows);
-  sh.setFrozenRows(1);
-  Logger.log('資産シートを v7 構成（' + ASSET_HEADERS.length + ' 列）に更新しました。' +
-             (moved.length ? '既存 ' + moved.length + ' 行を移し替えました。'
-                           : '空だったので初期値を入れました。'));
-}
-
 function createDailyTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'main') ScriptApp.deleteTrigger(t);
@@ -1095,7 +926,7 @@ function runFortinet_() {
   let processedCount = 0;
   const labelTotals = {};
 
-  // RSS は 50 件しか持たず MAX_ADVISORIES_PER_RUN も 50 なので、対象は必ず 1 回で捌ける。
+  // RSS は 50 件しか持たないので、対象は必ず 1 回で捌ける。
   // 以前はここを while で回してバッチ分割していたが、2 周目に入る条件が構造上存在しなかった。
   const todo = fetched.filter(function (f) {
     return needsAdvisoryProcessing_(f.item.ir, f.updatedAt, f.version, known, !!f.error);
