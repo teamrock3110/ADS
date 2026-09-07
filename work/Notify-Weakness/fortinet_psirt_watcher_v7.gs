@@ -417,7 +417,7 @@ const RUNLOG_HEADERS = ['実行日時', '結果', '確認件数', '差分なし'
  * ツールの出力、ここは再生成できない人の記録、と役割を分ける。
  *
  * 列は「いつ・何に対して・どう決めたか・なぜ・誰が」の順。
- * 対象時点は改訂検知用で、メニューから起こせば自動で入る（下記）。
+ * 対象時点は改訂検知用。人が入れる（空欄だとその行は無視される）。
  */
 const SHEET_DECISION = '判断記録';
 
@@ -480,16 +480,6 @@ const STATE_VERSION_UNAVAILABLE = '未取得';
 // ============================================================
 // エントリポイント
 // ============================================================
-
-function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  ui.createMenu('脆弱性ウォッチャー')
-    .addItem('データ削除（台帳・処理済み）', 'clearRunData')
-    .addItem('Ciscoだけ再取得', 'reprocessCisco')
-    .addSeparator()
-    .addSeparator()
-    .addToUi();
-}
 
 /**
  * 判断記録シートを用意する。既にあれば何もしない（人が書いた行を触らない）。
@@ -576,7 +566,7 @@ function clearRunData() {
   try {
     ui = SpreadsheetApp.getUi();
   } catch (e) {
-    throw new Error('clearRunData() はスプレッドシートを開いた状態で、メニュー「脆弱性ウォッチャー → データ削除」から実行してください。');
+    throw new Error('clearRunData() は確認ダイアログを出すため、対象のスプレッドシートを開いた状態で実行してください。');
   }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -722,14 +712,6 @@ function deleteSheetRowSafe_(sh, row) {
     return;
   }
   sh.deleteRow(row);
-}
-
-function createDailyTrigger() {
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'main') ScriptApp.deleteTrigger(t);
-  });
-  ScriptApp.newTrigger('main').timeBased().atHour(9).everyDays(1).create();
-  Logger.log('毎日 9 時台に main() を実行するトリガーを作成しました。');
 }
 
 function main() {

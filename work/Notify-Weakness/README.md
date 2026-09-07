@@ -350,8 +350,8 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
   下したもの。改訂で影響範囲や修正版が変わったのに前回の「対応不要」が効き続けたら
   見逃しになる。台帳の最終更新日が対象時点より新しければ判断を無効にし、
   ツールの判定へ戻す（既読判定を `current_release_date` と版で行うのと同じ考え方）
-- メニュー「選択行から判断記録を作る」で台帳から起こすと `対象時点` は自動で入る。
-  ここを人任せにすると空欄や打ち間違いが出て、その行が捨てられる
+- `対象時点` は人が入れる。**空欄だとその行は無視される**ので、書き忘れに注意
+  （以前はメニューから自動で入れていたが、使われないので 2026-09-07 に削除した）
 - `判断` はプルダウン。語彙は `DECISION_VERDICT` のキーが正
 
 | 判断 | 自社影響 | 台帳 | Slack |
@@ -762,7 +762,7 @@ GAS エディタへの手貼りで、確認用の関数はほとんど変わら�
            DECISION_HEADERS(7) / DECISION_VERDICT / decisions_
            STATE_VERSION_UNAVAILABLE='未取得' / aiRequestCount_ / runStats_
 エントリ   setup() / clearRunData() / ensureDecisionSheet_()
-           createDailyTrigger() / main() / reprocessFortinet() / reprocessCisco()
+           main() / reprocessFortinet() / reprocessCisco()
 取得       fetchRssItems_() / slugifyTitle_() / csafUrlFor_() / fetchCsaf_() / fetchAllCsaf_()
            fetchCiscoCsafRssItems_() / fetchCiscoCsafBatch_() / fetchCiscoHumanRssIndex_()
            selectRssCsafCandidates_()【Cisco専用】/ csafDate_() / csafUpdatedAt_()
@@ -837,7 +837,7 @@ Cisco の Security Hardening Release が重なった月だった可能性があ�
 - **対応基準の室長承認** — `社内ルール案_OS更新基準.md`。2026-09-04 に条件4の
   読み方（CVSS ベクター）が固まり、KEV の §5 は 2026-09-01 に承認済み。出せる状態
 - **資産棚卸しの運用ルール** — `更新日` 列は作ったが、いつ誰が確認するか未定（v3 §6.3-7）
-- **判断記録を誰がいつ書くか** — シートとメニューはあるが運用が無い。
+- **判断記録を誰がいつ書くか** — シートはあるが運用が無い。
   書かれても、いまは判定の上書きに使うだけ（§4.13）
 - **Gemini 無料枠のデータ利用を判断する** — 無料枠は入力が Google の製品改善に使用される。
   当初の設計では「資産シートに実データを入れる前に有料化を判断する」としていたが、
