@@ -46,15 +46,9 @@
 |---|---|
 | `GEMINI_API_KEY` | 影響機能・確認方法・ユーザ影響（Fortinet 判定用の機能分類も含む） |
 | `ANTHROPIC_API_KEY` | `AI_PROVIDER = 'claude'` に切り替えたときだけ使う（モデルは Haiku） |
-| `SLACK_WEBHOOK_URL` | Slack 通知の宛先「個人検証」（任意） |
-| `SLACK_WEBHOOK_URL_TEAM` | Slack 通知の宛先「会社テスト」（任意） |
-| `SLACK_TARGET` | 日次 `main()` の宛先。`personal` / `team`。**未設定なら `personal`** |
+| `SLACK_WEBHOOK_URL` | Slack 通知の宛先（未設定なら通知しない） |
 | `JPCERT_SEEN_AT` | 通知済みの JPCERT 注意喚起 ID。**ツールが自動で書きます。触らないこと**（消すと過去の注意喚起がもう一度流れます） |
 
-`SLACK_TARGET` は普段は未設定のままにします。会社テストチャンネルへ実データを流したいときだけ
-`team` を入れ、確認が済んだらキーごと削除してください。値を打ち間違えても通知は止まらず、
-警告をログに残して `personal` へ送ります（設定ミスが「静かな日」と区別できなくなるのを避けるため）。
-`team` のまま実行した日は、実行履歴の「備考」に `Slack宛先: 会社テスト` が残ります。
 
 AI は既定で Gemini。Gemini が HTTP 503（モデル側の一時的な過負荷）を返す日があり、
 その場合は `AI_PROVIDER` を `'claude'` にすると回避できます。日次上限（429・本文に `PerDay`）
@@ -109,7 +103,7 @@ Key/Secret 自体は有効（手元 `curl` で確認済み）だが、`UrlFetchA
 | 11 | `testCiscoInformationalSkip()` | `notice は台帳行 0` |
 | 12 | `testExternalSurface()` | 外面判定が期待どおり |
 | 13 | `testSlackBlocks()` | 対応検討／影響調査／AI未生成のカード JSON がログに出る（Webhook には送らない） |
-| 14 | `testProps()` | 2つの Webhook が `OK`、`SLACK_TARGET` の解決先が出る |
+| 14 | `testProps()` | API キーと Webhook が `OK` と出る |
 | 15 | `testGuessFortinetFeature()` | `影響機能の復元: 8 / 8 件が期待どおり` |
 
 > **`testSharedConstants()` を最初に実行してください。**`13 / 13 件` と出れば、
@@ -289,7 +283,7 @@ Slack は該当ありの日だけ鳴るため、「該当なしだった日」�
 | やりたいこと | 方法 | 送信 |
 |---|---|---|
 | JSON を目で見る | `testSlackBlocks()` | しない |
-| 実データの見え方を見せる | `SLACK_TARGET=team` にして `reprocessCisco()` | 本番と同じ経路で1通 |
+| 実データの見え方を見せる | `reprocessCisco()` | 本番と同じ経路で1通 |
 
 ## 6. うまくいかないとき
 

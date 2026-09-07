@@ -74,14 +74,8 @@ function testProps() {
   Logger.log('AI_PROVIDER        : ' + AI_PROVIDER);
   Logger.log('GEMINI_API_KEY     : ' + (p.getProperty('GEMINI_API_KEY') ? 'OK' : '未設定'));
   Logger.log('ANTHROPIC_API_KEY  : ' + (p.getProperty('ANTHROPIC_API_KEY') ? 'OK' : '未設定'));
-  Object.keys(SLACK_TARGETS).forEach(function (k) {
-    const t = SLACK_TARGETS[k];
-    Logger.log(t.prop + ' : ' + (p.getProperty(t.prop) ? 'OK' : '未設定') +
-               '（' + t.label + '）');
-  });
-  const raw = p.getProperty('SLACK_TARGET');
-  Logger.log('SLACK_TARGET : ' + (raw || '(未設定)') +
-             ' → 運用宛先は ' + SLACK_TARGETS[operationalSlackTarget_()].label);
+  Logger.log(SLACK_WEBHOOK_PROP + ' : ' +
+             (p.getProperty(SLACK_WEBHOOK_PROP) ? 'OK' : '未設定'));
 }
 
 function testRss() {
@@ -656,7 +650,7 @@ function testSharedConstants() {
   const names = [
     'AI_PROVIDER', 'V_ACT', 'V_INVEST', 'V_NONE',
     'VENDOR_FORTINET', 'VENDOR_CISCO', 'KEV_YES', 'KEV_NO',
-    'SLACK_TARGETS', 'SSL_VPN_ENABLED',
+    'SLACK_WEBHOOK_PROP', 'SSL_VPN_ENABLED',
     'CHECK_STEPS_FORTINET', 'CHECK_STEPS_NO_CSAF', 'CHECK_STEPS_CISCO_DEFAULT'
   ];
   let ng = 0;

@@ -29,7 +29,7 @@ Google スプレッドシート + Apps Script。毎朝 9 時台に Fortinet と 
 | やること | 読む節 | 目安 |
 |---|---|---|
 | **毎日の運用**<br>Slack を見る / 台帳を照合する | §1 の冒頭 → §2<br>あとは `GAS実行手順_v7.md` | 15 分 |
-| **設定を変える**<br>機器を足す / 統制語彙を足す / Slack 宛先を変える | 上に加えて §1.4 → §4 の該当項 | +20 分 |
+| **設定を変える**<br>機器を足す / 統制語彙を足す | 上に加えて §1.4 → §4 の該当項 | +20 分 |
 | **判定を変える・機能を足す** | 全部。ただし **§4 を最初に** | 1〜2 時間 |
 
 **§4「実装で注意する点」は、コードを触る前に必ず読むこと。** 349 行あってこの文書で最大だが、
@@ -43,7 +43,7 @@ Google スプレッドシート + Apps Script。毎朝 9 時台に Fortinet と 
 
 | やること | 見るセクション | 行数 |
 |---|---|---:|
-| 機器・統制語彙・Slack 宛先を変える | `設定`（先頭） | 486 |
+| 機器・統制語彙を変える | `設定`（先頭） | 486 |
 | 判定基準を変える | `通知判定` / `OS 該当・ベンダー別判定` | 1,116 |
 | 台帳の列を変える | `設定` の `LEDGER_HEADERS` と `台帳への記録` | 743 |
 | Slack の見た目を変える | `Slack 通知` | 476 |
@@ -450,29 +450,19 @@ v7 で意図的に残している非対称と、その根拠。
   手前で弾くので表面化しないが、それは偶然**で、この関数自身が両ベンダーで同じ答えを
   返せなければ揃っているとは言えない。設計書に記録の無かった非対称
 
-### 4.6 Slack の宛先はテーブルに置き、呼び出し側に持たせない
+### 4.6 Slack の宛先は 1 つ
 
-宛先は `SLACK_TARGETS`（`personal` / `team`）の 1 箇所だけで定義する。
-`notifySlack_(rows, targetKey)` の第2引数を省くと運用宛先（`SLACK_TARGET` プロパティ、
-未設定なら `personal`）になるので、**`main()` / `reprocessFortinet()` / `reprocessCisco()` の
-3 箇所は宛先を知らない**。3 つ目の宛先が要るときもテーブルに 1 行足すだけで、関数は触らない。
+Webhook URL はスクリプトプロパティ `SLACK_WEBHOOK_URL` の 1 本。プロパティ名は定数
+`SLACK_WEBHOOK_PROP` に置き、`notifySlack_` だけが読む。
 
-| 関数 | 役割 |
-|---|---|
-| `slackWebhookUrl_(key)` | キー → Webhook URL。未設定・未知は理由をログに残して `null` |
-| `operationalSlackTarget_()` | `SLACK_TARGET` → キー。**未知の値でも止めず既定へ落とす** |
-| `postSlack_(url, payload)` | 送信のみ。HTTP コードを見てログに残す |
+**このプロパティ名を改名しないこと。** 改名した .gs を貼った瞬間、プロパティを直すまで
+日次通知が黙って止まり、それは「該当が無くて静かな日」と見分けが付かない（§4.1 と同じ理由）。
 
-判断が 2 つある。
+`postSlack_` は応答コードを見てログに残す。宛先が 1 つなので「届かない ＝ すぐ気づく」が
+成り立つが、失効に気づけるよう記録は残しておく。
 
-- **`SLACK_WEBHOOK_URL` を `..._PERSONAL` に改名しない。** 命名は揃わないが、改名した .gs を
-  貼った瞬間、プロパティを直すまで日次通知が黙って止まる。それは「該当が無くて静かな日」と
-  見分けが付かない（§4.1 と同じ理由）
-- **`SLACK_TARGET` が未知の値でも既定へ送る。** 設定ミスを隠す妥協だが、
-  誤った宛先へ 1 通出る害より、通知が消えて誰も気づかない害の方が大きい。警告はログに残す
-
-`postSlack_` で応答コードを見るのはこの変更で足した。宛先が 1 つのうちは「届かない ＝ すぐ気づく」
-だったが、宛先が複数になると片方の Webhook だけ失効しても残りが届き、欠測に気づけない。
+> 以前は個人検証／会社テストの 2 宛先を `SLACK_TARGETS` テーブルで切り替えていた。
+> 実際には切り替えて使われなかったので 2026-09-07 に 1 本へ畳んだ。
 
 ### 4.7 フォールバック行は製品を名乗らない
 
@@ -746,7 +736,7 @@ Apps Script は全ファイルをグローバルスコープで実行するが�
 `V_INVEST` が `ReferenceError`）。関数と `var` はファイルをまたいで確実に共有される。
 
 対象は 13 個（`AI_PROVIDER` / `V_ACT` / `V_INVEST` / `V_NONE` / `VENDOR_FORTINET` /
-`VENDOR_CISCO` / `KEV_YES` / `KEV_NO` / `SLACK_TARGETS` / `SSL_VPN_ENABLED` /
+`VENDOR_CISCO` / `KEV_YES` / `KEV_NO` / `SLACK_WEBHOOK_PROP` / `SSL_VPN_ENABLED` /
 `CHECK_STEPS_FORTINET` / `CHECK_STEPS_NO_CSAF` / `CHECK_STEPS_CISCO_DEFAULT`）。
 確認用から新しい定数を参照したくなったら、その宣言も `var` へ変えて
 `testSharedConstants()` の一覧に足す。**`testSharedConstants()` を他のテストより先に
@@ -768,7 +758,6 @@ GAS エディタへの手貼りで、確認用の関数はほとんど変わら�
            RSS_URL / CSAF_BASE / CISCO_CSAF_RSS_URL / KEV_FEED_URL / JPCERT_RSS_URL
            AI_CHUNK_SIZE=10 / KEEP_OUT_OF_SCOPE_MONTHS=3
            SLACK_MAX_ITEMS=15 / NOTIFY_WHEN_NO_HITS=false
-           SLACK_TARGETS{personal,team} / SLACK_TARGET_DEFAULT='personal'
            LEDGER_HEADERS(14) / STATE_HEADERS(10) / RUNLOG_HEADERS(11) / ASSET_HEADERS(9)
            DECISION_HEADERS(7) / DECISION_VERDICT / decisions_
            STATE_VERSION_UNAVAILABLE='未取得' / aiRequestCount_ / runStats_
@@ -866,7 +855,6 @@ Cisco の Security Hardening Release が重なった月だった可能性があ�
 | 影響機能の 67% が「その他」 | 原因は分類器ではなく、Cisco の Security Hardening Release で CVE 側に材料が無かったこと。`document.notes` の CWE 表を読み、条件4を CVSS ベクターへ移した（§4.9 / §4.12） |
 | KEV 連携の基準未承認 | 2026-09-01 承認。登録主体を判定根拠に添える（社内ルール §5） |
 | 人の判断が残らない | 判断記録シート（§2.5 / §4.13） |
-| Slack の宛先が 1 つ | `SLACK_TARGETS` で切替（§4.6） |
 | CSAF が取れない件の製品を捏造 | 製品を名乗らない（§4.7） |
 | ツールの守備範囲外の情報 | JPCERT/CC の注意喚起だけ拾う（§4.8） |
 | テストが本体と同居 | 2 ファイルへ分離（§5） |

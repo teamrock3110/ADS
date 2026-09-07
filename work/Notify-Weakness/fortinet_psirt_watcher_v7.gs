@@ -8,8 +8,8 @@
  * 貼り替え・テスト・移行の手順は `GAS実行手順_v7.md`。判定ルールは `社内ルール案_OS更新基準.md`。
  *
  * スクリプト プロパティ:
- *   GEMINI_API_KEY / ANTHROPIC_API_KEY / SLACK_WEBHOOK_URL / SLACK_WEBHOOK_URL_TEAM /
- *   SLACK_TARGET（未設定なら個人）/ JPCERT_SEEN_AT（ツールが書く）
+ *   GEMINI_API_KEY / ANTHROPIC_API_KEY / SLACK_WEBHOOK_URL /
+ *   JPCERT_SEEN_AT（ツールが書く）
  *
  * CSAF とは:
  *   ベンダーが脆弱性情報を機械可読な JSON で公開しているファイル。Fortinet / Cisco とも
@@ -30,7 +30,7 @@
  * ReferenceError）。var と関数はファイルをまたいで確実に共有される。
  *
  * 対象: AI_PROVIDER / V_ACT / V_INVEST / V_NONE / VENDOR_FORTINET / VENDOR_CISCO /
- *       KEV_YES / KEV_NO / SLACK_TARGETS / SSL_VPN_ENABLED /
+ *       KEV_YES / KEV_NO / SLACK_WEBHOOK_PROP / SSL_VPN_ENABLED /
  *       CHECK_STEPS_FORTINET / CHECK_STEPS_NO_CSAF / CHECK_STEPS_CISCO_DEFAULT
  *
  * 確認用ファイルから新しい定数を参照したくなったら、その宣言も var に変えること。
@@ -124,21 +124,12 @@ const KEEP_OUT_OF_SCOPE_MONTHS = 3;
 const SLACK_MAX_ITEMS = 15;
 
 /**
- * Slack の宛先。キー → スクリプトプロパティ名と表示名。
+ * Slack の Webhook URL を入れるスクリプトプロパティ名。
  *
- * 増やすときはここに 1 行足すだけにする。送信側の関数は触らない。
- *
- * **personal のプロパティ名を SLACK_WEBHOOK_URL のまま残している。**改名した .gs を
- * 貼った瞬間、プロパティを直すまで日次通知が黙って止まり、それは「該当が無くて
- * 静かな日」と見分けが付かない。命名より「設定の欠落を沈黙にしない」を取る。
+ * **改名しないこと。**改名した .gs を貼った瞬間、プロパティを直すまで日次通知が
+ * 黙って止まり、それは「該当が無くて静かな日」と見分けが付かない。
  */
-var SLACK_TARGETS = {
-  personal: { prop: 'SLACK_WEBHOOK_URL',      label: '個人検証' },
-  team:     { prop: 'SLACK_WEBHOOK_URL_TEAM', label: '会社テスト' }
-};
-
-/** SLACK_TARGET が未設定・未知のときに使う宛先。 */
-const SLACK_TARGET_DEFAULT = 'personal';
+var SLACK_WEBHOOK_PROP = 'SLACK_WEBHOOK_URL';
 
 /** Slack 末尾の外部一覧。URL は表示せずリンクテキストだけ出す */
 const SECURITY_NEXT_VULN_URL = 'https://www.security-next.com/category/cat177';
@@ -754,7 +745,7 @@ function main() {
     runStats_.jpcert = alerts.length;
 
     if (notifyRows.length || alerts.length) {
-      if (notifySlack_(notifyRows, '', alerts)) markJpcertSeen_(alerts);
+      if (notifySlack_(notifyRows, alerts)) markJpcertSeen_(alerts);
     }
     Logger.log('main() 完了（Fortinet 台帳 ' + fortinetRows.length +
                ' 行 / Cisco 台帳 ' + ciscoRows.length + ' 行）');
@@ -4134,13 +4125,6 @@ function writeRunLog_(errorText) {
       return v.reduce(function (a, x) { return a + (x.labels[label] || 0); }, 0);
     }
 
-    // Slack の宛先は既定以外のときだけ書く。通常運用では 1 文字も増えない。
-    // 検証で会社テストへ向けたまま戻し忘れても、後からこの列で追える。
-    const tgt = runStats_.slackTarget;
-    const targetNote = (tgt && tgt !== SLACK_TARGET_DEFAULT && SLACK_TARGETS[tgt])
-      ? 'Slack宛先: ' + SLACK_TARGETS[tgt].label
-      : '';
-
     // 内訳は「見るべきことがあった日」だけ書く。平常日（更新も失敗もエラーも無い日）は
     // 毎日同じ文字列が並ぶだけで読む価値がなく、空欄にしておけば
     // 「何か書いてある行＝見るべき行」として拾える。
@@ -4148,7 +4132,7 @@ function writeRunLog_(errorText) {
     const jpNote = runStats_.jpcert ? 'JPCERT注意喚起 ' + runStats_.jpcert + ' 件' : '';
 
     const worthWriting = !!errorText || sum('processed') > 0 || sum('failed') > 0 ||
-                         !!targetNote || !!jpNote;
+                         !!jpNote;
 
     // ベンダー別の数字は 1 列にまとめる。異常時に切り分けられればよく、
     // ベンダーごとに行を分けると「今日動いたか」が 1 行で読めなくなる。
@@ -4236,7 +4220,7 @@ function writeRunLog_(errorText) {
       aiRequestCount_ - runStats_.aiAtStart,
       [errorText ? 'エラー: ' + errorText : '',
        worthWriting ? detail : '',
-       jpNote, targetNote].filter(function (t) { return t; }).join('  /  ')
+       jpNote].filter(function (t) { return t; }).join('  /  ')
     ]]);
     sh.getRange(row, 1).setNumberFormat('yyyy/mm/dd hh:mm');
   } catch (e) {
@@ -4358,16 +4342,18 @@ function formatLedger_(sh) {
  *
  * 「なし」は件数のみ。画像添付はしない（Webhook のみ）。
  *
- * targetKey を省略すると運用宛先（SLACK_TARGET）。呼び出し側は宛先を知らないでよい。
  * alerts は JPCERT の注意喚起。**判定を通っていない情報**なので CVE のカードとは混ぜず
  * 末尾に別枠で出す。該当 0 件でも注意喚起があれば送る（そうしないと消える）。
  *
  * @return {boolean} 実際に送ったか。呼び出し側が既読を進めてよいかの判断に使う。
  */
-function notifySlack_(rows, targetKey, alerts) {
-  const key = targetKey || operationalSlackTarget_();
-  const url = slackWebhookUrl_(key);
-  if (!url) return false;
+function notifySlack_(rows, alerts) {
+  const url = String(PropertiesService.getScriptProperties()
+    .getProperty(SLACK_WEBHOOK_PROP) || '').trim();
+  if (!url) {
+    Logger.log(SLACK_WEBHOOK_PROP + ' が未設定です。Slack へは送りません。');
+    return false;
+  }
 
   const hits = rows
     .filter(function (r) { return r.verdict === V_ACT || r.verdict === V_INVEST; })
@@ -4383,59 +4369,17 @@ function notifySlack_(rows, targetKey, alerts) {
   const shown = hits.slice(0, SLACK_MAX_ITEMS);
   const payload = buildSlackPayload_(shown, sheetUrl, hits, notes);
 
-  // 実際に送った宛先だけ実行履歴に残す。ここより上で戻る日は何も送っていないので
-  // 記録しない。切り替えたまま戻し忘れた日は、送った実行に必ず印が残る。
-  if (runStats_) runStats_.slackTarget = key;
-
   const code = postSlack_(url, payload);
-  Logger.log('Slack 通知を送信しました（' + SLACK_TARGETS[key].label + '）: ' +
+  Logger.log('Slack 通知を送信しました: ' +
              '全 ' + hits.length + ' 件のうち ' + shown.length + ' 件を表示' +
              (notes.length ? ' / JPCERT 注意喚起 ' + notes.length + ' 件' : ''));
   return code === 200;
 }
 
 /**
- * 宛先キーから Webhook URL を引く。取れないときは null を返して理由をログに残す。
- * 表示名とプロパティ名の両方を出す。「どの宛先が」「どの設定を」欠いているかが
- * 一度で分からないと、宛先が増えたときにログだけでは切り分けられない。
- */
-function slackWebhookUrl_(targetKey) {
-  const t = SLACK_TARGETS[targetKey];
-  if (!t) {
-    Logger.log('Slack 宛先「' + targetKey + '」は定義されていません。送信しません。');
-    return null;
-  }
-  const url = PropertiesService.getScriptProperties().getProperty(t.prop);
-  if (!url) {
-    Logger.log('Slack ' + t.label + '（' + t.prop + '）が未設定のため通知をスキップします。');
-    return null;
-  }
-  return url;
-}
-
-/**
- * 運用（main / reprocess）の宛先。スクリプトプロパティ SLACK_TARGET で切り替える。
- *
- * 未知の値でも送信は止めず、既定へ落として警告だけ出す。
- * ここで止めると、設定の打ち間違いが「Slack が静かな日」と区別できなくなる。
- * 既定へ送ってしまう害より、通知が消えて誰も気づかない害の方が大きい。
- */
-function operationalSlackTarget_() {
-  const v = String(PropertiesService.getScriptProperties().getProperty('SLACK_TARGET') || '').trim();
-  if (!v) return SLACK_TARGET_DEFAULT;
-  if (!SLACK_TARGETS[v]) {
-    Logger.log('SLACK_TARGET の値「' + v + '」は未知です。' +
-               SLACK_TARGETS[SLACK_TARGET_DEFAULT].label + ' に送ります。');
-    return SLACK_TARGET_DEFAULT;
-  }
-  return v;
-}
-
-/**
  * Slack へ送る。応答コードを見てログに残す。
  *
- * 以前は muteHttpExceptions のまま結果を捨てていた。宛先が 1 つのうちは
- * 「届かない ＝ すぐ気づく」だったが、宛先が複数になると片方の Webhook だけ
+ * 以前は muteHttpExceptions のまま結果を捨てていた。Webhook だけ
  * 失効しても残りが届き、欠測に気づけなくなる。
  */
 function postSlack_(url, payload) {
