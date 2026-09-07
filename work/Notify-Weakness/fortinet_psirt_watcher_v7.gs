@@ -507,9 +507,6 @@ function onOpen() {
     .addSeparator()
     .addItem('選択行から判断記録を作る', 'createDecisionFromLedger')
     .addSeparator()
-    .addSubMenu(ui.createMenu('Slack テスト送信')
-      .addItem('個人検証チャンネルへ', 'sendSlackTestToPersonal')
-      .addItem('会社テストチャンネルへ', 'sendSlackTestToTeam'))
     .addToUi();
 }
 
@@ -972,8 +969,6 @@ function main() {
 
     if (notifyRows.length || alerts.length) {
       if (notifySlack_(notifyRows, '', alerts)) markJpcertSeen_(alerts);
-    } else {
-      backfillAiColumns_();
     }
     Logger.log('main() 完了（Fortinet 台帳 ' + fortinetRows.length +
                ' 行 / Cisco 台帳 ' + ciscoRows.length + ' 行）');
@@ -4711,107 +4706,6 @@ function formatLedger_(sh) {
   all.setWrap(true);
 }
 
-/**
- * AI 列が空のまま残っている行を埋め直す。
- * v5 は判定できなかった行を削除して再取得していたが、取得済みの事実まで捨ててしまう。
- * v6 は通知判定をコードで確定させているので、行は残したまま AI 列だけ補える。
- */
-function backfillAiColumns_() {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LEDGER);
-  if (!sh || sh.getLastRow() < 2) return;
-
-  const n = sh.getLastRow() - 1;
-  const values = sh.getRange(2, 1, n, LEDGER_HEADERS.length).getValues();
-  const display = sh.getRange(2, 1, n, LEDGER_HEADERS.length).getDisplayValues();
-
-  const wanted = {};
-  let count = 0;
-  for (let i = 0; i < values.length; i++) {
-    const verdict = values[i][COL['自社影響'] - 1];
-    const advisoryId = display[i][COL['アドバイザリ'] - 1];
-    const vendor = vendorFromAdvisoryId_(advisoryId) || VENDOR_FORTINET;
-    if (verdict !== V_ACT && verdict !== V_INVEST && verdict !== V_NONE) continue;
-    if (String(values[i][COL['ユーザ影響'] - 1]).trim() &&
-        String(values[i][COL['影響機能'] - 1]).trim() &&
-        String(values[i][COL['確認方法'] - 1]).trim()) continue;
-
-    const key = advisoryId + '|' +
-                values[i][COL['CVE'] - 1] + '|' +
-                values[i][COL['製品'] - 1];
-    wanted[key] = {
-      rowIndex: i + 2,
-      advisoryId: advisoryId,
-      vendor: vendor
-    };
-    count++;
-  }
-
-  if (!count) { Logger.log('AI 補完が必要な行はありません。'); return; }
-  Logger.log('AI 補完対象: ' + count + ' 行');
-
-  const fortinetAssets = fortinetAssets_(readAssets_());
-  const ciscoAssetList = ciscoAssets_(readAssets_());
-  const byAdvisory = {};
-  Object.keys(wanted).forEach(function (k) {
-    const w = wanted[k];
-    byAdvisory[w.vendor + '\t' + w.advisoryId] = w.vendor;
-  });
-
-  const targets = [];
-  Object.keys(byAdvisory).forEach(function (vk) {
-    const parts = vk.split('\t');
-    const vendor = parts[0];
-    const id = parts[1];
-    try {
-      let rows = [];
-      if (vendor === VENDOR_CISCO) {
-        const item = { id: id, link: '', title: '', description: '', pubDate: '' };
-        rows = extractCiscoRowsFromCsaf_(fetchCiscoCsaf_(id), item, ciscoAssetList);
-        rows.forEach(function (r) { decideNotification_(r, ciscoAssetList); });
-      } else {
-        const item = {
-          ir: id,
-          title: '',
-          link: 'https://fortiguard.fortinet.com/psirt/' + id,
-          pubDate: ''
-        };
-        rows = extractRows_(fetchCsaf_(item), item);
-        rows.forEach(function (r) { decideNotification_(r, fortinetAssets); });
-      }
-      rows.forEach(function (r) {
-        const w = wanted[rowKey_(r)];
-        if (w && (r.needsVerdict || r.needsDisplayAi || r.needsCodeDisplay)) {
-          r.rowIndex = w.rowIndex;
-          targets.push(r);
-        }
-      });
-    } catch (e) {
-      Logger.log('AI 補完のための再取得に失敗: ' + id + ' / ' + e);
-    }
-    Utilities.sleep(300);
-  });
-
-  if (!targets.length) { Logger.log('再取得できた対象がありませんでした。'); return; }
-
-  fillLedgerDisplay_(targets);
-
-  let written = 0;
-  targets.forEach(function (t) {
-    if (!t.feature && !t.impactJa && !t.howToCheck) return;
-    sh.getRange(t.rowIndex, COL['影響機能']).setValue(t.feature || '');
-    sh.getRange(t.rowIndex, COL['判定根拠']).setValue(t.reason || '');
-    sh.getRange(t.rowIndex, COL['ユーザ影響']).setValue(t.impactJa || '');
-    sh.getRange(t.rowIndex, COL['確認方法']).setValue(stripCheckLabels_(t.howToCheck));
-    if (t.verdict) sh.getRange(t.rowIndex, COL['自社影響']).setValue(t.verdict);
-    if (t.kev) sh.getRange(t.rowIndex, COL['KEV']).setValue(t.kev);
-    written++;
-  });
-  Logger.log('AI 補完: ' + written + ' / ' + targets.length + ' 行を書き戻しました。');
-
-  // 台帳の行数は増えないので合計には足さない。何をしたかだけ内訳に残す。
-  addVendorStats_('AI補完', { note: written + ' 行を埋め直し' });
-}
-
 // ============================================================
 // Slack 通知（日次1通ダイジェスト）
 // ============================================================
@@ -5207,8 +5101,7 @@ function slackCvssBand_(score) {
 
 /**
  * 表示確認に使うサンプル 3 行。台帳の実データではない。
- * 実送信（sendSlackTest_・この下）と、ログ出力（testSlackBlocks・確認用ファイル側）で
- * 同じ内容を使う。
+ * 確認用ファイルの testSlackBlocks() が呼ぶ（同一スコープなので本体側にあってよい）。
  */
 function sampleSlackRows_() {
   return [
@@ -5247,43 +5140,3 @@ function sampleSlackRows_() {
   ];
 }
 
-
-/**
- * サンプル 3 行を実際に Slack へ送る。宛先はスプレッドシートのメニューから選ぶ。
- *
- * 先頭に「テスト送信」の 1 行を足す。中身は架空の CVE（CVE-2026-0001 など）で、
- * 会社のチャンネルに出したとき本物の公表として読まれると実害が出る。
- * 印は buildSlackPayload_ ではなくここで足す。本番の見た目のコードは 1 行も変えない。
- *
- * 実データで見せたいときはこの経路を使わない。SLACK_TARGET を切り替えて
- * reprocessCisco() を実行すれば、本番と同じ経路で 1 通出る。
- */
-function sendSlackTest_(targetKey) {
-  const t = SLACK_TARGETS[targetKey];
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  const url = slackWebhookUrl_(targetKey);
-  if (!url) {
-    // メニューから実行するとログを見に行かないので、シート側にも出す。
-    ss.toast(t.label + '（' + t.prop + '）が未設定です。', 'Slack テスト送信', 8);
-    return;
-  }
-
-  const payload = buildSlackPayload_(sampleSlackRows_(), ss.getUrl());
-  payload.blocks.unshift({
-    type: 'context',
-    elements: [{
-      type: 'mrkdwn',
-      text: ':test_tube: *表示確認のテスト送信です。* 以下は架空のサンプルで、実際の脆弱性ではありません。'
-    }]
-  });
-
-  const code = postSlack_(url, payload);
-  ss.toast(code === 200 ? t.label + ' へ送信しました。'
-                        : '送信に失敗しました（HTTP ' + code + '）。実行ログを確認してください。',
-           'Slack テスト送信', 8);
-}
-
-function sendSlackTestToPersonal() { sendSlackTest_('personal'); }
-
-function sendSlackTestToTeam() { sendSlackTest_('team'); }

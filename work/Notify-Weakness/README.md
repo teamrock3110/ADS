@@ -142,7 +142,7 @@ Slack で1通通知する。**目的は「対応要否の自動決定」では�
   │   csaf_20.xml から更新のあった分だけ CSAF を取得（直列・300ms間隔）
   │   以降は Fortinet と同じ
   ├ JPCERT/CC 注意喚起（自社ベンダー該当・未通知のみ。判定には混ぜない）
-  ├ Slack 通知（該当あり or 注意喚起ありの日だけ1通）／無ければ backfillAiColumns_()
+  ├ Slack 通知（該当あり or 注意喚起ありの日だけ1通）
   └ finally 実行履歴シートに1行記録（落ちた実行も残す）
 ```
 
@@ -479,9 +479,6 @@ v7 で意図的に残している非対称と、その根拠。
 `postSlack_` で応答コードを見るのはこの変更で足した。宛先が 1 つのうちは「届かない ＝ すぐ気づく」
 だったが、宛先が複数になると片方の Webhook だけ失効しても残りが届き、欠測に気づけない。
 
-メニューからのテスト送信（`sendSlackTest_`）はサンプル行を使い、先頭に「テスト送信」の印を足す。
-印は `buildSlackPayload_` ではなく送信側で `unshift` する。**本番の見た目を作るコードは変えない。**
-
 ### 4.7 フォールバック行は製品を名乗らない
 
 CSAF が取れなかった行の `product` は空にする。**知らないものに名前を付けない。**
@@ -801,14 +798,14 @@ GAS エディタへの手貼りで、確認用の関数はほとんど変わら�
            needsAdvisoryProcessing_() / ownershipJudgement_() / judgeReasonText_()
            isKevListed_() / fetchKevCatalog_() / impactSeverity_()
 AI         enrichWithAI_() / buildEnrichPrompt_() / callGemini_() / callGeminiModel_()
-           callClaude_() / countAiRequest_() / backfillAiColumns_() / fillLedgerDisplay_()
+           callClaude_() / countAiRequest_() / fillLedgerDisplay_()
 出力       getKnownState_() / removeRowsFor_() / writeState_() / sortState_()
            snapshotJudgeRows_() / advisoryIdCell_() / advisoryUrlFor_()
            toRowArray_() / writeLedger_() / sortLedger_() / formatLedger_()
            writeRunLog_() / startRunStats_() / addVendorStats_() / notifySlack_()
            slackWebhookUrl_() / operationalSlackTarget_() / postSlack_()
            sendOpsMail_() / notifyMainFailure_() / notifyFetchFailures_()
-           sampleSlackRows_() / sendSlackTest_()（メニュー用。確認用ではない）
+           sampleSlackRows_()（testSlackBlocks が使う）
 ```
 
 `_tests.gs` 側（22 関数）:
@@ -822,9 +819,8 @@ testTitleJaFromAdvisory() / testCiscoFeatureNormalize() / testExternalSurface()
 testSlackBlocks() / testAi() ほか
 ```
 
-**`sampleSlackRows_()` と `sendSlackTest_()` は本体に残した。**メニューから呼ばれる
-運用の機能であって、動作確認用ではない。`testSlackBlocks()` は確認用側にあり、
-本体の `sampleSlackRows_()` を呼ぶ（同一スコープなので動く）。
+**`sampleSlackRows_()` は本体に残した。**確認用側の `testSlackBlocks()` が呼ぶ
+（同一スコープなので動く）。
 
 ---
 
