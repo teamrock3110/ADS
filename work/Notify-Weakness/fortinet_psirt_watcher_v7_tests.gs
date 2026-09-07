@@ -515,43 +515,6 @@ function testImpactJaFromVector() {
   Logger.log('ユーザ影響ベクター: ' + pass + ' / ' + (cases.length + 1) + ' 件が期待どおり');
 }
 
-/** AI が無いとき、内容が英語切れ端ではなく日本語のタイトル訳になること */
-function testTitleJaFromAdvisory() {
-  const cases = [
-    {
-      name: 'FortiGate UI DoS',
-      row: { vendor: VENDOR_FORTINET, title: 'UI DoS attack', feature: '', summary: '', impact: '' },
-      expect: /管理画面/
-    },
-    {
-      name: 'Cisco BEEP',
-      row: {
-        vendor: VENDOR_CISCO,
-        title: 'Cisco IOS XE Software Blocks Extensible Exchange Protocol Denial of Service Vulnerability',
-        feature: '', summary: '', impact: ''
-      },
-      expect: /BEEP/
-    },
-    {
-      name: 'Cisco XMCP',
-      row: {
-        vendor: VENDOR_CISCO,
-        title: 'Cisco IOS XE Software Extensible Messaging Client Protocol Denial of Service Vulnerability',
-        feature: '', summary: '', impact: ''
-      },
-      expect: /XMCP/
-    }
-  ];
-  let pass = 0;
-  cases.forEach(function (c) {
-    const got = slackContentsJa_(c.row);
-    const ok = c.expect.test(got) && /[\u3040-\u30ff\u4e00-\u9faf]/.test(got);
-    if (ok) pass++;
-    Logger.log((ok ? 'OK  ' : 'NG  ') + c.name + ' → ' + got);
-  });
-  Logger.log('タイトル日本語訳: ' + pass + ' / ' + cases.length + ' 件が期待どおり');
-}
-
 /** Cisco 影響機能名の正規化テスト */
 function testCiscoFeatureNormalize() {
   const cases = [

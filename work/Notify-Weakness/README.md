@@ -194,7 +194,7 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
 | CSAF ファイルの HTTP ヘッダ | `ETag` / `Last-Modified` を返す。条件付きGETは可能だが**採用していない**。ファイルの更新であってアドバイザリの改訂ではなく、一括再生成で全件が誤検知になる |
 | 製品名に空白が入る | `FortiSOAR PaaS` / `FortiAnalyzer Cloud` / `FortiSOAR on-premise`。先頭1語を製品名とみなす実装は誤る |
 | バージョン表記は7種類 | 下の表のとおり（延べ 340 件を全件分類）。`25.1.c` のような非数値は比較不能 → `不明` に落とす |
-| **RSSは50件しか持たない** | 公表ペースは平均11件/月。ただし **Fortinet は改訂順**なので、古い件が改訂されるたび先頭に戻り末尾が押し出される。公表だけを数えた「4.5か月分」の見積もりより実際は早く溢れる。`warnIfFeedOverflowed_` が前回との重なりを数えて警告する |
+| **RSSは50件しか持たない** | 公表ペースは平均11件/月。ただし **Fortinet は改訂順**なので、古い件が改訂されるたび先頭に戻り末尾が押し出される。公表だけを数えた「4.5か月分」の見積もりより実際は早く溢れる |
 | CISA KEV | 1,687件・1.6MB。`CacheService` に CVE → 登録主体(vendorProject) を6時間キャッシュ（実測44KB／上限100KB）。あと約1,800件増えるまで余裕あり。`product` まで持つと78KBになり余裕が470件しか残らないので持たない |
 | GAS制限 | UrlFetch 20,000回/日、1実行6分。差分ゼロの実行は約10秒。**50件の全再処理は6分制限に到達した実績がある** |
 | Gemini 無料枠 | 1日20回程度（実測）。回数は AI Studio のレート制限ページでしか見られず公開文書には無い。モデルは `gemini-3.8-flash` → `3.7` → `3.6` → `3.5` → `2.5` の順に退避し、**1日上限はモデルごとに別勘定**なので段を増やすほど粘れる。HTTP 429 かつ本文に `PerDay` なら日次上限。**HTTP 404 / NOT_FOUND（モデル ID が無効・提供終了）でも退避する。**世代交代でモデルは消えるし ID の打ち間違いもここに来る。退避しないと AI 出力が全滅して台帳の 3 列がフォールバック文言だけになる。**HTTP 503 は過負荷であり別物**（退避しない。待って再試行する方が正しく、退避すると枠の残る世代を無駄に消費する）。**モデル ID は ai.google.dev/gemini-api/docs/models で実在を確かめてから置くこと**（2026-09-06 確認済み） |
@@ -386,11 +386,6 @@ CSAF が取れない
      Cisco は改訂で RSS 日付が動いた日に拾われる
 ```
 
-**一度も処理できていない件の取得失敗だけメールする**（`notifyFetchFailures_`）。
-記録済みの件が一時的に取れなかっただけなら送らない。
-
-`main()` が例外で止まった場合は別途メールする（`notifyMainFailure_`）。
-メールは保持期間が長く、台帳と Slack は流れるので、durable な記録として残している。
 
 ---
 
@@ -730,9 +725,7 @@ CSAF に `vulnerabilities` キー自体が無いアドバイザリが実在す�
 しかも根拠欄には「資産シートに未登録のため」と正直に書くが、**それを読むのは対象外の行を
 開いたときだけで、対象外は普通読まれない。**見逃しゼロが要件である以上、これが最も危険な失敗の型。
 
-`logUnownedProducts_` が、資産シートに無いことを理由に「なし」とした製品を実行のたびに
-ログへ一覧する。**前提を毎回目に見える場所へ出す**のが対処で、根本解決は資産シートを
-正しく保つ運用のほう（§6-2 の資産棚卸しルール）。
+対処は資産シートを正しく保つ運用のほう（§6-2 の資産棚卸しルール）。
 
 ---
 
@@ -784,7 +777,7 @@ GAS エディタへの手貼りで、確認用の関数はほとんど変わら�
 取得       fetchRssItems_() / slugifyTitle_() / csafUrlFor_() / fetchCsaf_() / fetchAllCsaf_()
            fetchCiscoCsafRssItems_() / fetchCiscoCsafBatch_() / fetchCiscoHumanRssIndex_()
            selectRssCsafCandidates_()【Cisco専用】/ csafDate_() / csafUpdatedAt_()
-           lastSeenDate_() / warnIfFeedOverflowed_() / ymd_()
+           lastSeenDate_() / ymd_()
 展開       extractRows_() / extractCiscoRowsFromCsaf_() / noVulnRow_()
            extractFortinetRowFallback_() / extractCiscoRowFallback_()
            ciscoCsafProductNames_() / csafCveList_()
@@ -803,7 +796,6 @@ AI         enrichWithAI_() / buildEnrichPrompt_() / callGemini_() / callGeminiMo
            toRowArray_() / writeLedger_() / sortLedger_() / formatLedger_()
            writeRunLog_() / startRunStats_() / addVendorStats_() / notifySlack_()
            slackWebhookUrl_() / operationalSlackTarget_() / postSlack_()
-           sendOpsMail_() / notifyMainFailure_() / notifyFetchFailures_()
            sampleSlackRows_()（testSlackBlocks が使う）
 ```
 

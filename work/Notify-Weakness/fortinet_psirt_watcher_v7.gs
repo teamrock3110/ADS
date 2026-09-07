@@ -657,7 +657,6 @@ function reprocessFortinet() {
  * 処理済みに残っていると main() は Cisco を再取得しない。
  */
 function reprocessCisco() {
-  clearCiscoEmptyRetryMark_();
   const removedState = deleteVendorStateRows_(VENDOR_CISCO);
   const removedLedger = deleteVendorLedgerRows_(VENDOR_CISCO);
   Logger.log('Cisco 再取得の準備: 処理済み ' + removedState + ' 行 / 台帳 ' + removedLedger + ' 行を削除');
@@ -701,50 +700,6 @@ function deleteVendorLedgerRows_(vendor) {
     removed++;
   }
   return removed;
-}
-
-const PROP_CISCO_EMPTY_RETRY = 'ciscoEmptyLedgerRetryAt';
-
-function clearCiscoEmptyRetryMark_() {
-  PropertiesService.getScriptProperties().deleteProperty(PROP_CISCO_EMPTY_RETRY);
-}
-
-function countLedgerVendorRows_(vendor) {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LEDGER);
-  if (!sh || sh.getLastRow() < 2) return 0;
-  const n = sh.getLastRow() - 1;
-  const col = COL['アドバイザリ'];
-  const ids = sh.getRange(2, col, n, 1).getDisplayValues();
-  let count = 0;
-  for (let i = 0; i < ids.length; i++) {
-    if (vendorFromAdvisoryId_(ids[i][0]) === vendor) count++;
-  }
-  return count;
-}
-
-/**
- * 処理済みに Cisco があるのに台帳が空なら、処理済みを消して再取得する。
- * 突合を直したあとに、古い「対象外」記録で永久スキップされるのを防ぐ。
- * 再取得しても空なら、同じ実行を毎日繰り返さない。
- */
-function recoverCiscoIfLedgerEmpty_() {
-  const knownCount = Object.keys(getKnownState_(VENDOR_CISCO).dates).length;
-  const ledgerCount = countLedgerVendorRows_(VENDOR_CISCO);
-  const props = PropertiesService.getScriptProperties();
-
-  if (ledgerCount > 0) {
-    props.deleteProperty(PROP_CISCO_EMPTY_RETRY);
-    return;
-  }
-  if (!knownCount) return;
-  if (props.getProperty(PROP_CISCO_EMPTY_RETRY)) {
-    Logger.log('Cisco: 処理済みはあるが台帳が空です。再取得は実施済みのためスキップ。必要なら reprocessCisco() を実行してください。');
-    return;
-  }
-
-  props.setProperty(PROP_CISCO_EMPTY_RETRY, new Date().toISOString());
-  const n = deleteVendorStateRows_(VENDOR_CISCO);
-  Logger.log('Cisco: 処理済み ' + n + ' 行を消して再取得します（台帳が空のため）');
 }
 
 /** 指定シートの 2 行目以降を削除する。削除した行数を返す。 */
@@ -805,91 +760,12 @@ function main() {
                ' 行 / Cisco 台帳 ' + ciscoRows.length + ' 行）');
   } catch (e) {
     Logger.log('main() 失敗: ' + e);
-    notifyMainFailure_(e);
     runError = String(e);
     throw e;
   } finally {
     // 落ちた実行こそ履歴に残す。行が無い＝そもそも実行されなかった、と読めるようにする。
     writeRunLog_(runError);
   }
-}
-
-/**
- * 運用者（実行アカウント）へメールする。
- *
- * 日次トリガーの結果はログを見ないと分からず、実行ログの保持期間も短い。
- * 「人が見に行かなくても届く」経路はここだけなので、
- * 人の判断が要る事実に限ってここから送る。Slack と台帳は増やさない。
- * 送信に失敗しても処理は止めない（通知の失敗で本体を落とさない）。
- */
-function sendOpsMail_(subject, bodyLines) {
-  try {
-    const to = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail();
-    if (!to) {
-      Logger.log('メール通知: 宛先メールが取得できませんでした（' + subject + '）');
-      return;
-    }
-    MailApp.sendEmail({
-      to: to,
-      subject: subject,
-      body: bodyLines.concat([
-        '',
-        'スプレッドシート: ' + SpreadsheetApp.getActiveSpreadsheet().getUrl()
-      ]).join('\n')
-    });
-    Logger.log('メールを送信しました（' + subject + '） → ' + to);
-  } catch (mailErr) {
-    Logger.log('メール送信に失敗（' + subject + '）: ' + mailErr);
-  }
-}
-
-/**
- * main() が落ちたとき、実行アカウントへメールする。
- * 日次トリガーはログを見ないと気づかないので、失敗だけは能動的に届ける。
- */
-function notifyMainFailure_(err) {
-  sendOpsMail_('[脆弱性ウォッチャー] main() 失敗', [
-    '日次の脆弱性チェック（main）が失敗しました。',
-    '',
-    'エラー: ' + err,
-    '',
-    'Apps Script の実行ログを確認してください。'
-  ]);
-}
-
-/**
- * 一度も処理できていないアドバイザリの CSAF を取得できなかったとき、運用者へメールする。
- *
- * 台帳にも Slack にも出さない。ログだけだと「Slack に何も出ない日」と
- * 「取りこぼした日」が同じ見え方になり、疑うきっかけが無いため、
- * 人が動く必要がある場合に限ってメールで知らせる。
- *
- * 送るのは「処理済みシートに記録が無い＝一度も台帳に反映できていない」件だけ。
- * 記録済みの件が一時的に取れなかった場合は、翌日の実行で取り直せば済むので送らない。
- */
-function notifyFetchFailures_(vendor, failures) {
-  const lines = [
-    vendor + ' の新しいアドバイザリ ' + failures.length + ' 件で、CSAF を取得できませんでした。',
-    'これらはまだ一度も台帳に反映できていません。',
-    ''
-  ];
-
-  failures.forEach(function (f) {
-    const item = f.item || f;
-    lines.push('・' + (item.ir || item.id) + '  ' + (item.title || ''));
-    lines.push('    ' + f.error);
-    lines.push('    アドバイザリ: ' + (item.link || ''));
-    lines.push('    CSAF: ' + (item.csafUrl || csafUrlFor_(item)));
-    lines.push(f.missing
-      ? '    → CSAF未作成として記録しました。以後この件を自動では取りに行きません。'
-      : '    → 記録していません。翌日の実行で自動的に取り直します。');
-    lines.push('');
-  });
-
-  lines.push('「CSAF未作成」と出ている件は、CSAF が実在するのに URL を外している可能性もあります。');
-  lines.push('アドバイザリページを開いて中身を確認してください。');
-
-  sendOpsMail_('[脆弱性ウォッチャー] CSAF 取得失敗 ' + failures.length + ' 件（' + vendor + '）', lines);
 }
 
 function runFortinet_() {
@@ -902,7 +778,6 @@ function runFortinet_() {
   // 処理済みシートはこの実行の中で書き換わらない（間にあるのは外部取得とメールだけ）ので、
   // 1 実行につき 1 回だけ読む。
   const known = getKnownState_(VENDOR_FORTINET);
-  warnIfFeedOverflowed_(allItems, known.dates, function (it) { return it.ir; });
 
   // RSS の日付では CSAF の改訂を判断できないため、毎回すべて取得する。
   // 実測: RSS の pubDate / description の "Revised on" と CSAF の current_release_date は
@@ -914,13 +789,6 @@ function runFortinet_() {
   Logger.log('Fortinet RSS: 全 ' + allItems.length +
              ' 件の CSAF を取得します（RSS の日付は CSAF の改訂を表さないため毎回全件）');
   const fetched = fetchAllCsaf_(allItems);
-
-  // 一度も処理できていない件の取得に失敗したときだけメールする。
-  // 記録済みの件の一時的な失敗は、翌日取り直せば済むので通知しない。
-  const unseenFailures = fetched.filter(function (f) {
-    return f.error && !known.dates[f.item.ir];
-  });
-  if (unseenFailures.length) notifyFetchFailures_(VENDOR_FORTINET, unseenFailures);
 
   let allLedgerRows = [];
   let processedCount = 0;
@@ -967,7 +835,6 @@ function runFortinet_() {
     const counts = countVerdicts_(rows);
     Logger.log('全 ' + rows.length + ' 行: ' + V_ACT + ' ' + counts[V_ACT] +
                ' / ' + V_INVEST + ' ' + counts[V_INVEST] + ' / ' + V_NONE + ' ' + counts[V_NONE]);
-    logUnownedProducts_(rows);
 
     // 取得に失敗した件も記録する（Cisco と同じ方針）。
     // 以前は記録せず翌日やり直していたが、それは失敗が台帳に出ず誰も気づけなかったため。
@@ -1120,11 +987,8 @@ function runCisco_() {
     return [];
   }
 
-  recoverCiscoIfLedgerEmpty_();
-
   const allItems = fetchCiscoCsafRssItems_();
   const known = getKnownState_(VENDOR_CISCO);
-  warnIfFeedOverflowed_(allItems, known.dates, function (it) { return it.id; });
 
   const candidates = selectRssCsafCandidates_(allItems, known, function (it) { return it.id; },
     function (it) { return it.pubDate; });
@@ -1210,10 +1074,7 @@ function runCisco_() {
     allLedgerRows = allLedgerRows.concat(ledgerRows);
   }
 
-  if (allLedgerRows.length) {
-    sortLedger_();
-    clearCiscoEmptyRetryMark_();
-  }
+  if (allLedgerRows.length) sortLedger_();
 
   addVendorStats_(VENDOR_CISCO, {
     rss: allItems.length,
@@ -1908,33 +1769,6 @@ function fetchCsaf_(item) {
     throw new Error('CSAF 取得失敗 HTTP ' + res.getResponseCode() + ': ' + url);
   }
   return JSON.parse(res.getContentText());
-}
-
-/**
- * RSS の枠から取りこぼした可能性を検知する。
- *
- * Fortinet の RSS は常に 50 件しか持たない。実測の公表ペースは月 11 件（最大 18 件）
- * なので、3 か月ほど実行しないと古いものが枠から押し出され、二度と流れてこない。
- * **押し出されてもエラーにはならず、静かに消える。** 分母を主張するツールでは致命的なので、
- * 前回との「重なり」を数えて連続性を確かめる。
- *
- * 重なりが 0 件＝ RSS の全件が未知＝前回以降に 50 件以上入れ替わった、
- * つまり取りこぼしたかどうかを自力では判断できない状態である。
- */
-function warnIfFeedOverflowed_(items, knownDates, getId) {
-  if (!Object.keys(knownDates).length) return;
-
-  const overlap = items.filter(function (it) { return knownDates[getId(it)]; }).length;
-
-  if (overlap === 0) {
-    Logger.log('警告: RSS 50 件のいずれも記録にありません。');
-    Logger.log('  前回の実行から 50 件以上が入れ替わり、枠から押し出されたものがある可能性があります。');
-    Logger.log('  ベンダーの PSIRT ページを人が確認し、抜けが無いか突き合わせてください。');
-  } else if (overlap < 5) {
-    Logger.log('注意: 前回との重なりが ' + overlap + ' 件しかありません（50 件中）。');
-    Logger.log('  実行間隔が空きすぎています。取りこぼす前に実行頻度を上げてください。');
-  }
-  // 正常時は何も出さない。毎日 2 行出していたので警告が埋もれていた。
 }
 
 /** Date を 'yyyy-mm-dd' にする。既読判定の突合キーに使うため文字列で揃える。 */
@@ -3455,34 +3289,6 @@ function narrowFixVersion_(row, assets) {
 }
 
 /**
- * 「資産シートに無いから対象外」にした製品を毎回ログに出す。
- *
- * この判定は資産シートの記載だけを根拠にしているため、
- * 登録漏れがあると「持っていない」と誤って断定し、静かに見逃す。
- * しかもエラーは出ず、根拠欄を読むのは対象外の行を開いたときだけで、
- * 対象外は普通読まれない。見逃しゼロが必須（設計書 6.4）なので、
- * 前提を毎回目に見える形にする。
- *
- * ここに並ぶ製品名は本来すべて自社非保有のはずで、
- * 見覚えのある製品が出てきたら資産シートを疑う。
- */
-function logUnownedProducts_(rows) {
-  const c = {};
-  rows.forEach(function (r) {
-    if (r.verdict === V_NONE && r.reason.indexOf('使用していない') !== -1) {
-      c[r.product] = (c[r.product] || 0) + 1;
-    }
-  });
-  const names = Object.keys(c).sort();
-  if (!names.length) return;
-
-  Logger.log('--- 資産シートに無いため「対象外」にした製品（' + names.length + '種）---');
-  Logger.log(names.map(function (n) { return n + '(' + c[n] + '行)'; }).join(' / '));
-  Logger.log('※ この中に自社で使っている製品があれば、資産シートに追加して再実行してください。');
-  Logger.log('※ 登録漏れはそのまま「対象外」になり、通知対象の見逃しになります。');
-}
-
-/**
  * CSAF の修正指示を日本語の短い一文にする。コードで変換するので AI を使わない。
  *
  * 実データで確認できた文型は3つだけ（延べ 443 行）:
@@ -4788,8 +4594,10 @@ function slackActionLine_(r) {
 
 /** Slack の「内容」。AI の日本語要約。無ければ公式タイトルの日本語訳。 */
 function slackContentsJa_(r) {
+  // AI の要約が無い/使えない日は、アドバイザリのタイトルをそのまま出す。
+  // 以前は英語を正規表現で日本語へ組み直していたが、AI が動く日は 1 行も通らなかった。
   const ai = String(r.cveSummaryJa || '').trim();
-  const text = isUsableCveSummary_(ai) ? ai : titleJaFromAdvisory_(r);
+  const text = isUsableCveSummary_(ai) ? ai : String(r.title || '').trim();
   return text.length > 30 ? text.slice(0, 30) + '…' : text;
 }
 
@@ -4802,100 +4610,6 @@ function isUsableCveSummary_(s) {
   if (ja === 0) return false;
   if (letters >= 8 && ja < 4) return false;
   return true;
-}
-
-/** 製品名と Vulnerability を落とした公式タイトルを日本語にする。定型の「機器が応答停止」は使わない。 */
-function titleJaFromAdvisory_(r) {
-  const feat = contentFeatureJa_(r);
-  const kind = vulnKindJa_(r);
-  if (feat && kind) return feat + 'の' + kind;
-
-  const translated = translateTitlePhrases_(stripAdvisoryTitle_(r));
-  if (feat && translated && translated.indexOf(feat) === -1) return feat + 'の' + translated;
-  if (translated) return translated;
-  if (feat) return feat + 'の脆弱性';
-  if (kind) return kind;
-  return '（タイトルなし）';
-}
-
-function contentFeatureJa_(r) {
-  if ((r.vendor || '') === VENDOR_CISCO) {
-    const f = normalizeCiscoFeature_(r.feature || r.title || '');
-    if (f && f !== 'IOS XE 基盤') return f.replace(/\s+Server$/, '');
-    return '';
-  }
-  const f = String(r.feature || '').trim();
-  if (f === '管理GUI' || f === 'WebUI') return '管理画面';
-  if (f && f !== '不明' && f !== 'その他' && f !== '—') return f;
-  const guessed = guessFortinetFeature_(r);
-  if (guessed === '管理GUI') return '管理画面';
-  if (guessed && guessed !== 'その他') return guessed;
-  return '';
-}
-
-function vulnKindJa_(r) {
-  const low = advisoryCorpus_(r).toLowerCase() + ' ' + String(r.title || '').toLowerCase();
-  if (/remote code|code execution|arbitrary code|command injection|\brce\b/.test(low)) return '遠隔コード実行';
-  if (/privilege.?escalat|elevation of privilege/.test(low)) return '権限昇格';
-  if (/information disclosure|information leak|sensitive.*expos/.test(low)) return '情報漏えい';
-  if (/auth(entication)? bypass|improper authentication/.test(low)) return '認証回避';
-  if (/path.?traversal|directory.?traversal/.test(low)) return 'パストラバーサル';
-  if (/cross.?site.?script|\bxss\b/.test(low)) return 'クロスサイトスクリプティング';
-  if (/sql.?inject/.test(low)) return 'SQLインジェクション';
-  if (/buffer overflow|heap overflow|stack overflow/.test(low)) return 'バッファオーバーフロー';
-  if (/resource exhaust|\bdos\b|denial of service/.test(low)) return 'サービス停止';
-  return '';
-}
-
-function stripAdvisoryTitle_(r) {
-  let t = String(r.title || '').replace(/\s+/g, ' ').trim();
-  if (!t) return '';
-  return t
-    .replace(/^Cisco IOS(?: Software)? and IOS XE Software\s+/i, '')
-    .replace(/^Cisco IOS XE Software\s+/i, '')
-    .replace(/^Cisco IOS Software\s+/i, '')
-    .replace(/\s+in Fortinet FortiOS$/i, '')
-    .replace(/^Fortinet\s+/i, '')
-    .replace(/\s+Vulnerabilit(?:y|ies)$/i, '')
-    .trim();
-}
-
-/** 英語タイトルの定型句だけ日本語にする。プロトコル名（BEEP 等）は残す。 */
-function translateTitlePhrases_(en) {
-  let s = String(en || '').replace(/\s+/g, ' ').trim();
-  if (!s) return '';
-  const pairs = [
-    [/UI DoS attack/gi, '管理画面のサービス停止'],
-    [/DoS attack/gi, 'サービス停止'],
-    [/Resource Exhaustion Allowing Denial of Service/gi, 'リソース枯渇によるサービス停止'],
-    [/Denial of Service/gi, 'サービス停止'],
-    [/Remote Code Execution/gi, '遠隔コード実行'],
-    [/Arbitrary Code Execution/gi, '遠隔コード実行'],
-    [/Privilege Escalation/gi, '権限昇格'],
-    [/Information Disclosure/gi, '情報漏えい'],
-    [/Authentication Bypass/gi, '認証回避'],
-    [/Command Injection/gi, 'コマンドインジェクション'],
-    [/Buffer Over-?read/gi, 'バッファ過剰読み取り'],
-    [/Buffer Overflow/gi, 'バッファオーバーフロー'],
-    [/Resource Exhaustion/gi, 'リソース枯渇'],
-    [/\bDoS\b/gi, 'サービス停止'],
-    [/\bRCE\b/gi, '遠隔コード実行'],
-    [/\bXSS\b/gi, 'クロスサイトスクリプティング'],
-    [/\bWebUI\b/gi, '管理画面'],
-    [/\bGUI\b/g, '管理画面'],
-    [/\bUI\b/g, '管理画面'],
-    [/\battack\b/gi, '攻撃'],
-    [/\ballowing\b/gi, 'による'],
-    [/\bvulnerabilit(?:y|ies)\b/gi, '']
-  ];
-  for (let i = 0; i < pairs.length; i++) {
-    s = s.replace(pairs[i][0], ' ' + pairs[i][1] + ' ');
-  }
-  s = s.replace(/\s+/g, ' ').trim();
-  s = s.replace(/([^\s])\s+(?=[\u3040-\u30ff\u4e00-\u9faf])/g, '$1の');
-  s = s.replace(/の+/g, 'の').replace(/^の+|の+$/g, '');
-  s = s.replace(/サービス停止の攻撃/g, 'サービス停止');
-  return s.replace(/\s+/g, ' ').trim();
 }
 
 /** Slack の「影響」。主語は機器。機能名は足さない。 */
