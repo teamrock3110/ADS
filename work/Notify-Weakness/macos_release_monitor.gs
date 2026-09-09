@@ -101,6 +101,9 @@ var MACOS_TRACK_ACTIVE = '追跡中';
 var MACOS_TRACK_BACKFILL = '初期取込';
 var MACOS_TRACK_DONE = '適用済';
 
+/** 一度も調べていない、という状態。「調べたが分からない」と区別する。 */
+var MACOS_NOT_EVALUATED = '未評価';
+
 /** 通知状態。PENDING / FAILED のあいだは翌日以降も再送対象（設計確定書 §2.7・引き継ぎ §22.5）。 */
 var MACOS_N_PENDING = 'PENDING';
 var MACOS_N_SUCCESS = 'SUCCESS';
@@ -475,14 +478,27 @@ function macosUpsertReleases_(led, releases, isBackfill) {
       rec.version = r.version;
       rec.postingDate = r.postingDate;
       rec.managedOs = managed;
-      rec.tracking = isBackfill ? MACOS_TRACK_BACKFILL : MACOS_TRACK_ACTIVE;
-      rec.securityStatus = r.noPublishedCve ? 'NO_PUBLISHED_CVE' : (r.securityUrl ? 'PENDING_DETAIL' : 'PENDING_INDEX');
       rec.securityUrl = r.securityUrl || '';
-      rec.appleExploited = 'UNKNOWN';
-      rec.decision = 'PENDING';
-      rec.reasonCode = 'INFORMATION_INCOMPLETE';
-      rec.aiStatus = 'PENDING';
-      rec.noticeState = isBackfill ? MACOS_N_NA : MACOS_N_PENDING;
+
+      if (isBackfill) {
+        // 監視を始める前からあったリリース。**一度も調べていない。**
+        // PENDING や UNKNOWN を入れると「調べたが分からなかった」ように読める。
+        // 実際は見ていないので、そう書く（README §4.1 空欄に意味を持たせない）。
+        rec.tracking = MACOS_TRACK_BACKFILL;
+        rec.securityStatus = MACOS_NOT_EVALUATED;
+        rec.appleExploited = MACOS_NOT_EVALUATED;
+        rec.decision = MACOS_NOT_EVALUATED;
+        rec.noticeState = MACOS_N_NA;
+        rec.aiStatus = MACOS_NOT_EVALUATED;
+      } else {
+        rec.tracking = MACOS_TRACK_ACTIVE;
+        rec.securityStatus = r.noPublishedCve ? 'NO_PUBLISHED_CVE' : (r.securityUrl ? 'PENDING_DETAIL' : 'PENDING_INDEX');
+        rec.appleExploited = 'UNKNOWN';
+        rec.decision = 'PENDING';
+        rec.reasonCode = 'INFORMATION_INCOMPLETE';
+        rec.aiStatus = 'PENDING';
+        rec.noticeState = MACOS_N_PENDING;
+      }
 
       led.recs.push(rec);
       byVersion[r.version] = rec;
@@ -624,6 +640,7 @@ function macosNeedsNotice_(state) {
 
 /** 管理対象外と新メジャー OS は Apple 詳細も KEV も取りに行かない（判定に使わないため）。 */
 function macosShouldFetchSecurity_(rec) {
+  if (String(rec.tracking).trim() === MACOS_TRACK_BACKFILL) return false;
   if (macosNormBool_(rec.managedOs) === 'FALSE') return false;
   if (macosIsMajorUpgrade_(rec.version)) return false;
   return true;
