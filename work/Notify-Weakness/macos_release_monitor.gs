@@ -57,9 +57,6 @@ var MACOS_INITIALIZED_PROP = 'MACOS_INITIALIZED';
 var MACOS_LAST_RUN_PROP = 'MACOS_LAST_RUN_AT';
 var MACOS_TRIGGER_FN = 'macosDaily';
 
-/** Slack の 1 section は 3,000 字。CVE を全部並べると数十件で溢れる（設計確定書 §2.8）。 */
-var MACOS_SLACK_MAX_CVE = 12;
-
 var MACOS_AI_MAX_FACTS = 20;
 var MACOS_AI_PROMPT_VERSION = '1.0';
 
@@ -447,12 +444,6 @@ function macosIsConfirmed_(status) {
 // 台帳
 // ============================================================
 
-function macosColIndex_() {
-  const m = {};
-  MACOS_LEDGER_COLS.forEach(function (c, i) { m[c.key] = i; });
-  return m;
-}
-
 function macosHeaders_() {
   return MACOS_LEDGER_COLS.map(function (c) { return c.label; });
 }
@@ -664,7 +655,6 @@ function macosUpsertReleases_(led, releases, isBackfill) {
 
   return added;
 }
-
 
 /**
  * 情報源に出てきたメジャー系統のうち、管理OS シートに無いものの行を作る。
@@ -1413,7 +1403,6 @@ function macosHeadline_(d) {
   return ':white_circle:';
 }
 
-
 function macosReasonText_(code, rec) {
   const map = {
     MAJOR_RELEASE: '新しいメジャー OS のため、月次パッチとは別に計画します。',
@@ -1463,7 +1452,6 @@ function macosKevText_(rec, kev) {
   if (rec.kevCheckedAt) return '一致なし（' + String(rec.kevCheckedAt).slice(5, 16) + ' 照合）';
   return '未確認';
 }
-
 
 // ============================================================
 // 実行履歴・死活
@@ -1656,11 +1644,6 @@ function macosFetchText_(url, label) {
 
 function macosNow_() {
   return Utilities.formatDate(new Date(), MACOS_TZ, 'yyyy-MM-dd HH:mm:ss');
-}
-
-function macosIsoDate_(v) {
-  const m = String(v || '').trim().match(/^(\d{4}-\d{2}-\d{2})/);
-  return m ? m[1] : '';
 }
 
 /** 真偽値でも文字列でも 'TRUE' / 'FALSE' / 'UNKNOWN' に寄せる。型のずれで比較が外れないように。 */
@@ -1877,33 +1860,6 @@ function macosNotifyLatest() {
   macosSaveLedger_(led);
   Logger.log('追跡状態は「' + prev.tracking + '」に戻しました。日次の動きには影響しません。');
   return sent;
-}
-
-/**
- * Slack へテスト送信する。**実際にチャンネルへ 1 通届く。**
- * 台帳の状態に一切依存しないので、「Slack 自体が通るか」だけを切り分けられる。
- */
-function macosSlackTest() {
-  const url = String(PropertiesService.getScriptProperties().getProperty(SLACK_WEBHOOK_PROP) || '').trim();
-  if (!url) { Logger.log('NG: ' + SLACK_WEBHOOK_PROP + ' が未設定です。'); return false; }
-  Logger.log('宛先: ' + url.slice(0, 34) + '...（末尾は伏せています）');
-
-  try {
-    macosPostSlack_({
-      text: 'macOS リリース監視のテスト送信',
-      blocks: [
-        { type: 'header', text: { type: 'plain_text', text: '🧪 macOS リリース監視 テスト送信', emoji: true } },
-        { type: 'section', text: { type: 'mrkdwn', text: 'これはテストです。配布判断ではありません。' } },
-        { type: 'context', elements: [{ type: 'mrkdwn', text: macosNow_() }] }
-      ]
-    });
-    Logger.log('OK: 送信できました。チャンネルを確認してください。');
-    return true;
-  } catch (e) {
-    Logger.log('NG: ' + (e && e.message ? e.message : e));
-    Logger.log('※ HTTP 404 は Webhook の失効、403 はチャンネル権限、400 は本文の形式です。');
-    return false;
-  }
 }
 
 // ============================================================
