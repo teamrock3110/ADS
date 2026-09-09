@@ -260,7 +260,6 @@ function macosDaily() {
     }
 
     stats.added = macosUpsertReleases_(led, releases, asBackfill);
-    if (asBackfill) macosTrackLatestPerMajor_(led);
 
     // 初回は「いま出ているもの」を記録するだけ。追跡もしないし通知もしない。
     //
@@ -598,27 +597,6 @@ function macosEnsureManagedRows_(releases) {
  * 管理対象かどうか。**未設定は UNKNOWN。**サンプル値を自動で TRUE にしない。
  * 文字列で返す（真偽値で返すと台帳側の比較が型でずれる）。
  */
-/**
- * 管理対象の系統ごとに、**いちばん新しい版だけを追跡対象にする。**
- *
- * 初回取込で全部を「初期取込」にすると、いま配っている版が KEV 掲載でも通知が出ない。
- * 「会社の PC に更新が要るか」を答えるツールとして、そこは黙ってはいけない。
- * 古い版は履歴として残すだけ（超えられた版に対してできることは無い）。
- */
-function macosTrackLatestPerMajor_(led) {
-  const latest = {};
-  led.recs.forEach(function (rec) {
-    if (macosNormBool_(rec.managedOs) !== 'TRUE') return;
-    const major = String(rec.version || '').split('.')[0];
-    if (!latest[major] || String(rec.postingDate) > String(latest[major].postingDate)) latest[major] = rec;
-  });
-  Object.keys(latest).forEach(function (m) {
-    const rec = latest[m];
-    if (String(rec.tracking).trim() !== MACOS_TRACK_BACKFILL) return;
-    rec.tracking = MACOS_TRACK_ACTIVE;
-    rec.noticeState = MACOS_N_PENDING;
-  });
-}
 
 /** 新しく検知した行の Security 状態。 */
 function macosInitialSecurityStatus_(r) {
@@ -667,14 +645,16 @@ function macosRunPhase2_(led, kev, stats) {
       // 判定結果は毎回書く。「未評価」は正規化すると「判断保留」になるので、
       // 変化の有無だけで書き込みを決めると、初回評価の結果が台帳に載らない。
       const wasEvaluated = String(rec.decision || '') !== MACOS_NOT_EVALUATED && String(rec.decision || '') !== '';
+      const changed = before !== ev.decision;
       rec.decision = ev.decision;
 
-      if (wasEvaluated && before !== ev.decision) {
+      if (wasEvaluated && changed) {
         rec.prevDecision = before;
-        // 通知を立てるのは追跡中の行だけ。初期取込は記録するだけで知らせない。
-        if (String(rec.tracking).trim() === MACOS_TRACK_ACTIVE) rec.noticeState = MACOS_N_PENDING;
         stats.changed++;
       }
+      // **初回評価でも通知は立てる。**判定が変わったかどうかと、知らせるべきかは別。
+      // ここを「変化したときだけ」にすると、初回に緊急と判定された行が黙って埋もれる。
+      if ((changed || !wasEvaluated) && macosShouldNotify_(rec)) rec.noticeState = MACOS_N_PENDING;
 
       // **管理対象外と宣言した系統は Slack に出さない。**
       // 対応しないと決めたものを毎回知らせても判断は増えない。
@@ -692,9 +672,7 @@ function macosRunPhase2_(led, kev, stats) {
   // 通知は判定がすべて出そろってから。
   // PENDING / FAILED のあいだは翌日以降も対象なので、送信失敗が黙って消えない。
   led.recs.forEach(function (rec) {
-    if (String(rec.tracking) === MACOS_TRACK_ACTIVE && macosNeedsNotice_(rec.noticeState)) {
-      pending.push(rec);
-    }
+    if (macosNeedsNotice_(rec.noticeState)) pending.push(rec);
   });
 
   pending.forEach(function (rec) {
@@ -708,6 +686,23 @@ function macosRunPhase2_(led, kev, stats) {
   });
 
   if (macosAiDownThisRun_) stats.notes.push('AI が応答しないため、この実行は AI 要約なしで通知しました');
+}
+
+/**
+ * この行を Slack に出すか。
+ *
+ * 追跡中は通常どおり。**初期取込でも「早めの適用を検討」なら出す。**
+ *
+ * 以前は「新しい版があるから古い版は関係ない」として初期取込を一律で黙らせていたが、
+ * 実データで 26.6.1 が CISA KEV 掲載の CVE を修正していて緊急と判定されたのに、
+ * 26.6.2 が出ているという理由だけで握り潰していた（2026-09-10）。
+ * **判定が緊急に出た行を通知しない理由は無い。**
+ */
+function macosShouldNotify_(rec) {
+  const t = String(rec.tracking).trim();
+  if (t === MACOS_TRACK_DONE) return false;
+  if (t === MACOS_TRACK_ACTIVE) return true;
+  return macosNormDecision_(rec.decision) === MACOS_D_EMERGENCY;
 }
 
 function macosNeedsNotice_(state) {
@@ -768,7 +763,7 @@ function macosUpdateSecurity_(rec) {
 
     if (changed) {
       rec.aiStatus = MACOS_AI_PENDING;
-      if (String(rec.tracking).trim() === MACOS_TRACK_ACTIVE) rec.noticeState = MACOS_N_PENDING;
+      if (macosShouldNotify_(rec)) rec.noticeState = MACOS_N_PENDING;
     }
   } catch (e) {
     rec.securityStatus = MACOS_S_NO_DETAIL;
