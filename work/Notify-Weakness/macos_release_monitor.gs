@@ -36,7 +36,6 @@
  * 失うのは 15.x / 14.x のような旧メジャー系統のビルド番号表示だけで、
  * 検知・配布判断・CVE・KEV は Developer RSS と Security Index の 2 情報源で動く。
  */
-var MACOS_DEV_RSS_URL = 'https://developer.apple.com/news/releases/rss/releases.rss';
 var MACOS_SECURITY_INDEX_URL = 'https://support.apple.com/en-us/100100';
 
 var MACOS_SHEET_LEDGER = 'macOS台帳';
@@ -78,27 +77,6 @@ var MACOS_AI_DAILY_BUDGET = 12;
  */
 var MACOS_HISTORY_DAYS = 90;
 
-/**
- * ビルドが取れなかったときに書く値。**空欄にはしない。**
- *
- * 空欄だと「入力漏れ」と区別が付かない（README §4.1）。既存の処理済みシートが
- * `CSAF版 = 未取得` としているのと同じ語彙に揃える。
- *
- * ビルドは Developer RSS からしか取れず、その RSS は直近しか持たない短い窓なので、
- * **過去のリリースはほぼ未取得になる。**追いかけている最新版では取れるので、
- * 未取得が並ぶこと自体は劣化ではない。
- */
-var MACOS_BUILD_UNSET = '未取得';
-
-/** 確認状態。Apple Security Releases に載っていれば正式版、Developer RSS だけなら候補。 */
-var MACOS_CONFIRMED = '確定';
-var MACOS_CANDIDATE = '候補';
-
-/** ビルドが分かっているか。過去データの 'UNKNOWN' も未取得として扱う。 */
-function macosHasBuild_(v) {
-  const b = String(v === undefined || v === null ? '' : v).trim();
-  return !!b && b !== MACOS_BUILD_UNSET && b !== 'UNKNOWN';
-}
 
 /**
  * この実行で AI を諦めたか。**1 件目が失敗した時点で、その実行では以降呼ばない。**
@@ -138,10 +116,7 @@ var MACOS_N_NA = '対象外';
  */
 var MACOS_LEDGER_COLS = [
   { key: 'version',        label: 'バージョン' },
-  { key: 'build',          label: 'ビルド' },
   { key: 'postingDate',    label: '公開日' },
-  { key: 'confirmation',   label: '確認状態' },
-  { key: 'sources',        label: '検知ソース' },
   { key: 'managedOs',      label: '管理対象' },
   { key: 'tracking',       label: '追跡状態' },
   { key: 'securityStatus', label: 'Security状態' },
@@ -156,7 +131,6 @@ var MACOS_LEDGER_COLS = [
   { key: 'reasonCode',     label: '判定理由' },
   { key: 'noticeState',    label: '通知状態' },
   { key: 'noticedAt',      label: '最終通知' },
-  { key: 'candidateState', label: '不一致警告' },
   { key: 'aiStatus',       label: 'AI状態' },
   { key: 'aiSummary',      label: 'AI要約' },
   { key: 'aiChanges',      label: 'AI主な修正' },
@@ -194,15 +168,10 @@ function macosDaily() {
     const readiness = macosCheckReadiness_();
     readiness.errors.forEach(function (e) { stats.notes.push(e); });
 
-    // 2 情報源は個別に取る。片方落ちても残りで続行し、両方落ちたときだけ失敗にする。
-    const r = macosSafeSource_('Developer RSS', macosFetchDevRss_);
-    const s = macosSafeSource_('Security Index', macosFetchSecurityIndex_);
-    if (!r.ok && !s.ok) {
-      throw new Error('Apple の 2 情報源どちらにも接続できません: ' + [r.error, s.error].join(' / '));
-    }
-    [r, s].forEach(function (x) { if (!x.ok) { stats.notes.push(x.error); stats.failed++; } });
+    const src = macosSafeSource_('Security Index', macosFetchSecurityIndex_);
+    if (!src.ok) throw new Error(src.error);
 
-    const releases = macosMergeSources_(r.data, s.data);
+    const releases = macosCollectReleases_(src.data);
     stats.detected = releases.length;
 
     // 新しいメジャー OS が出たら、管理OS シートに行だけ用意しておく。
@@ -290,47 +259,6 @@ function macosSafeSource_(name, fn) {
 // Phase 1: 情報源
 // ============================================================
 
-/** Apple Developer Releases RSS。補助センサー。これ単独では正式版と判定しない。 */
-function macosFetchDevRss_() {
-  return macosParseDevRss_(macosFetchText_(MACOS_DEV_RSS_URL, 'Developer RSS'));
-}
-
-function macosParseDevRss_(xml) {
-  const root = XmlService.parse(xml).getRootElement();
-  const channel = root.getChild('channel');
-  const items = channel ? channel.getChildren('item') : root.getChildren('entry', root.getNamespace());
-
-  const out = [];
-  items.forEach(function (item) {
-    const title = macosChildText_(item, 'title');
-    if (!/^macOS\s+/i.test(title)) return;
-    if (/\b(beta|release candidate|RC)\b/i.test(title)) return;
-
-    // 「macOS Tahoe 27.1 (26B123)」のようにコードネームが入る形にも当てておく。
-    // 現在の Apple はコードネームを付けていないが（2026-09-10 実測）、
-    // 付いた瞬間に取りこぼすと、ビルドが取れなくなるだけでなく
-    // Security Index が遅れた日の検知そのものが落ちる。
-    const m = title.match(/^macOS\s+(?:[A-Za-z]+\s+)?(\d+(?:\.\d+){0,2})\s+\(([^)]+)\)\s*$/i);
-    if (!m) return;
-
-    const raw = macosChildText_(item, 'pubDate') || macosChildText_(item, 'updated') || macosChildText_(item, 'published');
-    out.push({ version: m[1], build: m[2].trim(), rssDate: macosRssDate_(raw), rssTitle: title });
-  });
-  return out;
-}
-
-function macosRssDate_(raw) {
-  const s = String(raw || '').trim();
-  const m = s.match(/\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b/i);
-  if (m) {
-    const months = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
-                     jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
-    return m[3] + '-' + months[m[2].slice(0, 3).toLowerCase()] + '-' + ('0' + m[1]).slice(-2);
-  }
-  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
-  return iso ? iso[1] : '';
-}
-
 /** Apple Security Releases 一覧。**公開日と詳細ページ URL はここが正。** */
 function macosFetchSecurityIndex_() {
   return macosParseSecurityIndex_(macosFetchText_(MACOS_SECURITY_INDEX_URL, 'Security Index'));
@@ -385,62 +313,25 @@ function macosSecurityDate_(text) {
 }
 
 /**
- * 2 情報源を **バージョン単位で** 束ねる。
+ * Apple Security Releases の行を **バージョン単位で** 畳む。
  *
- * 日付で結合しないこと。情報源によって「日付」の意味が違うため、
- * 完全一致で結合すると同じリリースが別行に割れる（設計確定書 §2.2）。
- * Apple は 1 バージョンにつきセキュリティページを 1 つしか出さないので、版で束ねれば足りる。
- *
- * ビルドは Developer RSS、公開日と詳細 URL は Security Index が正。
+ * 同じ版の行が複数あれば新しいほうを採る。日付では畳まない。
+ * Apple は 1 バージョンにつきセキュリティページを 1 つしか出さない。
  */
-function macosMergeSources_(rss, sec) {
+function macosCollectReleases_(rows) {
   const byVersion = {};
-  function slot(v) {
-    if (!byVersion[v]) {
-      byVersion[v] = { version: v, build: '', rss: false, sec: false,
-                       securityUrl: '', noPublishedCve: false, rssTitle: '',
-                       rssDate: '', secDate: '' };
-    }
-    return byVersion[v];
-  }
-
-  (rss || []).forEach(function (r) {
-    const t = slot(r.version);
-    t.rss = true;
-    if (!t.build) t.build = r.build;
-    if (!t.rssDate || r.rssDate > t.rssDate) t.rssDate = r.rssDate;
-    if (!t.rssTitle) t.rssTitle = r.rssTitle;
-  });
-
-  (sec || []).forEach(function (s) {
-    const t = slot(s.version);
-    t.sec = true;
-    // 同じ版の行が複数あるときは新しいほうを採る
-    if (!t.secDate || s.secDate > t.secDate) {
-      t.secDate = s.secDate;
-      if (s.securityUrl) t.securityUrl = s.securityUrl;
-    }
-    t.noPublishedCve = t.noPublishedCve || s.noPublishedCve;
-  });
-
-  return Object.keys(byVersion).map(function (v) {
+  const order = [];
+  (rows || []).forEach(function (r) {
+    const v = r.version;
+    if (!byVersion[v]) { byVersion[v] = { version: v, postingDate: '', securityUrl: '', noPublishedCve: false }; order.push(v); }
     const t = byVersion[v];
-    if (!macosHasBuild_(t.build)) t.build = MACOS_BUILD_UNSET;
-    t.postingDate = t.secDate || t.rssDate || '';
-    // **正式版と認めるには Security Index が要る。**RSS だけの行は候補どまりにして
-    // 配布判断へ進めない。分からないものを緑にしないため。
-    //
-    // 値は 2 つだけ。どの情報源で拾ったかは隣の「検知ソース」列が直接書いている。
-    t.confirmation = t.sec ? MACOS_CONFIRMED : MACOS_CANDIDATE;
-    t.sources = [t.rss ? 'DEV_RSS' : '', t.sec ? 'SECURITY_INDEX' : '']
-      .filter(function (x) { return x; }).join(',');
-    return t;
+    if (!t.postingDate || r.secDate > t.postingDate) {
+      t.postingDate = r.secDate;
+      if (r.securityUrl) t.securityUrl = r.securityUrl;
+    }
+    t.noPublishedCve = t.noPublishedCve || r.noPublishedCve;
   });
-}
-
-function macosIsConfirmed_(status) {
-  const v = String(status || '');
-  return v === MACOS_CONFIRMED || v.indexOf('CONFIRMED_') === 0;  // 後半は旧データ用
+  return order.map(function (v) { return byVersion[v]; });
 }
 
 // ============================================================
@@ -582,10 +473,7 @@ function macosUpsertReleases_(led, releases, isBackfill) {
       const rec = {};
       MACOS_LEDGER_COLS.forEach(function (c) { rec[c.key] = ''; });
       rec.version = r.version;
-      rec.build = r.build;
       rec.postingDate = r.postingDate;
-      rec.confirmation = r.confirmation;
-      rec.sources = r.sources;
       rec.managedOs = managed;
       rec.tracking = isBackfill ? MACOS_TRACK_BACKFILL : MACOS_TRACK_ACTIVE;
       rec.securityStatus = r.noPublishedCve ? 'NO_PUBLISHED_CVE' : (r.securityUrl ? 'PENDING_DETAIL' : 'PENDING_INDEX');
@@ -594,15 +482,7 @@ function macosUpsertReleases_(led, releases, isBackfill) {
       rec.decision = 'PENDING';
       rec.reasonCode = 'INFORMATION_INCOMPLETE';
       rec.aiStatus = 'PENDING';
-
-      if (isBackfill) {
-        rec.noticeState = MACOS_N_NA;
-        rec.candidateState = MACOS_N_NA;
-      } else {
-        rec.noticeState = macosIsConfirmed_(r.confirmation) ? MACOS_N_PENDING : MACOS_N_NA;
-        rec.candidateState = (r.confirmation === MACOS_CANDIDATE) ? MACOS_N_PENDING : MACOS_N_NA;
-      }
-      rec.internalJson = JSON.stringify({ rssDate: r.rssDate, secDate: r.secDate, rssTitle: r.rssTitle });
+      rec.noticeState = isBackfill ? MACOS_N_NA : MACOS_N_PENDING;
 
       led.recs.push(rec);
       byVersion[r.version] = rec;
@@ -610,47 +490,12 @@ function macosUpsertReleases_(led, releases, isBackfill) {
       return;
     }
 
-    // --- 既存行の更新 ---
-    const wasConfirmed = macosIsConfirmed_(existing.confirmation);
-    const previousBuild = String(existing.build || '');
-    // 片方でもビルドが分からない場合は「差し替え」と判定しない。
-    const buildChanged = macosHasBuild_(r.build) && macosHasBuild_(existing.build) &&
-                         String(existing.build) !== r.build;
-
-    if (macosHasBuild_(r.build)) existing.build = r.build;
     if (r.postingDate) existing.postingDate = r.postingDate;
-    existing.confirmation = r.confirmation;
-    existing.sources = r.sources;
     existing.managedOs = managed;
     if (r.securityUrl) existing.securityUrl = r.securityUrl;
     if (r.noPublishedCve) existing.securityStatus = 'NO_PUBLISHED_CVE';
     else if (!existing.securityStatus || existing.securityStatus === 'PENDING_INDEX') {
       existing.securityStatus = existing.securityUrl ? 'PENDING_DETAIL' : 'PENDING_INDEX';
-    }
-
-    const internal = macosParseJson_(existing.internalJson, {});
-    internal.rssDate = r.rssDate || internal.rssDate || '';
-    internal.secDate = r.secDate || internal.secDate || '';
-    internal.rssTitle = internal.rssTitle || r.rssTitle || '';
-    existing.internalJson = JSON.stringify(internal);
-
-    if (isBackfill) return;
-
-    // 候補どまりだった行が正式版として確認できたら、そこから追跡を始める。
-    if (!wasConfirmed && macosIsConfirmed_(r.confirmation)) {
-      if (String(existing.tracking) === MACOS_TRACK_BACKFILL) existing.tracking = MACOS_TRACK_ACTIVE;
-      existing.noticeState = MACOS_N_PENDING;
-      existing.candidateState = MACOS_N_NA;
-    }
-    // Apple がビルドを差し替えた場合は、追跡中の行に限り通知をやり直す。
-    // 差し替え前のビルドを持っておく。通知でそれを書かないと 1 通目と区別が付かない。
-    if (buildChanged && String(existing.tracking) === MACOS_TRACK_ACTIVE) {
-      existing.noticeState = MACOS_N_PENDING;
-      existing.lastError = '';
-      existing.__buildChangedFrom = previousBuild;
-    }
-    if (r.confirmation === MACOS_CANDIDATE && existing.candidateState === MACOS_N_NA) {
-      existing.candidateState = MACOS_N_PENDING;
     }
   });
 
@@ -754,21 +599,18 @@ function macosRunPhase2_(led, kev, stats) {
   // 通知は判定がすべて出そろってから。
   // PENDING / FAILED のあいだは翌日以降も対象なので、送信失敗が黙って消えない。
   led.recs.forEach(function (rec) {
-    if (macosNeedsNotice_(rec.candidateState) && String(rec.confirmation) === MACOS_CANDIDATE) {
-      pending.push({ rec: rec, kind: 'candidate' });
-    } else if (String(rec.tracking) === MACOS_TRACK_ACTIVE && macosNeedsNotice_(rec.noticeState)) {
-      pending.push({ rec: rec, kind: 'decision' });
+    if (String(rec.tracking) === MACOS_TRACK_ACTIVE && macosNeedsNotice_(rec.noticeState)) {
+      pending.push(rec);
     }
   });
 
-  pending.forEach(function (p) {
+  pending.forEach(function (rec) {
     try {
-      if (p.kind === 'candidate') macosSendCandidateWarning_(p.rec);
-      else macosSendDecisionNotice_(p.rec, kev);
+      macosSendDecisionNotice_(rec, kev);
       stats.notified++;
     } catch (e) {
       stats.failed++;
-      Logger.log('macOS Slack 送信失敗 (' + p.rec.version + '): ' + e);
+      Logger.log('macOS Slack 送信失敗 (' + rec.version + '): ' + e);
     }
   });
 
@@ -782,7 +624,6 @@ function macosNeedsNotice_(state) {
 
 /** 管理対象外と新メジャー OS は Apple 詳細も KEV も取りに行かない（判定に使わないため）。 */
 function macosShouldFetchSecurity_(rec) {
-  if (!macosIsConfirmed_(rec.confirmation)) return false;
   if (macosNormBool_(rec.managedOs) === 'FALSE') return false;
   if (macosIsMajorUpgrade_(rec.version)) return false;
   return true;
@@ -1213,10 +1054,7 @@ function macosBuildDecisionPayload_(rec, decision, isFirst, ai, kev) {
 
   // 2 通目以降は「なぜまた来たか」を必ず書く。書かないと 1 通目と見分けが付かない。
   const prev = String(rec.prevDecision || '').toUpperCase();
-  if (!isFirst && rec.__buildChangedFrom) {
-    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn',
-      text: 'Apple が同じバージョンのビルドを ' + rec.__buildChangedFrom + ' から ' + rec.build + ' に差し替えました' }] });
-  } else if (!isFirst && prev && prev !== decision) {
+  if (!isFirst && prev && prev !== decision) {
     blocks.push({ type: 'context', elements: [{ type: 'mrkdwn',
       text: '前回は「' + macosShortVerdict_(prev) + '」でした' }] });
   }
@@ -1251,7 +1089,6 @@ function macosBuildDecisionPayload_(rec, decision, isFirst, ai, kev) {
   const facts = [];
   const age = macosDaysSince_(rec.postingDate);
   if (age !== null && age >= 7) facts.push('公開から ' + age + ' 日');
-  if (macosHasBuild_(rec.build)) facts.push('ビルド ' + rec.build);
   facts.push('管理OS ' + (managed === 'TRUE' ? '対象' : managed === 'FALSE' ? '対象外' : '未確認'));
   facts.push('公開CVE ' + macosCveCountText_(rec));
 
@@ -1362,27 +1199,6 @@ function macosCveCountText_(rec) {
   if (String(rec.securityStatus).toUpperCase() === 'NO_PUBLISHED_CVE') return 'Apple 公開エントリなし';
   const n = macosParseCves_(rec.cveList).length;
   return n ? (n + ' 件') : '0 件';
-}
-
-/** Developer Releases にだけ出ていて Apple Security Releases で確認できない状態の警告。 */
-function macosSendCandidateWarning_(rec) {
-  const blocks = [
-    { type: 'header', text: { type: 'plain_text', text: '⚠️ macOS 公開情報の不一致', emoji: true } },
-    { type: 'section', text: { type: 'mrkdwn',
-      text: '*macOS ' + rec.version + (macosHasBuild_(rec.build) ? '（ビルド ' + rec.build + '）' : '') + '*\n' +
-            'Developer Releases では確認できましたが、Apple Security Releases にはまだ掲載されていません。' } },
-    { type: 'context', elements: [{ type: 'mrkdwn',
-      text: '現時点では正式版と判定しません。配布判断も行いません。' }] }
-  ];
-
-  try {
-    macosPostSlack_({ text: 'macOS 公開情報の不一致: ' + rec.version, blocks: blocks });
-    rec.candidateState = MACOS_N_SUCCESS;
-  } catch (e) {
-    rec.candidateState = MACOS_N_FAILED;
-    rec.lastError = 'SLACK: ' + String(e && e.message ? e.message : e);
-    throw e;
-  }
 }
 
 /** AI を使うのは、判定が出ていて Apple の修正内容も読めている場合だけ。 */
@@ -1747,11 +1563,16 @@ function macosDiagnose() {
   });
 
   try {
-    const r = macosSafeSource_('Developer RSS', macosFetchDevRss_);
-    line('Developer RSS', r.ok ? (r.data.length + ' 件') : r.error);
-    const s2 = macosSafeSource_('Security Index', macosFetchSecurityIndex_);
-    line('Security Index', s2.ok ? (s2.data.length + ' 件') : s2.error);
-    if (r.ok || s2.ok) line('マージ後', macosMergeSources_(r.data, s2.data).length + ' 件');
+    const src = macosSafeSource_('Security Index', macosFetchSecurityIndex_);
+    line('Security Index', src.ok ? (src.data.length + ' 件') : src.error);
+    if (src.ok) {
+      const rel = macosCollectReleases_(src.data);
+      const recent = rel.filter(function (r) {
+        const a = macosDaysSince_(r.postingDate);
+        return a === null || a <= MACOS_HISTORY_DAYS;
+      });
+      line('版で畳んだ後', rel.length + ' 件（うち ' + MACOS_HISTORY_DAYS + ' 日以内 ' + recent.length + ' 件）');
+    }
   } catch (e) { line('情報源', 'エラー ' + e.message); }
 
   // 追跡対象の行を並べる。通知が来ないときは、まずここに行が出ているかを見る。
@@ -1803,12 +1624,11 @@ function macosNotifyLatest() {
   macosAiDownThisRun_ = false;
 
   const led = macosLoadLedger_();
-  const confirmed = led.recs.filter(function (r) { return macosIsConfirmed_(r.confirmation); });
-  if (!confirmed.length) throw new Error('台帳に正式版の行がありません。先に macosDaily() を実行してください。');
+  if (!led.recs.length) throw new Error('台帳が空です。先に macosDaily() を実行してください。');
 
   // 管理対象の系統を優先する。そのほうが本番に近い通知になる。
-  const managed = confirmed.filter(function (r) { return macosNormBool_(r.managedOs) === 'TRUE'; });
-  const pool = managed.length ? managed : confirmed;
+  const managed = led.recs.filter(function (r) { return macosNormBool_(r.managedOs) === 'TRUE'; });
+  const pool = managed.length ? managed : led.recs;
   pool.sort(function (a, b) { return String(b.postingDate).localeCompare(String(a.postingDate)); });
   const rec = pool[0];
 
@@ -1816,7 +1636,7 @@ function macosNotifyLatest() {
     Logger.log('注意: 管理対象が TRUE の行がありません。「⚫ 対象外」の通知になります。');
     Logger.log('本番に近い形で見たい場合は「macOS管理OS」シートで該当のメジャーを TRUE にしてください。');
   }
-  Logger.log('対象: macOS ' + rec.version + '（ビルド ' + rec.build + ' / 公開日 ' + rec.postingDate + '）');
+  Logger.log('対象: macOS ' + rec.version + '（公開日 ' + rec.postingDate + '）');
 
   const prev = { tracking: rec.tracking, noticeState: rec.noticeState, noticedAt: rec.noticedAt };
   rec.tracking = MACOS_TRACK_ACTIVE;
