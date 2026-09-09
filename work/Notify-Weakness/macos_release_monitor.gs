@@ -90,6 +90,10 @@ var MACOS_HISTORY_DAYS = 90;
  */
 var MACOS_BUILD_UNSET = '未取得';
 
+/** 確認状態。Apple Security Releases に載っていれば正式版、Developer RSS だけなら候補。 */
+var MACOS_CONFIRMED = '確定';
+var MACOS_CANDIDATE = '候補';
+
 /** ビルドが分かっているか。過去データの 'UNKNOWN' も未取得として扱う。 */
 function macosHasBuild_(v) {
   const b = String(v === undefined || v === null ? '' : v).trim();
@@ -136,7 +140,6 @@ var MACOS_LEDGER_COLS = [
   { key: 'version',        label: 'バージョン' },
   { key: 'build',          label: 'ビルド' },
   { key: 'postingDate',    label: '公開日' },
-  { key: 'detectedAt',     label: '検知日時' },
   { key: 'confirmation',   label: '確認状態' },
   { key: 'sources',        label: '検知ソース' },
   { key: 'managedOs',      label: '管理対象' },
@@ -157,8 +160,6 @@ var MACOS_LEDGER_COLS = [
   { key: 'aiStatus',       label: 'AI状態' },
   { key: 'aiSummary',      label: 'AI要約' },
   { key: 'aiChanges',      label: 'AI主な修正' },
-  { key: 'appliedAt',      label: '適用日時' },
-  { key: 'lastReviewedAt', label: '最終確認' },
   { key: 'lastError',      label: '最終エラー' },
   { key: 'internalJson',   label: '内部データ' }
 ];
@@ -428,8 +429,9 @@ function macosMergeSources_(rss, sec) {
     t.postingDate = t.secDate || t.rssDate || '';
     // **正式版と認めるには Security Index が要る。**RSS だけの行は候補どまりにして
     // 配布判断へ進めない。分からないものを緑にしないため。
-    t.confirmation = (t.sec && t.rss) ? 'CONFIRMED_SECURITY_RSS'
-      : (t.sec ? 'CONFIRMED_SECURITY_ONLY' : 'CANDIDATE_RSS_ONLY');
+    //
+    // 値は 2 つだけ。どの情報源で拾ったかは隣の「検知ソース」列が直接書いている。
+    t.confirmation = t.sec ? MACOS_CONFIRMED : MACOS_CANDIDATE;
     t.sources = [t.rss ? 'DEV_RSS' : '', t.sec ? 'SECURITY_INDEX' : '']
       .filter(function (x) { return x; }).join(',');
     return t;
@@ -437,7 +439,8 @@ function macosMergeSources_(rss, sec) {
 }
 
 function macosIsConfirmed_(status) {
-  return String(status || '').indexOf('CONFIRMED_') === 0;
+  const v = String(status || '');
+  return v === MACOS_CONFIRMED || v.indexOf('CONFIRMED_') === 0;  // 後半は旧データ用
 }
 
 // ============================================================
@@ -566,7 +569,6 @@ function macosUpsertReleases_(led, releases, isBackfill) {
   led.recs.forEach(function (rec) { byVersion[String(rec.version)] = rec; });
 
   let added = 0;
-  const now = macosNow_();
 
   releases.forEach(function (r) {
     const managed = macosManagedState_(r.version);
@@ -582,7 +584,6 @@ function macosUpsertReleases_(led, releases, isBackfill) {
       rec.version = r.version;
       rec.build = r.build;
       rec.postingDate = r.postingDate;
-      rec.detectedAt = now;
       rec.confirmation = r.confirmation;
       rec.sources = r.sources;
       rec.managedOs = managed;
@@ -599,7 +600,7 @@ function macosUpsertReleases_(led, releases, isBackfill) {
         rec.candidateState = MACOS_N_NA;
       } else {
         rec.noticeState = macosIsConfirmed_(r.confirmation) ? MACOS_N_PENDING : MACOS_N_NA;
-        rec.candidateState = (r.confirmation === 'CANDIDATE_RSS_ONLY') ? MACOS_N_PENDING : MACOS_N_NA;
+        rec.candidateState = (r.confirmation === MACOS_CANDIDATE) ? MACOS_N_PENDING : MACOS_N_NA;
       }
       rec.internalJson = JSON.stringify({ rssDate: r.rssDate, secDate: r.secDate, rssTitle: r.rssTitle });
 
@@ -648,7 +649,7 @@ function macosUpsertReleases_(led, releases, isBackfill) {
       existing.lastError = '';
       existing.__buildChangedFrom = previousBuild;
     }
-    if (r.confirmation === 'CANDIDATE_RSS_ONLY' && existing.candidateState === MACOS_N_NA) {
+    if (r.confirmation === MACOS_CANDIDATE && existing.candidateState === MACOS_N_NA) {
       existing.candidateState = MACOS_N_PENDING;
     }
   });
@@ -753,7 +754,7 @@ function macosRunPhase2_(led, kev, stats) {
   // 通知は判定がすべて出そろってから。
   // PENDING / FAILED のあいだは翌日以降も対象なので、送信失敗が黙って消えない。
   led.recs.forEach(function (rec) {
-    if (macosNeedsNotice_(rec.candidateState) && String(rec.confirmation) === 'CANDIDATE_RSS_ONLY') {
+    if (macosNeedsNotice_(rec.candidateState) && String(rec.confirmation) === MACOS_CANDIDATE) {
       pending.push({ rec: rec, kind: 'candidate' });
     } else if (String(rec.tracking) === MACOS_TRACK_ACTIVE && macosNeedsNotice_(rec.noticeState)) {
       pending.push({ rec: rec, kind: 'decision' });
@@ -804,13 +805,11 @@ function macosUpdateSecurity_(rec) {
     rec.cveList = '';
     rec.appleExploited = 'FALSE';
     rec.exploitContext = '';
-    rec.lastReviewedAt = macosNow_();
     return;
   }
 
   if (!rec.securityUrl) {
     rec.securityStatus = 'PENDING_INDEX';
-    rec.lastReviewedAt = macosNow_();
     return;
   }
 
@@ -827,7 +826,6 @@ function macosUpdateSecurity_(rec) {
     rec.cveList = cves;
     rec.appleExploited = exploited;
     rec.exploitContext = macosClip_(d.exploitContexts.join(' | '), 900);
-    rec.lastReviewedAt = macosNow_();
     rec.lastError = '';
 
     // 事実は台帳に持たない。毎日取り直すので持つ必要がなく、
@@ -840,7 +838,6 @@ function macosUpdateSecurity_(rec) {
     }
   } catch (e) {
     rec.securityStatus = 'PENDING_DETAIL';
-    rec.lastReviewedAt = macosNow_();
     rec.lastError = 'APPLE_SECURITY: ' + String(e && e.message ? e.message : e);
   }
 }
