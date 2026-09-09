@@ -96,9 +96,15 @@ var macosRunStartedAt_ = 0;
 /** AI に入ってよい残り時間の下限（ミリ秒）。1 リリース分の再試行は最悪 70 秒ほどかかる。 */
 var MACOS_AI_TIME_GUARD_MS = 180000;
 
-/** 追跡状態。人が「適用済」と手入力できるよう日本語にしてある。 */
+/**
+ * 追跡状態。人が「適用済」と手入力できるよう日本語にしてある。
+ *
+ * **1 リリース 1 通知。**赤も緑もそのリリースの判定として届く。
+ * 「初期取込」という中間状態は廃止した。通知するかどうかを追跡状態で分けると、
+ * 緊急と判定した行を握り潰す事故が起きる（2026-09-10 に実際に起きた）。
+ * 通知しないのは「適用済」と「管理対象外」だけ。
+ */
 var MACOS_TRACK_ACTIVE = '追跡中';
-var MACOS_TRACK_BACKFILL = '初期取込';
 var MACOS_TRACK_DONE = '適用済';
 
 /** 一度も調べていない、という状態。「調べたが分からない」と区別する。 */
@@ -233,15 +239,14 @@ function macosDaily() {
 
     const led = macosLoadLedger_();
 
-    // 古くなった初期取込の行を落とす。人が判断した行（追跡中・適用済）は消さない。
-    const before = led.recs.length;
+    // 期間を過ぎた行を落とす。情報源が返しても再登録されないので、通知が蒸し返ることはない。
+    const beforeCount = led.recs.length;
     led.recs = led.recs.filter(function (r) {
-      if (String(r.tracking).trim() !== MACOS_TRACK_BACKFILL) return true;
       const age = macosDaysSince_(r.postingDate);
       return age === null || age <= MACOS_HISTORY_DAYS;
     });
-    const pruned = before - led.recs.length;
-    if (pruned) stats.notes.push(String(MACOS_HISTORY_DAYS) + ' 日より古い初期取込 ' + pruned + ' 件を台帳から外しました');
+    const pruned = beforeCount - led.recs.length;
+    if (pruned) stats.notes.push(String(MACOS_HISTORY_DAYS) + ' 日より古い ' + pruned + ' 件を台帳から外しました');
 
     if (led.blank || led.dup) {
       stats.notes.push('台帳を整理: 空行 ' + led.blank + ' 件を除外 / 重複 ' + led.dup + ' 件を統合');
@@ -268,11 +273,9 @@ function macosDaily() {
     // 通知状態が PENDING のまま残って翌日また最初からになる（設計確定書 §2.3）。
     if (asBackfill) {
       props.setProperty(MACOS_INITIALIZED_PROP, 'TRUE');
-      stats.notes.push('初回取込 ' + stats.added + ' 件を記録（通知なし）');
+      stats.notes.push('初回取込 ' + stats.added + ' 件');
     }
 
-    // **初回取込の行も調べる。**通知を抑えるのと、調べないのは別の話。
-    // 調べないと、いま配っている版の CVE も KEV も台帳に無く、台帳が何も答えられない。
     const kev = kevCatalogWithStatus_();
     if (!kev.ok) stats.notes.push('KEV照合不可：' + kev.error);
     else if (kev.source !== 'CISA') stats.notes.push('KEV出典：' + kev.source);
@@ -512,7 +515,7 @@ function macosUpsertReleases_(led, releases, isBackfill) {
     const existing = byVersion[r.version];
 
     if (!existing) {
-      // 監視を始める前の古いリリースは記録しない。いま対応できることが無く、台帳を読めなくする。
+      // 期間を過ぎた古いリリースは記録しない。いま対応できることが無く、台帳を読めなくする。
       const age = macosDaysSince_(r.postingDate);
       if (age !== null && age > MACOS_HISTORY_DAYS) return;
 
@@ -522,26 +525,13 @@ function macosUpsertReleases_(led, releases, isBackfill) {
       rec.postingDate = r.postingDate;
       rec.managedOs = managed;
       rec.securityUrl = r.securityUrl || '';
-
-      if (isBackfill) {
-        // 監視を始める前からあったリリース。**一度も調べていない。**
-        // PENDING や UNKNOWN を入れると「調べたが分からなかった」ように読める。
-        // 実際は見ていないので、そう書く（README §4.1 空欄に意味を持たせない）。
-        rec.tracking = MACOS_TRACK_BACKFILL;
-        rec.securityStatus = MACOS_NOT_EVALUATED;
-        rec.appleExploited = MACOS_NOT_EVALUATED;
-        rec.decision = MACOS_NOT_EVALUATED;
-        rec.noticeState = MACOS_N_NA;
-        rec.aiStatus = MACOS_NOT_EVALUATED;
-      } else {
-        rec.tracking = MACOS_TRACK_ACTIVE;
-        rec.securityStatus = macosInitialSecurityStatus_(r);
-        rec.appleExploited = MACOS_NOT_EVALUATED;
-        rec.decision = MACOS_D_PENDING;
-        rec.reasonCode = MACOS_R_INCOMPLETE;
-        rec.aiStatus = MACOS_AI_PENDING;
-        rec.noticeState = MACOS_N_PENDING;
-      }
+      rec.tracking = MACOS_TRACK_ACTIVE;
+      rec.securityStatus = macosInitialSecurityStatus_(r);
+      // ここではまだ何も調べていない。この直後の Phase 2 が実際の値で上書きする。
+      rec.appleExploited = MACOS_NOT_EVALUATED;
+      rec.decision = MACOS_NOT_EVALUATED;
+      rec.aiStatus = MACOS_NOT_EVALUATED;
+      rec.noticeState = MACOS_N_PENDING;
 
       led.recs.push(rec);
       byVersion[r.version] = rec;
@@ -628,7 +618,6 @@ function macosRunPhase2_(led, kev, stats) {
   const pending = [];
 
   led.recs.forEach(function (rec) {
-    // 適用済だけ外す。初期取込は調べる（通知はしない）。
     if (String(rec.tracking).trim() === MACOS_TRACK_DONE) return;
 
     try {
@@ -689,20 +678,12 @@ function macosRunPhase2_(led, kev, stats) {
 }
 
 /**
- * この行を Slack に出すか。
- *
- * 追跡中は通常どおり。**初期取込でも「早めの適用を検討」なら出す。**
- *
- * 以前は「新しい版があるから古い版は関係ない」として初期取込を一律で黙らせていたが、
- * 実データで 26.6.1 が CISA KEV 掲載の CVE を修正していて緊急と判定されたのに、
- * 26.6.2 が出ているという理由だけで握り潰していた（2026-09-10）。
- * **判定が緊急に出た行を通知しない理由は無い。**
+ * この行を Slack に出すか。**判定が出た行はすべて出す。**
+ * 黙るのは、人が適用済にした行と、管理対象外と宣言した系統だけ。
  */
 function macosShouldNotify_(rec) {
-  const t = String(rec.tracking).trim();
-  if (t === MACOS_TRACK_DONE) return false;
-  if (t === MACOS_TRACK_ACTIVE) return true;
-  return macosNormDecision_(rec.decision) === MACOS_D_EMERGENCY;
+  if (String(rec.tracking).trim() === MACOS_TRACK_DONE) return false;
+  return macosNormBool_(rec.managedOs) !== 'FALSE';
 }
 
 function macosNeedsNotice_(state) {
@@ -1477,7 +1458,7 @@ function macosCheckReadiness_() {
  *
  * 1 回目の実行で情報源の一部が取れていなかった場合に使う。
  * このあと macosDaily() を 1 回実行すると、いま公開されているものを取り直して
- * すべて「初期取込」として記録し、**Slack は送らない。**
+ * このあと macosDaily() を 1 回実行すると、いま公開されているものを取り直す。
  * 台帳は消さない（消す必要が無い。同じ版は上書きされる）。
  */
 function macosReinitialize() {
@@ -1669,8 +1650,8 @@ function macosDiagnose() {
   // 追跡対象の行を並べる。通知が来ないときは、まずここに行が出ているかを見る。
   try {
     const led = macosLoadLedger_();
-    const active = led.recs.filter(function (r) { return String(r.tracking).trim() !== MACOS_TRACK_BACKFILL; });
-    out.push('  追跡対象の行: ' + active.length + ' 件（初期取込を除く）');
+    const active = led.recs.filter(function (r) { return String(r.tracking).trim() !== MACOS_TRACK_DONE; });
+    out.push('  追跡中の行: ' + active.length + ' 件（適用済を除く）');
     if (!active.length) {
       out.push('    → 0 件なので通知は出ません。通知を試すには台帳の I 列を「追跡中」、T 列を「PENDING」にします');
     }
