@@ -104,10 +104,53 @@ var MACOS_TRACK_DONE = '適用済';
 /** 一度も調べていない、という状態。「調べたが分からない」と区別する。 */
 var MACOS_NOT_EVALUATED = '未評価';
 
+/* 台帳に書く値はすべて日本語にする。見出しが日本語のシートに英語の列挙が混ざると読めない。
+ * コード側の比較もこの定数で行うので、表示用の変換層は要らない。 */
+
+/** 配布判断。Slack の 1 行目に出る言葉と同じ。 */
+var MACOS_D_EMERGENCY = '早めの適用を検討';
+var MACOS_D_NEXT      = '急ぎの対応は不要';
+var MACOS_D_PENDING   = '判断保留';
+var MACOS_D_NA        = '対象外';
+var MACOS_D_PLAN      = '別途アップグレード計画';
+
+/** 判定理由。Slack には macosReasonText_ が文章にして出す。 */
+var MACOS_R_MAJOR           = '新メジャーOS';
+var MACOS_R_MANAGED_FALSE   = '管理対象外';
+var MACOS_R_MANAGED_UNKNOWN = '管理対象が未設定';
+var MACOS_R_EXPLOITED       = 'Apple実悪用の記載';
+var MACOS_R_KEV             = 'CISA KEV掲載';
+var MACOS_R_SEC_PENDING     = 'Apple情報が未確認';
+var MACOS_R_CISA_DOWN       = 'CISA未取得';
+var MACOS_R_STICKY          = '緊急判定を維持';
+var MACOS_R_NO_EVIDENCE     = '緊急根拠なし';
+var MACOS_R_INCOMPLETE      = '情報不足';
+
+/** Apple セキュリティ情報の取得状態。 */
+var MACOS_S_FOUND     = '確認済';
+var MACOS_S_NO_INDEX  = 'Apple索引に未掲載';
+var MACOS_S_NO_DETAIL = '詳細が未取得';
+var MACOS_S_NO_CVE    = '公開CVEなし';
+
+/** 管理対象。macOS管理OS シートの TRUE/FALSE を台帳の言葉へ写す。 */
+var MACOS_MANAGED_YES     = '対象';
+var MACOS_MANAGED_NO      = '対象外';
+var MACOS_MANAGED_UNKNOWN = '未確認';
+
+/** Apple 実悪用。 */
+var MACOS_E_YES     = 'あり';
+var MACOS_E_NO      = 'なし';
+var MACOS_E_UNKNOWN = '未確認';
+
+/** AI の状態。 */
+var MACOS_AI_PENDING = '未実行';
+var MACOS_AI_OK      = '成功';
+var MACOS_AI_FAILED  = '失敗';
+
 /** 通知状態。PENDING / FAILED のあいだは翌日以降も再送対象（設計確定書 §2.7・引き継ぎ §22.5）。 */
-var MACOS_N_PENDING = 'PENDING';
-var MACOS_N_SUCCESS = 'SUCCESS';
-var MACOS_N_FAILED = 'FAILED';
+var MACOS_N_PENDING = '未送信';
+var MACOS_N_SUCCESS = '送信済';
+var MACOS_N_FAILED = '送信失敗';
 var MACOS_N_NA = '対象外';
 
 /**
@@ -492,11 +535,11 @@ function macosUpsertReleases_(led, releases, isBackfill) {
         rec.aiStatus = MACOS_NOT_EVALUATED;
       } else {
         rec.tracking = MACOS_TRACK_ACTIVE;
-        rec.securityStatus = r.noPublishedCve ? 'NO_PUBLISHED_CVE' : (r.securityUrl ? 'PENDING_DETAIL' : 'PENDING_INDEX');
-        rec.appleExploited = 'UNKNOWN';
-        rec.decision = 'PENDING';
-        rec.reasonCode = 'INFORMATION_INCOMPLETE';
-        rec.aiStatus = 'PENDING';
+        rec.securityStatus = macosInitialSecurityStatus_(r);
+        rec.appleExploited = MACOS_NOT_EVALUATED;
+        rec.decision = MACOS_D_PENDING;
+        rec.reasonCode = MACOS_R_INCOMPLETE;
+        rec.aiStatus = MACOS_AI_PENDING;
         rec.noticeState = MACOS_N_PENDING;
       }
 
@@ -509,9 +552,9 @@ function macosUpsertReleases_(led, releases, isBackfill) {
     if (r.postingDate) existing.postingDate = r.postingDate;
     existing.managedOs = managed;
     if (r.securityUrl) existing.securityUrl = r.securityUrl;
-    if (r.noPublishedCve) existing.securityStatus = 'NO_PUBLISHED_CVE';
-    else if (!existing.securityStatus || existing.securityStatus === 'PENDING_INDEX') {
-      existing.securityStatus = existing.securityUrl ? 'PENDING_DETAIL' : 'PENDING_INDEX';
+    if (r.noPublishedCve) existing.securityStatus = MACOS_S_NO_CVE;
+    else if (!existing.securityStatus || macosNormSecurity_(existing.securityStatus) === MACOS_S_NO_INDEX) {
+      existing.securityStatus = macosInitialSecurityStatus_(r);
     }
   });
 
@@ -554,20 +597,26 @@ function macosEnsureManagedRows_(releases) {
  * 管理対象かどうか。**未設定は UNKNOWN。**サンプル値を自動で TRUE にしない。
  * 文字列で返す（真偽値で返すと台帳側の比較が型でずれる）。
  */
+/** 新しく検知した行の Security 状態。 */
+function macosInitialSecurityStatus_(r) {
+  if (r.noPublishedCve) return MACOS_S_NO_CVE;
+  return r.securityUrl ? MACOS_S_NO_DETAIL : MACOS_S_NO_INDEX;
+}
+
 function macosManagedState_(version) {
   const major = String(version || '').split('.')[0];
   const sh = macosSheet_(MACOS_SHEET_MANAGED);
   const last = sh.getLastRow();
-  if (last < 2) return 'UNKNOWN';
+  if (last < 2) return MACOS_MANAGED_UNKNOWN;
   const values = sh.getRange(2, 1, last - 1, 2).getValues();
   for (let i = 0; i < values.length; i++) {
     if (String(values[i][0]).trim() !== major) continue;
     const v = values[i][1];
-    if (v === true || /^TRUE$/i.test(String(v).trim())) return 'TRUE';
-    if (v === false || /^FALSE$/i.test(String(v).trim())) return 'FALSE';
-    return 'UNKNOWN';
+    if (v === true || /^TRUE$/i.test(String(v).trim())) return MACOS_MANAGED_YES;
+    if (v === false || /^FALSE$/i.test(String(v).trim())) return MACOS_MANAGED_NO;
+    return MACOS_MANAGED_UNKNOWN;
   }
-  return 'UNKNOWN';
+  return MACOS_MANAGED_UNKNOWN;
 }
 
 // ============================================================
@@ -588,7 +637,7 @@ function macosRunPhase2_(led, kev, stats) {
         rec.kevCheckedAt = macosNow_();
       }
 
-      const before = String(rec.decision || 'PENDING').toUpperCase();
+      const before = macosNormDecision_(rec.decision);
       const ev = macosEvaluateDecision_(rec, kev.ok);
       rec.reasonCode = ev.reason;
 
@@ -604,7 +653,7 @@ function macosRunPhase2_(led, kev, stats) {
       // ただし台帳には残す。「見落とした」のか「判断して外した」のかを後から区別するため
       // （README §1.0「対応しなくてよいと説得する材料」）。
       if (macosNormBool_(rec.managedOs) === 'FALSE') rec.noticeState = MACOS_N_NA;
-      if (ev.decision === 'EMERGENCY') stats.emergency++;
+      if (ev.decision === MACOS_D_EMERGENCY) stats.emergency++;
     } catch (e) {
       rec.lastError = 'PHASE2: ' + String(e && e.message ? e.message : e);
       stats.failed++;
@@ -659,28 +708,28 @@ function macosShouldCheckKev_(rec) {
 function macosUpdateSecurity_(rec) {
   if (!macosShouldFetchSecurity_(rec)) return;
 
-  if (String(rec.securityStatus) === 'NO_PUBLISHED_CVE') {
+  if (macosNormSecurity_(rec.securityStatus) === MACOS_S_NO_CVE) {
     rec.cveList = '';
-    rec.appleExploited = 'FALSE';
+    rec.appleExploited = MACOS_E_NO;
     rec.exploitContext = '';
     return;
   }
 
   if (!rec.securityUrl) {
-    rec.securityStatus = 'PENDING_INDEX';
+    rec.securityStatus = MACOS_S_NO_INDEX;
     return;
   }
 
   try {
     const d = macosFetchSecurityDetail_(rec.securityUrl, rec.version);
     const cves = d.cves.join(',');
-    const exploited = d.appleExploited ? 'TRUE' : 'FALSE';
+    const exploited = d.appleExploited ? MACOS_E_YES : MACOS_E_NO;
 
     const changed = String(rec.cveList || '') !== cves ||
                     String(rec.appleExploited || '') !== exploited ||
-                    String(rec.securityStatus || '') !== 'FOUND';
+                    macosNormSecurity_(rec.securityStatus) !== MACOS_S_FOUND;
 
-    rec.securityStatus = 'FOUND';
+    rec.securityStatus = MACOS_S_FOUND;
     rec.cveList = cves;
     rec.appleExploited = exploited;
     rec.exploitContext = macosClip_(d.exploitContexts.join(' | '), 900);
@@ -691,11 +740,11 @@ function macosUpdateSecurity_(rec) {
     rec.__facts = d.facts;
 
     if (changed) {
-      rec.aiStatus = 'PENDING';
+      rec.aiStatus = MACOS_AI_PENDING;
       rec.noticeState = MACOS_N_PENDING;
     }
   } catch (e) {
-    rec.securityStatus = 'PENDING_DETAIL';
+    rec.securityStatus = MACOS_S_NO_DETAIL;
     rec.lastError = 'APPLE_SECURITY: ' + String(e && e.message ? e.message : e);
   }
 }
@@ -773,42 +822,42 @@ function macosParseCves_(value) {
  */
 function macosEvaluateDecision_(rec, kevAvailable) {
   const managed = macosNormBool_(rec.managedOs);
-  const sec = String(rec.securityStatus || 'PENDING_INDEX').toUpperCase();
+  const sec = macosNormSecurity_(rec.securityStatus);
   const exploited = macosNormBool_(rec.appleExploited);
   const kev = macosParseCves_(rec.kevList);
   const cve = macosParseCves_(rec.cveList);
-  const prev = String(rec.decision || 'PENDING').toUpperCase();
+  const prev = macosNormDecision_(rec.decision);
 
   // ① 新メジャー OS は月次パッチではなくアップグレード計画の話。
-  if (macosIsMajorUpgrade_(rec.version)) return { decision: 'SEPARATE_PLAN', reason: 'MAJOR_RELEASE' };
+  if (macosIsMajorUpgrade_(rec.version)) return { decision: MACOS_D_PLAN, reason: MACOS_R_MAJOR };
 
   // ② / ③ 自社が持っているかどうか。未設定は決めない。
-  if (managed === 'FALSE') return { decision: 'NOT_APPLICABLE', reason: 'MANAGED_FALSE' };
-  if (managed !== 'TRUE') return { decision: 'PENDING', reason: 'MANAGED_UNKNOWN' };
+  if (managed === 'FALSE') return { decision: MACOS_D_NA, reason: MACOS_R_MANAGED_FALSE };
+  if (managed !== 'TRUE') return { decision: MACOS_D_PENDING, reason: MACOS_R_MANAGED_UNKNOWN };
 
   // ④ 一度緊急にしたものは、外部情報の揺れで自動的に下げない。人が「適用済」にするまで維持。
-  if (prev === 'EMERGENCY') return { decision: 'EMERGENCY', reason: 'EMERGENCY_STICKY' };
+  if (prev === MACOS_D_EMERGENCY) return { decision: MACOS_D_EMERGENCY, reason: MACOS_R_STICKY };
 
   // ⑤ / ⑥ 実悪用の確認は他のすべてに優先する。
-  if (exploited === 'TRUE') return { decision: 'EMERGENCY', reason: 'APPLE_EXPLOITED' };
-  if (kev.length > 0) return { decision: 'EMERGENCY', reason: 'CISA_KEV' };
+  if (exploited === 'TRUE') return { decision: MACOS_D_EMERGENCY, reason: MACOS_R_EXPLOITED };
+  if (kev.length > 0) return { decision: MACOS_D_EMERGENCY, reason: MACOS_R_KEV };
 
   // ⑦ Apple の情報が確認できないうちは「定期更新まで待てる」と言わない。
-  if (sec === 'PENDING_INDEX' || sec === 'PENDING_DETAIL' || sec === 'UNKNOWN') {
-    return { decision: 'PENDING', reason: 'SECURITY_PENDING' };
+  if (sec === MACOS_S_NO_INDEX || sec === MACOS_S_NO_DETAIL) {
+    return { decision: MACOS_D_PENDING, reason: MACOS_R_SEC_PENDING };
   }
 
   // ⑧ Apple が「公開 CVE エントリなし」と明記した場合。安全という意味ではない。
-  if (sec === 'NO_PUBLISHED_CVE') return { decision: 'NEXT_CYCLE', reason: 'NO_EMERGENCY_EVIDENCE' };
+  if (sec === MACOS_S_NO_CVE) return { decision: MACOS_D_NEXT, reason: MACOS_R_NO_EVIDENCE };
 
-  if (sec === 'FOUND') {
+  if (sec === MACOS_S_FOUND) {
     // ⑨ 昨日照合できたことは、今日の KEV が変わっていない証明にならない。
-    if (cve.length > 0 && !kevAvailable) return { decision: 'PENDING', reason: 'CISA_UNAVAILABLE' };
+    if (cve.length > 0 && !kevAvailable) return { decision: MACOS_D_PENDING, reason: MACOS_R_CISA_DOWN };
     // ⑩
-    return { decision: 'NEXT_CYCLE', reason: 'NO_EMERGENCY_EVIDENCE' };
+    return { decision: MACOS_D_NEXT, reason: MACOS_R_NO_EVIDENCE };
   }
 
-  return { decision: 'PENDING', reason: 'INFORMATION_INCOMPLETE' };
+  return { decision: MACOS_D_PENDING, reason: MACOS_R_INCOMPLETE };
 }
 
 /** 27.0 のような x.0（および数字だけ）は新メジャー OS。26.6.2 は月次パッチ系。 */
@@ -842,7 +891,7 @@ function macosAiCountToday_() {
 function macosPrepareAiSummary_(rec) {
   const facts = rec.__facts || [];
   if (!facts.length) {
-    rec.aiStatus = 'SKIPPED_NO_FACTS';
+    rec.aiStatus = '省略（材料なし）';
     return { ok: false };
   }
 
@@ -851,12 +900,12 @@ function macosPrepareAiSummary_(rec) {
   const internal = macosParseJson_(rec.internalJson, {});
 
   // 入力が同じなら前回の要約を使い回す。無料枠を無駄に減らさないため。
-  if (String(rec.aiStatus) === 'SUCCESS' && internal.aiFp === fingerprint && String(rec.aiSummary || '')) {
+  if (String(rec.aiStatus) === MACOS_AI_OK && internal.aiFp === fingerprint && String(rec.aiSummary || '')) {
     return { ok: true, summary: String(rec.aiSummary), changes: macosParseJson_(rec.aiChanges, []) };
   }
 
   if (!macosAiAllowed_()) {
-    rec.aiStatus = macosAiDownThisRun_ ? 'SKIPPED_AI_DOWN' : 'SKIPPED_BUDGET';
+    rec.aiStatus = macosAiDownThisRun_ ? '省略（AI応答なし）' : '省略（枠上限）';
     return { ok: false };
   }
 
@@ -866,7 +915,7 @@ function macosPrepareAiSummary_(rec) {
     if (!out) throw new Error('AI 応答を JSON として読めない');
     macosValidateAiOutput_(out, selected);
 
-    rec.aiStatus = 'SUCCESS';
+    rec.aiStatus = MACOS_AI_OK;
     rec.aiSummary = macosClip_(String(out.summary.text), 500);
     rec.aiChanges = JSON.stringify(out.notable_changes || []);
     internal.aiFp = fingerprint;
@@ -877,7 +926,7 @@ function macosPrepareAiSummary_(rec) {
 
     return { ok: true, summary: rec.aiSummary, changes: out.notable_changes || [] };
   } catch (e) {
-    rec.aiStatus = 'FAILED';
+    rec.aiStatus = MACOS_AI_FAILED;
     internal.aiFp = fingerprint;
     rec.internalJson = JSON.stringify(internal);
     rec.lastError = 'AI: ' + String(e && e.message ? e.message : e);
@@ -1045,7 +1094,7 @@ function macosPostSlack_(payload) {
  * 見出し・理由・結論・注意書きの 4 か所が同じことを言っていたのを削った。
  */
 function macosSendDecisionNotice_(rec, kev) {
-  const decision = String(rec.decision || 'PENDING').toUpperCase();
+  const decision = macosNormDecision_(rec.decision);
   const isFirst = !String(rec.noticedAt || '');
   const ai = macosUseAi_(rec) ? macosPrepareAiSummary_(rec) : { ok: false };
   const payload = macosBuildDecisionPayload_(rec, decision, isFirst, ai, kev);
@@ -1073,7 +1122,7 @@ function macosBuildDecisionPayload_(rec, decision, isFirst, ai, kev) {
   const prev = String(rec.prevDecision || '').toUpperCase();
   if (!isFirst && prev && prev !== decision) {
     blocks.push({ type: 'context', elements: [{ type: 'mrkdwn',
-      text: '前回は「' + macosShortVerdict_(prev) + '」でした' }] });
+      text: '前回は「' + macosNormDecision_(prev) + '」でした' }] });
   }
 
   // 🔴 の根拠。Apple が実悪用を書いた原文をそのまま引く。
@@ -1113,7 +1162,7 @@ function macosBuildDecisionPayload_(rec, decision, isFirst, ai, kev) {
   // ただし NO_EMERGENCY_EVIDENCE のときは理由行が同じ 2 つを既に書いているので、
   // ここで繰り返さず、理由行に無い「いつ照合したか」だけを足す。
   const lines = [];
-  if (String(rec.reasonCode) === 'NO_EMERGENCY_EVIDENCE') {
+  if (String(rec.reasonCode) === MACOS_R_NO_EVIDENCE) {
     facts.push('実悪用・KEV 照合 ' + (rec.kevCheckedAt ? String(rec.kevCheckedAt).slice(5, 16) : '未実施'));
     lines.push(facts.join(' ／ '));
   } else {
@@ -1130,7 +1179,7 @@ function macosBuildDecisionPayload_(rec, decision, isFirst, ai, kev) {
 
   // 注意書きは 1 行に畳む。毎日同じ文が 3 行続くと 3 回目から読まれない。
   const notes = [];
-  if (decision === 'NEXT_CYCLE') notes.push('「急ぎの対応は不要」は安全の保証ではなく、現時点で臨時更新の条件に当たらないという判定です。');
+  if (decision === MACOS_D_NEXT) notes.push('「急ぎの対応は不要」は安全の保証ではなく、現時点で臨時更新の条件に当たらないという判定です。');
   if (managed === 'TRUE') notes.push('端末モデル / CPU 個別の条件は対象外。');
   if (ai.ok) notes.push('要約のみ AI で、判断・CVE・KEV はコードです。');
 
@@ -1158,28 +1207,9 @@ function macosNoticeTitle_(rec, decision, isFirst) {
   // ケースでは、日付が無いと新しく出たものだと誤読する。
   const pub = rec.postingDate ? '（' + rec.postingDate + ' 公開）' : ' ';
   return macosHeadline_(decision) + ' macOS ' + rec.version + pub +
-         '— ' + macosShortVerdict_(decision);
+         '— ' + macosNormDecision_(decision);
 }
 
-/**
- * 1 行目に置く結論。**読んだ人が次に何をするかが分かる言葉にする。**
- *
- * 「次回定例アップデートで可」という言い方はやめた。社内でその呼び方をしていないうえ、
- * 「定例」から月次を連想させるが、実際のベースラインは **年1回の定期 OS 更新**
- * （社内ルール案_OS更新基準.md）。
- *
- * さらに社内ルールは「次回定期」という値を一度使って**廃止している**
- * （設定を見ていないのに待てると断定していたため）。同じ語をここで復活させない。
- *
- * 社内語彙の「定期更新 / 臨時更新」は本文側で使い、1 行目は行動が分かる平易な言葉にする。
- */
-function macosShortVerdict_(d) {
-  if (d === 'EMERGENCY') return '早めの適用を検討';
-  if (d === 'NEXT_CYCLE') return '急ぎの対応は不要';
-  if (d === 'SEPARATE_PLAN') return '別途アップグレード計画';
-  if (d === 'NOT_APPLICABLE') return '対象外';
-  return '判断保留';
-}
 
 /**
  * 判定の根拠と、必要なら次の行動。
@@ -1191,7 +1221,7 @@ function macosLeadText_(rec, decision) {
   const reason = macosReasonText_(rec.reasonCode, rec);
   // 🟢 は行動を書かない。1 行目の言い換えにしかならないので、
   // 代わりに社内語彙（定期更新）で位置づけを 1 文だけ添える。
-  if (decision === 'NEXT_CYCLE') return reason + '定期更新まで待てる状態です。';
+  if (decision === MACOS_D_NEXT) return reason + '定期更新まで待てる状態です。';
   return reason + '\n' + macosActionText_(decision);
 }
 
@@ -1207,48 +1237,49 @@ function macosDaysSince_(yyyyMmDd) {
 
 /** Apple のセキュリティ情報を実際に読めているか。読めていないなら「なし」と言わない。 */
 function macosSecurityVerified_(rec) {
-  const s = String(rec.securityStatus || '').toUpperCase();
-  return s === 'FOUND' || s === 'NO_PUBLISHED_CVE';
+  const v = rec.securityStatus;
+  const n = macosNormSecurity_(v);
+  return n === MACOS_S_FOUND || n === MACOS_S_NO_CVE;
 }
 
 function macosCveCountText_(rec) {
   if (!macosSecurityVerified_(rec)) return '未確認';
-  if (String(rec.securityStatus).toUpperCase() === 'NO_PUBLISHED_CVE') return 'Apple 公開エントリなし';
+  if (macosNormSecurity_(rec.securityStatus) === MACOS_S_NO_CVE) return 'Apple 公開エントリなし';
   const n = macosParseCves_(rec.cveList).length;
   return n ? (n + ' 件') : '0 件';
 }
 
 /** AI を使うのは、判定が出ていて Apple の修正内容も読めている場合だけ。 */
 function macosUseAi_(rec) {
-  const d = String(rec.decision || '').toUpperCase();
-  if (d !== 'EMERGENCY' && d !== 'NEXT_CYCLE') return false;
-  return String(rec.securityStatus || '').toUpperCase() === 'FOUND' && !!(rec.__facts && rec.__facts.length);
+  const d = macosNormDecision_(rec.decision);
+  if (d !== MACOS_D_EMERGENCY && d !== MACOS_D_NEXT) return false;
+  return macosNormSecurity_(rec.securityStatus) === MACOS_S_FOUND && !!(rec.__facts && rec.__facts.length);
 }
 
 function macosHeadline_(d) {
-  if (d === 'EMERGENCY') return ':red_circle:';
-  if (d === 'NEXT_CYCLE') return ':large_green_circle:';
-  if (d === 'SEPARATE_PLAN') return ':large_purple_circle:';
-  if (d === 'NOT_APPLICABLE') return ':black_circle:';
+  if (d === MACOS_D_EMERGENCY) return ':red_circle:';
+  if (d === MACOS_D_NEXT) return ':large_green_circle:';
+  if (d === MACOS_D_PLAN) return ':large_purple_circle:';
+  if (d === MACOS_D_NA) return ':black_circle:';
   return ':white_circle:';
 }
 
 function macosReasonText_(code, rec) {
-  const map = {
-    MAJOR_RELEASE: '新しいメジャー OS のため、月次パッチとは別に計画します。',
-    MANAGED_FALSE: 'macOS管理OS シートで管理対象外に設定されています。',
-    MANAGED_UNKNOWN: '自社の管理対象 OS か確認できません。',
-    APPLE_EXPLOITED: 'Apple が実悪用の可能性を明記しています。',
-    CISA_KEV: '対象 CVE が CISA KEV に掲載されています。',
-    SECURITY_PENDING: 'Apple のセキュリティ情報がまだ確認できていません。',
-    CISA_UNAVAILABLE: 'CISA KEV の最新状態を確認できないため、配布時期を保留します。',
-    EMERGENCY_STICKY: '一度緊急適用と判定したため、適用完了まで自動では解除しません。',
-    NO_EMERGENCY_EVIDENCE: 'Apple の実悪用記載なし、CISA KEV 一致なし。',
-    INFORMATION_INCOMPLETE: '判断に必要な情報が不足しています。'
-  };
+  const map = {};
+  map[MACOS_R_MAJOR]           = '新しいメジャー OS のため、月次パッチとは別に計画します。';
+  map[MACOS_R_MANAGED_FALSE]   = 'macOS管理OS シートで管理対象外に設定されています。';
+  map[MACOS_R_MANAGED_UNKNOWN] = '自社の管理対象 OS か確認できません。';
+  map[MACOS_R_EXPLOITED]       = 'Apple が実悪用の可能性を明記しています。';
+  map[MACOS_R_KEV]             = '対象 CVE が CISA KEV に掲載されています。';
+  map[MACOS_R_SEC_PENDING]     = 'Apple のセキュリティ情報がまだ確認できていません。';
+  map[MACOS_R_CISA_DOWN]       = 'CISA KEV の最新状態を確認できないため、配布時期を保留します。';
+  map[MACOS_R_STICKY]          = '一度緊急と判定したため、適用完了まで自動では解除しません。';
+  map[MACOS_R_NO_EVIDENCE]     = 'Apple の実悪用記載なし、CISA KEV 一致なし。';
+  map[MACOS_R_INCOMPLETE]      = '判断に必要な情報が不足しています。';
+
   let text = map[String(code || '')] || String(code || '');
   // 「設定してください」だけでは何を足すか分からない。対象のメジャーまで書く。
-  if (String(code) === 'MANAGED_UNKNOWN' && rec && rec.version) {
+  if (String(code) === MACOS_R_MANAGED_UNKNOWN && rec && rec.version) {
     const major = String(rec.version).split('.')[0];
     text += 'macOS管理OS シートの「' + major + '」に TRUE / FALSE を入れてください。';
   }
@@ -1258,9 +1289,9 @@ function macosReasonText_(code, rec) {
 /** 次にやること。社内ルールの語彙（定期更新 / 臨時更新）に合わせる。 */
 function macosActionText_(d) {
   // 「臨時更新」は社内ルールの用語。即日更新という意味ではない、と同ルールに明記がある。
-  if (d === 'EMERGENCY') return '*臨時更新の要否を判断してください。*';
-  if (d === 'SEPARATE_PLAN') return '*通常の更新とは分けて、メジャー OS のアップグレードとして計画してください。*';
-  if (d === 'NOT_APPLICABLE') return '*現在の管理対象 OS の設定では、対応は発生しません。*';
+  if (d === MACOS_D_EMERGENCY) return '*臨時更新の要否を判断してください。*';
+  if (d === MACOS_D_PLAN) return '*通常の更新とは分けて、メジャー OS のアップグレードとして計画してください。*';
+  if (d === MACOS_D_NA) return '*現在の管理対象 OS の設定では、対応は発生しません。*';
   return '*いまは配布時期を決めません。情報が更新されてから再判定します。*';
 }
 
@@ -1479,9 +1510,30 @@ function macosNow_() {
 /** 真偽値でも文字列でも 'TRUE' / 'FALSE' / 'UNKNOWN' に寄せる。型のずれで比較が外れないように。 */
 function macosNormBool_(v) {
   const s = String(v === undefined || v === null ? '' : v).trim().toUpperCase();
-  if (s === 'TRUE') return 'TRUE';
-  if (s === 'FALSE') return 'FALSE';
+  if (s === 'TRUE' || s === '対象' || s === 'あり') return 'TRUE';
+  if (s === 'FALSE' || s === '対象外' || s === 'なし') return 'FALSE';
   return 'UNKNOWN';
+}
+
+/* 台帳の値を判定用にそろえる。**旧データ（英語）も受ける。**
+ * シートを作り直せば英語の値は現れないが、作り直し忘れたときに
+ * 「EMERGENCY」の行が判断保留へ落ちると、緊急判定の維持が失われる。そこだけは守る。 */
+function macosNormSecurity_(v) {
+  const s = String(v === undefined || v === null ? '' : v).trim();
+  if (s === MACOS_S_FOUND || s === 'FOUND') return MACOS_S_FOUND;
+  if (s === MACOS_S_NO_CVE || s === 'NO_PUBLISHED_CVE') return MACOS_S_NO_CVE;
+  if (s === MACOS_S_NO_DETAIL || s === 'PENDING_DETAIL') return MACOS_S_NO_DETAIL;
+  if (s === MACOS_S_NO_INDEX || s === 'PENDING_INDEX' || !s || s === 'UNKNOWN') return MACOS_S_NO_INDEX;
+  return s;   // 未評価など。判定は情報不足へ落ちる
+}
+
+function macosNormDecision_(v) {
+  const s = String(v === undefined || v === null ? '' : v).trim();
+  if (s === MACOS_D_EMERGENCY || s === 'EMERGENCY') return MACOS_D_EMERGENCY;
+  if (s === MACOS_D_NEXT || s === 'NEXT_CYCLE') return MACOS_D_NEXT;
+  if (s === MACOS_D_NA || s === 'NOT_APPLICABLE') return MACOS_D_NA;
+  if (s === MACOS_D_PLAN || s === 'SEPARATE_PLAN') return MACOS_D_PLAN;
+  return MACOS_D_PENDING;
 }
 
 function macosUnique_(items) {
@@ -1676,7 +1728,7 @@ function macosNotifyLatest() {
   rec.reasonCode = ev.reason;
   if (String(rec.decision || '') !== ev.decision) rec.prevDecision = String(rec.decision || '');
   rec.decision = ev.decision;
-  Logger.log('配布判断: ' + macosShortVerdict_(ev.decision) + '（' + ev.reason + '）');
+  Logger.log('配布判断: ' + macosNormDecision_(ev.decision) + '（' + ev.reason + '）');
 
   let sent = false;
   try {
@@ -1730,19 +1782,21 @@ function macosSelfTest() {
 
   // --- 配布判定の順序 ---
   function d(rec, kev) { return macosEvaluateDecision_(rec, kev === undefined ? true : kev); }
-  check('① 新メジャーOS → SEPARATE_PLAN', function () { return d({ version: '27.0', managedOs: 'TRUE' }).decision === 'SEPARATE_PLAN' || 'NG'; });
-  check('② 管理対象外 → NOT_APPLICABLE', function () { return d({ version: '26.6.2', managedOs: 'FALSE' }).decision === 'NOT_APPLICABLE' || 'NG'; });
-  check('③ 管理未設定 → PENDING', function () { return d({ version: '26.6.2', managedOs: '' }).reason === 'MANAGED_UNKNOWN' || 'NG'; });
-  check('④ EMERGENCY は自動で下げない', function () { return d({ version: '26.6.2', managedOs: 'TRUE', decision: 'EMERGENCY', securityStatus: 'FOUND' }).reason === 'EMERGENCY_STICKY' || 'NG'; });
-  check('⑤ Apple実悪用 → EMERGENCY', function () { return d({ version: '26.6.2', managedOs: 'TRUE', appleExploited: 'TRUE', securityStatus: 'FOUND' }).reason === 'APPLE_EXPLOITED' || 'NG'; });
-  check('⑥ KEV一致 → EMERGENCY', function () { return d({ version: '26.6.2', managedOs: 'TRUE', securityStatus: 'FOUND', kevList: 'CVE-2026-1234' }).reason === 'CISA_KEV' || 'NG'; });
-  check('⑦ Security未確認 → PENDING', function () { return d({ version: '26.6.2', managedOs: 'TRUE', securityStatus: 'PENDING_DETAIL' }).reason === 'SECURITY_PENDING' || 'NG'; });
-  check('⑨ CISA不通なら緑にしない', function () { return d({ version: '26.6.2', managedOs: 'TRUE', securityStatus: 'FOUND', cveList: 'CVE-2026-1234' }, false).reason === 'CISA_UNAVAILABLE' || 'NG'; });
-  check('⑩ 緊急根拠なし → NEXT_CYCLE', function () { return d({ version: '26.6.2', managedOs: 'TRUE', securityStatus: 'FOUND', cveList: 'CVE-2026-1234' }).decision === 'NEXT_CYCLE' || 'NG'; });
+  check('① 新メジャーOS → 別途アップグレード計画', function () { return d({ version: '27.0', managedOs: MACOS_MANAGED_YES }).decision === MACOS_D_PLAN || 'NG'; });
+  check('② 管理対象外 → 対象外', function () { return d({ version: '26.6.2', managedOs: MACOS_MANAGED_NO }).decision === MACOS_D_NA || 'NG'; });
+  check('③ 管理未設定 → 判断保留', function () { return d({ version: '26.6.2', managedOs: '' }).reason === MACOS_R_MANAGED_UNKNOWN || 'NG'; });
+  check('④ 緊急判定は自動で下げない', function () { return d({ version: '26.6.2', managedOs: MACOS_MANAGED_YES, decision: MACOS_D_EMERGENCY, securityStatus: MACOS_S_FOUND }).reason === MACOS_R_STICKY || 'NG'; });
+  check('⑤ Apple実悪用 → 早めの適用', function () { return d({ version: '26.6.2', managedOs: MACOS_MANAGED_YES, appleExploited: MACOS_E_YES, securityStatus: MACOS_S_FOUND }).reason === MACOS_R_EXPLOITED || 'NG'; });
+  check('⑥ KEV一致 → 早めの適用', function () { return d({ version: '26.6.2', managedOs: MACOS_MANAGED_YES, securityStatus: MACOS_S_FOUND, kevList: 'CVE-2026-1234' }).reason === MACOS_R_KEV || 'NG'; });
+  check('⑦ Security未確認 → 判断保留', function () { return d({ version: '26.6.2', managedOs: MACOS_MANAGED_YES, securityStatus: MACOS_S_NO_DETAIL }).reason === MACOS_R_SEC_PENDING || 'NG'; });
+  check('⑨ CISA不通なら緑にしない', function () { return d({ version: '26.6.2', managedOs: MACOS_MANAGED_YES, securityStatus: MACOS_S_FOUND, cveList: 'CVE-2026-1234' }, false).reason === MACOS_R_CISA_DOWN || 'NG'; });
+  check('⑩ 緊急根拠なし → 急ぎの対応は不要', function () { return d({ version: '26.6.2', managedOs: MACOS_MANAGED_YES, securityStatus: MACOS_S_FOUND, cveList: 'CVE-2026-1234' }).decision === MACOS_D_NEXT || 'NG'; });
+  check('旧データ（英語）も同じに判定する', function () { return d({ version: '26.6.2', managedOs: 'TRUE', decision: 'EMERGENCY', securityStatus: 'FOUND' }).reason === MACOS_R_STICKY || 'NG'; });
 
   // --- シートの型ぶれに耐えるか（'TRUE' が真偽値になっても比較が成立するか） ---
-  check('真偽値でも管理対象を判定できる', function () {
-    return (macosNormBool_(false) === 'FALSE' && macosNormBool_(true) === 'TRUE' && macosNormBool_('') === 'UNKNOWN') || 'NG';
+  check('真偽値でも日本語でも管理対象を判定できる', function () {
+    return (macosNormBool_(false) === 'FALSE' && macosNormBool_(true) === 'TRUE' && macosNormBool_('') === 'UNKNOWN' &&
+            macosNormBool_(MACOS_MANAGED_NO) === 'FALSE' && macosNormBool_(MACOS_MANAGED_YES) === 'TRUE') || 'NG';
   });
 
   // --- 列マップの往復（見出しを日本語にしても壊れないこと） ---
@@ -1761,11 +1815,11 @@ function macosSelfTest() {
   check('CVE が多くても Slack の 3,000 字上限に収まる', function () {
     const many = [];
     for (let i = 0; i < 90; i++) many.push('CVE-2026-' + (10000 + i));
-    const rec = { version: '26.6.2', build: '25G83', postingDate: '2026-08-17', managedOs: 'TRUE',
-                  securityStatus: 'FOUND', cveList: many.join(','), appleExploited: 'FALSE',
-                  securityUrl: 'https://support.apple.com/en-us/1', decision: 'NEXT_CYCLE',
-                  reasonCode: 'NO_EMERGENCY_EVIDENCE' };
-    const p = macosBuildDecisionPayload_(rec, 'NEXT_CYCLE', true, { ok: false }, { ok: true });
+    const rec = { version: '26.6.2', postingDate: '2026-08-17', managedOs: MACOS_MANAGED_YES,
+                  securityStatus: MACOS_S_FOUND, cveList: many.join(','), appleExploited: MACOS_E_NO,
+                  securityUrl: 'https://support.apple.com/en-us/1', decision: MACOS_D_NEXT,
+                  reasonCode: MACOS_R_NO_EVIDENCE };
+    const p = macosBuildDecisionPayload_(rec, MACOS_D_NEXT, true, { ok: false }, { ok: true });
     const over = (p.blocks || []).filter(function (b) { return b.text && String(b.text.text).length >= 3000; });
     return over.length === 0 || (over.length + ' ブロックが上限超過');
   });
