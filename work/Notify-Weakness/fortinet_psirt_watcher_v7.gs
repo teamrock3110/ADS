@@ -73,7 +73,40 @@ const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
  */
 let aiRequestCount_ = 0;
 
-function countAiRequest_() { aiRequestCount_++; }
+function countAiRequest_() {
+  aiRequestCount_++;
+  bumpSharedAiCount_();
+}
+
+/**
+ * 当日の AI 消費数をスクリプトプロパティへ積む。**NW と macOS で共有する。**
+ *
+ * aiRequestCount_ はモジュールスコープの let なので、実行が分かれると数が分かれる。
+ * macOS は別トリガー＝別実行なので、これが無いと macOS の消費が
+ * 実行履歴の「AI呼び出し」に一切載らず、無料枠が減った理由が追えなくなる。
+ * 枠は 1 日 20 回程度・モデル別（GEMINI_MODEL のコメント参照）。
+ */
+var SHARED_AI_COUNT_PROP = 'AI_COUNT_';
+
+function bumpSharedAiCount_() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const key = SHARED_AI_COUNT_PROP + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd');
+    props.setProperty(key, String((Number(props.getProperty(key)) || 0) + 1));
+  } catch (e) {
+    // 数えられなくても本処理は止めない。枠の可視化はあくまで補助。
+    Logger.log('AI 消費数の記録に失敗: ' + e);
+  }
+}
+
+/** 当日これまでに投げた AI リクエスト数（NW ＋ macOS の合計）。 */
+function sharedAiCountToday_() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const key = SHARED_AI_COUNT_PROP + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd');
+    return Number(props.getProperty(key)) || 0;
+  } catch (e) { return 0; }
+}
 
 const RSS_URL = 'https://filestore.fortinet.com/fortiguard/rss/ir.xml';
 /** Cisco CSAF RSS（主経路）。link/guid に CSAF JSON の URL が直接入る */
@@ -178,6 +211,18 @@ const JPCERT_SEEN_PROP = 'JPCERT_SEEN_AT';
 const JPCERT_SEEN_MAX = 200;
 
 const KEV_FEED_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
+/**
+ * CISA 本家が落ちたときの代替。2026-09-08 実測で catalogVersion・件数とも本家と一致
+ * （2026.09.04 / 1,695 件）。本家が 200 を返さなかったときだけ使う。
+ *
+ * 代替を足した理由は、取得失敗が「KEV 掲載なし」と同じ見た目になっていたから。
+ * isKevListed_ は例外を握りつぶして false を返すので、CISA が落ちた日は
+ * 全 CVE が「なし」になり、KEV で「調査」へ引き上げるはずの行が静かに消えていた。
+ */
+const KEV_FEED_FALLBACK_URL = 'https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json';
+
+/** 直近の KEV 取得結果。実行履歴の備考へ「照合できたか」を出すために持つ。 */
+let kevLastStatus_ = null;
 
 /** Fortinet AI が選ぶ影響機能（外面判定の統制語彙） */
 const FORTINET_AI_FEATURES = [
@@ -2666,31 +2711,78 @@ function stripCheckLabels_(text) {
 // KEV カタログ
 // ============================================================
 
-function fetchKevCatalog_() {
+/**
+ * KEV カタログを取得し、成否と出典まで返す。NW と macOS の両方がこれを使う。
+ *
+ * **例外を投げない。**呼ぶ側が「取れなかった」と「掲載が無い」を区別できるようにするため。
+ * 従来どおり例外で扱いたい経路には fetchKevCatalog_() を残してある。
+ *
+ * キャッシュキーを kev_catalog_v2 にしてある。**戻り値の形を変えたので必ず変えること。**
+ * 旧キーのままだと貼り替え直後の最大 6 時間、旧形（素のマップ）が返って
+ * .map が undefined になり、KEV が全件「なし」に落ちる。
+ * 同じ事故は値を true で入れていた頃に一度起きている（kevVendor_ のコメント）。
+ */
+function kevCatalogWithStatus_() {
+  if (kevLastStatus_) return kevLastStatus_;
+
   const cache = CacheService.getScriptCache();
-  const cached = cache.get('kev_catalog');
+  const cached = cache.get('kev_catalog_v2');
   if (cached) {
-    try { return JSON.parse(cached); } catch (e) { /* 再取得 */ }
+    try {
+      const c = JSON.parse(cached);
+      if (c && c.map) {
+        kevLastStatus_ = { ok: true, map: c.map, source: c.source, fetchedAt: c.fetchedAt, error: '' };
+        return kevLastStatus_;
+      }
+    } catch (e) { /* 再取得 */ }
   }
-  const res = UrlFetchApp.fetch(KEV_FEED_URL, { muteHttpExceptions: true });
-  if (res.getResponseCode() !== 200) {
-    throw new Error('KEV 取得失敗 HTTP ' + res.getResponseCode());
-  }
-  const body = JSON.parse(res.getContentText());
-  const set = {};
-  (body.vulnerabilities || []).forEach(function (v) {
-    // 値は true ではなく登録主体（vendorProject）。KEV の登録が別ベンダーの
-    // 製品に対するものかを判定根拠に書くために要る（kevVendor_ 参照）。
-    // 空文字は入れない。!!set[cve] で掲載を見ているので偽になってしまう。
-    if (v.cveID) {
-      set[String(v.cveID).toUpperCase()] = String(v.vendorProject || '').trim() || '登録元不明';
+
+  const errors = [];
+  const sources = [[KEV_FEED_URL, 'CISA'], [KEV_FEED_FALLBACK_URL, 'CISA_GitHubミラー']];
+  for (let i = 0; i < sources.length; i++) {
+    try {
+      const res = UrlFetchApp.fetch(sources[i][0], { muteHttpExceptions: true });
+      if (res.getResponseCode() !== 200) {
+        throw new Error('HTTP ' + res.getResponseCode());
+      }
+      const body = JSON.parse(res.getContentText());
+      if (!body || !Array.isArray(body.vulnerabilities)) throw new Error('vulnerabilities 配列が無い');
+
+      const set = {};
+      body.vulnerabilities.forEach(function (v) {
+        // 値は true ではなく登録主体（vendorProject）。KEV の登録が別ベンダーの
+        // 製品に対するものかを判定根拠に書くために要る（kevVendor_ 参照）。
+        // 空文字は入れない。!!set[cve] で掲載を見ているので偽になってしまう。
+        if (v.cveID) {
+          set[String(v.cveID).toUpperCase()] = String(v.vendorProject || '').trim() || '登録元不明';
+        }
+      });
+
+      const payload = { map: set, source: sources[i][1], fetchedAt: new Date().toISOString() };
+      // product まで持つと 78KB になり、CacheService の 100KB 上限まで 470 件しか
+      // 余裕が無くなる。vendorProject だけなら 47.6KB で、あと 1,800 件は入る
+      // （2026-08-31 版 1,687 件で実測）。
+      try { cache.put('kev_catalog_v2', JSON.stringify(payload), 21600); } catch (e) {
+        Logger.log('KEV キャッシュ保存に失敗（取得自体は成功）: ' + e);
+      }
+      if (i > 0) Logger.log('KEV は代替経路 ' + sources[i][1] + ' から取得しました: ' + errors.join(' / '));
+      kevLastStatus_ = { ok: true, map: set, source: sources[i][1], fetchedAt: payload.fetchedAt, error: '' };
+      return kevLastStatus_;
+    } catch (e) {
+      errors.push(sources[i][1] + ': ' + e.message);
     }
-  });
-  // product まで持つと 78KB になり、CacheService の 100KB 上限まで 470 件しか
-  // 余裕が無くなる。vendorProject だけなら 47.6KB で、あと 1,800 件は入る
-  // （2026-08-31 版 1,687 件で実測）。
-  cache.put('kev_catalog', JSON.stringify(set), 21600);
-  return set;
+  }
+
+  Logger.log('KEV 取得失敗（全経路）: ' + errors.join(' / '));
+  kevLastStatus_ = { ok: false, map: {}, source: '', fetchedAt: '', error: errors.join(' / ') };
+  return kevLastStatus_;
+}
+
+/** 従来の呼び出し口。素のマップを返し、取れなければ投げる。外形は変えていない。 */
+function fetchKevCatalog_() {
+  const r = kevCatalogWithStatus_();
+  if (!r.ok) throw new Error('KEV 取得失敗 ' + r.error);
+  return r.map;
 }
 
 function isKevListed_(cve) {
@@ -3551,13 +3643,13 @@ function buildEnrichPrompt_(rows) {
   ].join('\n');
 }
 
-function callGemini_(prompt) {
+function callGemini_(prompt, responseSchema) {
   const models = [GEMINI_MODEL].concat(GEMINI_MODEL_FALLBACKS || []);
   let lastErr = null;
   for (let i = 0; i < models.length; i++) {
     const model = models[i];
     try {
-      const text = callGeminiModel_(model, prompt);
+      const text = callGeminiModel_(model, prompt, responseSchema);
       if (i > 0) Logger.log('AI はフォールバックモデル ' + model + ' で生成しました');
       return text;
     } catch (e) {
@@ -3583,7 +3675,7 @@ function shouldFallbackGeminiModel_(err) {
   return /HTTP 404/.test(msg) || /NOT_FOUND/i.test(msg);
 }
 
-function callGeminiModel_(model, prompt) {
+function callGeminiModel_(model, prompt, responseSchema) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) throw new Error('GEMINI_API_KEY がスクリプト プロパティに未設定です。');
 
@@ -3597,7 +3689,11 @@ function callGeminiModel_(model, prompt) {
     muteHttpExceptions: true,
     payload: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 32768 }
+      // responseSchema は省略可。渡さなければ従来と同じ設定になるので、
+      // 既存の呼び出し（enrichWithAI_）の挙動は変わらない。
+      generationConfig: responseSchema
+        ? { responseMimeType: 'application/json', maxOutputTokens: 32768, responseSchema: responseSchema }
+        : { responseMimeType: 'application/json', maxOutputTokens: 32768 }
     })
   };
 
@@ -4113,6 +4209,18 @@ function writeRunLog_(errorText) {
     // JPCERT の注意喚起は出た日だけ書く。CVE の件数とは別枠なので数字に混ぜない。
     const jpNote = runStats_.jpcert ? 'JPCERT注意喚起 ' + runStats_.jpcert + ' 件' : '';
 
+    // KEV が取れなかった日は必ず書く。取得失敗と「掲載なし」が同じ見た目になるため、
+    // ここに出さないと判定が緩んだ日を後から見分けられない（README §4.15）。
+    const kevNote = (kevLastStatus_ && !kevLastStatus_.ok)
+      ? 'KEV照合不可（全経路失敗）' + (kevLastStatus_.error ? '：' + kevLastStatus_.error : '')
+      : (kevLastStatus_ && kevLastStatus_.source && kevLastStatus_.source !== 'CISA'
+          ? 'KEV出典：' + kevLastStatus_.source : '');
+
+    // macOS モジュールは別トリガーで動くので、止まっても Slack が静かなだけで気づけない。
+    // 見る場所を実行履歴 1 か所に保つため、ここに死活を出す。
+    // macOS のファイルを貼っていない環境でも落ちないよう typeof で守る。
+    const macosNote = (typeof macosHealthNote_ === 'function') ? macosHealthNote_() : '';
+
     const worthWriting = !!errorText || sum('processed') > 0 || sum('failed') > 0 ||
                          !!jpNote;
 
@@ -4202,7 +4310,7 @@ function writeRunLog_(errorText) {
       aiRequestCount_ - runStats_.aiAtStart,
       [errorText ? 'エラー: ' + errorText : '',
        worthWriting ? detail : '',
-       jpNote].filter(function (t) { return t; }).join('  /  ')
+       jpNote, kevNote, macosNote].filter(function (t) { return t; }).join('  /  ')
     ]]);
     sh.getRange(row, 1).setNumberFormat('yyyy/mm/dd hh:mm');
   } catch (e) {
