@@ -260,6 +260,7 @@ function macosDaily() {
     }
 
     stats.added = macosUpsertReleases_(led, releases, asBackfill);
+    if (asBackfill) macosTrackLatestPerMajor_(led);
 
     // 初回は「いま出ているもの」を記録するだけ。追跡もしないし通知もしない。
     //
@@ -267,12 +268,12 @@ function macosDaily() {
     // 素直に追跡対象にすると翌日 87 通の Slack が飛び、6 分制限で途中死し、
     // 通知状態が PENDING のまま残って翌日また最初からになる（設計確定書 §2.3）。
     if (asBackfill) {
-      macosSaveLedger_(led);
       props.setProperty(MACOS_INITIALIZED_PROP, 'TRUE');
-      stats.notes.push('初回取込 ' + stats.added + ' 件を記録（追跡対象外・通知なし）');
-      return;
+      stats.notes.push('初回取込 ' + stats.added + ' 件を記録（通知なし）');
     }
 
+    // **初回取込の行も調べる。**通知を抑えるのと、調べないのは別の話。
+    // 調べないと、いま配っている版の CVE も KEV も台帳に無く、台帳が何も答えられない。
     const kev = kevCatalogWithStatus_();
     if (!kev.ok) stats.notes.push('KEV照合不可：' + kev.error);
     else if (kev.source !== 'CISA') stats.notes.push('KEV出典：' + kev.source);
@@ -597,6 +598,28 @@ function macosEnsureManagedRows_(releases) {
  * 管理対象かどうか。**未設定は UNKNOWN。**サンプル値を自動で TRUE にしない。
  * 文字列で返す（真偽値で返すと台帳側の比較が型でずれる）。
  */
+/**
+ * 管理対象の系統ごとに、**いちばん新しい版だけを追跡対象にする。**
+ *
+ * 初回取込で全部を「初期取込」にすると、いま配っている版が KEV 掲載でも通知が出ない。
+ * 「会社の PC に更新が要るか」を答えるツールとして、そこは黙ってはいけない。
+ * 古い版は履歴として残すだけ（超えられた版に対してできることは無い）。
+ */
+function macosTrackLatestPerMajor_(led) {
+  const latest = {};
+  led.recs.forEach(function (rec) {
+    if (macosNormBool_(rec.managedOs) !== 'TRUE') return;
+    const major = String(rec.version || '').split('.')[0];
+    if (!latest[major] || String(rec.postingDate) > String(latest[major].postingDate)) latest[major] = rec;
+  });
+  Object.keys(latest).forEach(function (m) {
+    const rec = latest[m];
+    if (String(rec.tracking).trim() !== MACOS_TRACK_BACKFILL) return;
+    rec.tracking = MACOS_TRACK_ACTIVE;
+    rec.noticeState = MACOS_N_PENDING;
+  });
+}
+
 /** 新しく検知した行の Security 状態。 */
 function macosInitialSecurityStatus_(r) {
   if (r.noPublishedCve) return MACOS_S_NO_CVE;
@@ -627,7 +650,8 @@ function macosRunPhase2_(led, kev, stats) {
   const pending = [];
 
   led.recs.forEach(function (rec) {
-    if (String(rec.tracking) !== MACOS_TRACK_ACTIVE) return;
+    // 適用済だけ外す。初期取込は調べる（通知はしない）。
+    if (String(rec.tracking).trim() === MACOS_TRACK_DONE) return;
 
     try {
       macosUpdateSecurity_(rec);
@@ -640,11 +664,15 @@ function macosRunPhase2_(led, kev, stats) {
       const before = macosNormDecision_(rec.decision);
       const ev = macosEvaluateDecision_(rec, kev.ok);
       rec.reasonCode = ev.reason;
+      // 判定結果は毎回書く。「未評価」は正規化すると「判断保留」になるので、
+      // 変化の有無だけで書き込みを決めると、初回評価の結果が台帳に載らない。
+      const wasEvaluated = String(rec.decision || '') !== MACOS_NOT_EVALUATED && String(rec.decision || '') !== '';
+      rec.decision = ev.decision;
 
-      if (before !== ev.decision) {
+      if (wasEvaluated && before !== ev.decision) {
         rec.prevDecision = before;
-        rec.decision = ev.decision;
-        rec.noticeState = MACOS_N_PENDING;
+        // 通知を立てるのは追跡中の行だけ。初期取込は記録するだけで知らせない。
+        if (String(rec.tracking).trim() === MACOS_TRACK_ACTIVE) rec.noticeState = MACOS_N_PENDING;
         stats.changed++;
       }
 
@@ -689,7 +717,6 @@ function macosNeedsNotice_(state) {
 
 /** 管理対象外と新メジャー OS は Apple 詳細も KEV も取りに行かない（判定に使わないため）。 */
 function macosShouldFetchSecurity_(rec) {
-  if (String(rec.tracking).trim() === MACOS_TRACK_BACKFILL) return false;
   if (macosNormBool_(rec.managedOs) === 'FALSE') return false;
   if (macosIsMajorUpgrade_(rec.version)) return false;
   return true;
@@ -741,7 +768,7 @@ function macosUpdateSecurity_(rec) {
 
     if (changed) {
       rec.aiStatus = MACOS_AI_PENDING;
-      rec.noticeState = MACOS_N_PENDING;
+      if (String(rec.tracking).trim() === MACOS_TRACK_ACTIVE) rec.noticeState = MACOS_N_PENDING;
     }
   } catch (e) {
     rec.securityStatus = MACOS_S_NO_DETAIL;
