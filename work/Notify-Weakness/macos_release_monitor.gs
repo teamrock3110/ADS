@@ -96,17 +96,6 @@ var macosRunStartedAt_ = 0;
 /** AI に入ってよい残り時間の下限（ミリ秒）。1 リリース分の再試行は最悪 70 秒ほどかかる。 */
 var MACOS_AI_TIME_GUARD_MS = 180000;
 
-/**
- * 追跡状態。人が「適用済」と手入力できるよう日本語にしてある。
- *
- * **1 リリース 1 通知。**赤も緑もそのリリースの判定として届く。
- * 「初期取込」という中間状態は廃止した。通知するかどうかを追跡状態で分けると、
- * 緊急と判定した行を握り潰す事故が起きる（2026-09-10 に実際に起きた）。
- * 通知しないのは「適用済」と「管理対象外」だけ。
- */
-var MACOS_TRACK_ACTIVE = '追跡中';
-var MACOS_TRACK_DONE = '適用済';
-
 /** 一度も調べていない、という状態。「調べたが分からない」と区別する。 */
 var MACOS_NOT_EVALUATED = '未評価';
 
@@ -146,7 +135,6 @@ var MACOS_MANAGED_UNKNOWN = '未確認';
 /** Apple 実悪用。 */
 var MACOS_E_YES     = 'あり';
 var MACOS_E_NO      = 'なし';
-var MACOS_E_UNKNOWN = '未確認';
 
 /** AI の状態。 */
 var MACOS_AI_PENDING = '未実行';
@@ -170,7 +158,6 @@ var MACOS_LEDGER_COLS = [
   { key: 'version',        label: 'バージョン' },
   { key: 'postingDate',    label: '公開日' },
   { key: 'managedOs',      label: '管理対象' },
-  { key: 'tracking',       label: '追跡状態' },
   { key: 'securityStatus', label: 'Security状態' },
   { key: 'securityUrl',    label: 'Apple公式URL' },
   { key: 'cveList',        label: '公開CVE' },
@@ -179,7 +166,6 @@ var MACOS_LEDGER_COLS = [
   { key: 'kevList',        label: 'CISA KEV一致' },
   { key: 'kevCheckedAt',   label: 'KEV最終照合' },
   { key: 'decision',       label: '配布判断' },
-  { key: 'prevDecision',   label: '前回の配布判断' },
   { key: 'reasonCode',     label: '判定理由' },
   { key: 'noticeState',    label: '通知状態' },
   { key: 'noticedAt',      label: '最終通知' },
@@ -253,8 +239,7 @@ function macosDaily() {
     }
 
     // 台帳が空なら、INITIALIZED が TRUE でも初回取込として扱う。
-    // 人が台帳を消したあとの実行がこれに当たる。実行履歴に残しておかないと、
-    // 検知件数と新規件数が同じ日になった理由が後から読めない。
+    // 実行履歴に残さないと、検知件数と新規件数が同じ日になった理由が後から読めない。
     const ledgerWasEmpty = led.recs.length === 0;
     const asBackfill = !initialized || ledgerWasEmpty;
     if (initialized && ledgerWasEmpty) {
@@ -264,13 +249,9 @@ function macosDaily() {
 
     stats.added = macosUpsertReleases_(led, releases);
 
-    // **初回取込でも通知は送る。**1 リリース 1 通知で、黙るのは人が「適用済」にした行と、
-    // 管理OS で対象外にした系統だけ（macosShouldNotify_）。
-    //
-    // 通知量を抑えているのは「初回かどうか」ではなく MACOS_HISTORY_DAYS の窓のほう。
-    // Security Index は 2024 年まで遡って 81 行返すが（2026-09-08 実測）、台帳に入るのは
-    // 直近 90 日ぶんだけなので、初回に届くのはその範囲の管理対象の版に限られる
-    // （2026-09-11 実測で 8 版）。
+    // **初回取込でも通知は送る。**通知量を抑えているのは「初回かどうか」ではなく
+    // MACOS_HISTORY_DAYS の窓。索引は 2024 年まで遡って 81 行返すが、台帳に入るのは
+    // 直近 90 日ぶんだけ（2026-09-11 実測で 8 版、うち管理対象は 4 版）。
     if (asBackfill) {
       props.setProperty(MACOS_INITIALIZED_PROP, 'TRUE');
       stats.notes.push('初回取込 ' + stats.added + ' 件');
@@ -499,8 +480,8 @@ function macosSaveLedger_(led) {
  * フィード更新で動くものもあり、同じリリースが毎回「新規」になって速報が繰り返し出る
  * （設計確定書 §2.1）。ビルドは Apple が使い回さないので版とビルドで十分に一意。
  *
- * 同じ版でビルドだけ変わった場合（Apple の差し替え）は、同一リリースの更新として扱い、
- * 追跡中なら通知をやり直す。行を分けると「どちらを配ったか」が台帳から読めなくなる。
+ * 同じ版でビルドだけ変わった場合（Apple の差し替え）は、同一リリースの更新として扱う。
+ * 行を分けると「どちらを配ったか」が台帳から読めなくなる。
  *
  * @return {number} 新規に追加した行数
  */
@@ -525,7 +506,6 @@ function macosUpsertReleases_(led, releases) {
       rec.postingDate = r.postingDate;
       rec.managedOs = managed;
       rec.securityUrl = r.securityUrl || '';
-      rec.tracking = MACOS_TRACK_ACTIVE;
       rec.securityStatus = macosInitialSecurityStatus_(r);
       // ここではまだ何も調べていない。この直後の Phase 2 が実際の値で上書きする。
       rec.appleExploited = MACOS_NOT_EVALUATED;
@@ -591,15 +571,9 @@ function macosEnsureManagedRows_(releases) {
 /**
  * 新しく検知した行の Security 状態。**まだ詳細ページを読んでいない時点の値。**
  *
- * 「詳細が未取得」を仮置きに使わない。あれは macosUpdateSecurity_ が実際に取りに行って
- * 失敗したときの値で（最終エラー列とセット）、**調べたが分からなかった、という意味**。
- * 管理対象外と新メジャー OS の行は Phase 2 が詳細を取りに行かないので、仮置きすると
- * 「取りに行って失敗した」と読める値が、一度も見ていない行に残り続ける。
- *
- * ここで確定できるのは情報源の記載だけ。
- *   公開CVEなし        Apple 索引が「published CVE entries なし」と明記している
- *   Apple索引に未掲載  詳細ページの URL 自体が無い
- *   未評価             URL はあるが、まだ読んでいない
+ * 「詳細が未取得」を仮置きに使わない。あれは macosUpdateSecurity_ が取りに行って失敗した
+ * ときの値（最終エラー列とセット）で、調べたが分からなかった、という意味。管理対象外と
+ * 新メジャー OS は詳細を取りに行かないので、仮置きすると一度も見ていない行に残り続ける。
  */
 function macosInitialSecurityStatus_(r) {
   if (r.noPublishedCve) return MACOS_S_NO_CVE;
@@ -631,8 +605,6 @@ function macosRunPhase2_(led, kev, stats) {
   const pending = [];
 
   led.recs.forEach(function (rec) {
-    if (String(rec.tracking).trim() === MACOS_TRACK_DONE) return;
-
     try {
       macosUpdateSecurity_(rec);
 
@@ -651,7 +623,8 @@ function macosRunPhase2_(led, kev, stats) {
       rec.decision = ev.decision;
 
       if (wasEvaluated && changed) {
-        rec.prevDecision = before;
+        // 台帳には残さない。使うのは、この実行で送る通知の「前回は…」の 1 行だけ。
+        rec.__prevDecision = before;
         stats.changed++;
       }
       // **初回評価でも通知は立てる。**判定が変わったかどうかと、知らせるべきかは別。
@@ -690,12 +663,8 @@ function macosRunPhase2_(led, kev, stats) {
   if (macosAiDownThisRun_) stats.notes.push('AI が応答しないため、この実行は AI 要約なしで通知しました');
 }
 
-/**
- * この行を Slack に出すか。**判定が出た行はすべて出す。**
- * 黙るのは、人が適用済にした行と、管理対象外と宣言した系統だけ。
- */
+/** この行を Slack に出すか。判定が出た行はすべて出す。黙るのは管理対象外の系統だけ。 */
 function macosShouldNotify_(rec) {
-  if (String(rec.tracking).trim() === MACOS_TRACK_DONE) return false;
   return macosNormBool_(rec.managedOs) !== 'FALSE';
 }
 
@@ -1135,7 +1104,7 @@ function macosBuildDecisionPayload_(rec, decision, isFirst, ai, kev) {
   blocks.push({ type: 'section', text: { type: 'mrkdwn', text: macosLeadText_(rec, decision) } });
 
   // 2 通目以降は「なぜまた来たか」を必ず書く。書かないと 1 通目と見分けが付かない。
-  const prev = String(rec.prevDecision || '').toUpperCase();
+  const prev = String(rec.__prevDecision || '').toUpperCase();
   if (!isFirst && prev && prev !== decision) {
     blocks.push({ type: 'context', elements: [{ type: 'mrkdwn',
       text: '前回は「' + macosNormDecision_(prev) + '」でした' }] });
@@ -1578,16 +1547,6 @@ function macosParseJson_(v, fallback) {
   } catch (e) { return fallback; }
 }
 
-function macosChildText_(el, name) {
-  const direct = el.getChild(name);
-  if (direct) return direct.getText().trim();
-  const children = el.getChildren();
-  for (let i = 0; i < children.length; i++) {
-    if (children[i].getName() === name) return children[i].getText().trim();
-  }
-  return '';
-}
-
 function macosStripTags_(html) {
   return String(html || '')
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
@@ -1663,31 +1622,24 @@ function macosDiagnose() {
     }
   } catch (e) { line('情報源', 'エラー ' + e.message); }
 
-  // 追跡対象の行を並べる。通知が来ないときは、まずここに行が出ているかを見る。
+  // 台帳の行を並べる。通知が来ないときは、まずここを見る。
   try {
     const led = macosLoadLedger_();
-    const active = led.recs.filter(function (r) { return String(r.tracking).trim() !== MACOS_TRACK_DONE; });
-    out.push('  追跡中の行: ' + active.length + ' 件（適用済を除く）');
-    if (!active.length) {
-      out.push('    → 0 件なので通知は出ません。通知を試すには台帳の I 列を「追跡中」、T 列を「PENDING」にします');
-    }
-    active.slice(0, 10).forEach(function (r) {
+    out.push('  台帳の行: ' + led.recs.length + ' 件');
+    led.recs.slice(0, 10).forEach(function (r) {
       out.push('    macOS ' + r.version +
-               ' | 追跡=' + JSON.stringify(String(r.tracking)) +
                ' | 通知=' + JSON.stringify(String(r.noticeState)) +
                ' | 管理=' + JSON.stringify(String(r.managedOs)) +
                ' | 判断=' + String(r.decision || '') +
                ' | Security=' + String(r.securityStatus || ''));
       if (String(r.lastError || '')) out.push('      最終エラー: ' + String(r.lastError));
-      if (String(r.tracking).trim() !== MACOS_TRACK_ACTIVE && String(r.tracking).trim() !== MACOS_TRACK_DONE) {
-        out.push('      → 追跡状態の値が想定と違います。ちょうど「' + MACOS_TRACK_ACTIVE + '」と入れてください');
-      }
-      if (String(r.tracking).trim() === MACOS_TRACK_ACTIVE && !macosNeedsNotice_(String(r.noticeState).trim())) {
-        out.push('      → 通知状態が ' + JSON.stringify(String(r.noticeState)) +
-                 ' なので送信対象外です。送るには「PENDING」にします');
+      if (macosNormBool_(r.managedOs) === 'FALSE') {
+        out.push('      → 管理対象外なので Apple も CISA も見に行かず、通知もしません');
+      } else if (!macosNeedsNotice_(String(r.noticeState).trim())) {
+        out.push('      → 通知状態が ' + JSON.stringify(String(r.noticeState)) + ' なので送信対象外です');
       }
     });
-  } catch (e) { line('追跡対象の行', 'エラー ' + e.message); }
+  } catch (e) { line('台帳の行', 'エラー ' + e.message); }
 
   try {
     const rd = macosCheckReadiness_();
@@ -1704,7 +1656,7 @@ function macosDiagnose() {
  * Apple の次のリリースを待たずに、判定・KEV 照合・AI 要約・Slack の形まで通しで確かめるための関数。
  * 台帳を手で書き換える必要はない。
  *
- * 送信後、追跡状態と通知状態は**元に戻す**（テストの痕跡を残さないため）。
+ * 送信後、通知状態は**元に戻す**（テストの痕跡を残さないため）。
  * Apple から取り直した CVE・実悪用・配布判断はそのまま台帳に残す。情報が増えるだけなので。
  */
 function macosNotifyLatest() {
@@ -1726,8 +1678,7 @@ function macosNotifyLatest() {
   }
   Logger.log('対象: macOS ' + rec.version + '（公開日 ' + rec.postingDate + '）');
 
-  const prev = { tracking: rec.tracking, noticeState: rec.noticeState, noticedAt: rec.noticedAt };
-  rec.tracking = MACOS_TRACK_ACTIVE;
+  const prev = { noticeState: rec.noticeState, noticedAt: rec.noticedAt };
   rec.noticeState = MACOS_N_PENDING;
   rec.noticedAt = '';
 
@@ -1745,7 +1696,7 @@ function macosNotifyLatest() {
 
   const ev = macosEvaluateDecision_(rec, kev.ok);
   rec.reasonCode = ev.reason;
-  if (String(rec.decision || '') !== ev.decision) rec.prevDecision = String(rec.decision || '');
+  if (String(rec.decision || '') !== ev.decision) rec.__prevDecision = String(rec.decision || '');
   rec.decision = ev.decision;
   Logger.log('配布判断: ' + macosNormDecision_(ev.decision) + '（' + ev.reason + '）');
 
@@ -1759,11 +1710,10 @@ function macosNotifyLatest() {
     Logger.log('※ 404 は Webhook の失効、403 はチャンネル権限、400 は本文の形式です。');
   }
 
-  rec.tracking = prev.tracking;
   rec.noticeState = prev.noticeState;
   rec.noticedAt = prev.noticedAt;
   macosSaveLedger_(led);
-  Logger.log('追跡状態は「' + prev.tracking + '」に戻しました。日次の動きには影響しません。');
+  Logger.log('通知状態は元に戻しました。日次の動きには影響しません。');
   return sent;
 }
 
