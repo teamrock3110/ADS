@@ -588,10 +588,23 @@ function macosEnsureManagedRows_(releases) {
  * 文字列で返す（真偽値で返すと台帳側の比較が型でずれる）。
  */
 
-/** 新しく検知した行の Security 状態。 */
+/**
+ * 新しく検知した行の Security 状態。**まだ詳細ページを読んでいない時点の値。**
+ *
+ * 「詳細が未取得」を仮置きに使わない。あれは macosUpdateSecurity_ が実際に取りに行って
+ * 失敗したときの値で（最終エラー列とセット）、**調べたが分からなかった、という意味**。
+ * 管理対象外と新メジャー OS の行は Phase 2 が詳細を取りに行かないので、仮置きすると
+ * 「取りに行って失敗した」と読める値が、一度も見ていない行に残り続ける。
+ *
+ * ここで確定できるのは情報源の記載だけ。
+ *   公開CVEなし        Apple 索引が「published CVE entries なし」と明記している
+ *   Apple索引に未掲載  詳細ページの URL 自体が無い
+ *   未評価             URL はあるが、まだ読んでいない
+ */
 function macosInitialSecurityStatus_(r) {
   if (r.noPublishedCve) return MACOS_S_NO_CVE;
-  return r.securityUrl ? MACOS_S_NO_DETAIL : MACOS_S_NO_INDEX;
+  if (!r.securityUrl) return MACOS_S_NO_INDEX;
+  return MACOS_NOT_EVALUATED;
 }
 
 function macosManagedState_(version) {
@@ -1803,6 +1816,17 @@ function macosSelfTest() {
   check('真偽値でも日本語でも管理対象を判定できる', function () {
     return (macosNormBool_(false) === 'FALSE' && macosNormBool_(true) === 'TRUE' && macosNormBool_('') === 'UNKNOWN' &&
             macosNormBool_(MACOS_MANAGED_NO) === 'FALSE' && macosNormBool_(MACOS_MANAGED_YES) === 'TRUE') || 'NG';
+  });
+
+  // --- 語彙（「調べていない」と「調べたが分からない」を混ぜないこと） ---
+  check('調べていない行に「詳細が未取得」と書かない', function () {
+    // 「詳細が未取得」は macosUpdateSecurity_ が取りに行って失敗したときの値。
+    // 管理対象外の行は取りに行かないので、この値が残ると「調べたが駄目だった」と誤読される。
+    const init = macosInitialSecurityStatus_({ securityUrl: 'https://support.apple.com/en-us/1', noPublishedCve: false });
+    if (init !== MACOS_NOT_EVALUATED) return '仮置きが ' + init + ' になっている';
+    const rec = { version: '15.7.9', managedOs: MACOS_MANAGED_NO, securityUrl: 'https://support.apple.com/en-us/1', securityStatus: init };
+    macosUpdateSecurity_(rec);
+    return rec.securityStatus === MACOS_NOT_EVALUATED || '管理対象外の行が ' + rec.securityStatus + ' になった';
   });
 
   // --- 列マップの往復（見出しを日本語にしても壊れないこと） ---
