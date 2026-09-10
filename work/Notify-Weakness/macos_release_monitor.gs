@@ -253,24 +253,24 @@ function macosDaily() {
     }
 
     // 台帳が空なら、INITIALIZED が TRUE でも初回取込として扱う。
-    //
-    // 人が台帳を消したあと INITIALIZED が TRUE のままだと、公開中の全リリース（実測 81 件）が
-    // 「追跡中・通知 PENDING」で入り直し、**その場で 81 通 Slack に飛ぶ。**
-    // 通知は「初期化より後に新しく出たもの」だけ、という約束をここで守る。
+    // 人が台帳を消したあとの実行がこれに当たる。実行履歴に残しておかないと、
+    // 検知件数と新規件数が同じ日になった理由が後から読めない。
     const ledgerWasEmpty = led.recs.length === 0;
     const asBackfill = !initialized || ledgerWasEmpty;
     if (initialized && ledgerWasEmpty) {
-      stats.notes.push('台帳が空だったため初回取込としてやり直しました（通知は送っていません）');
-      Logger.log('台帳が空でした。初回取込としてやり直します。通知は送りません。');
+      stats.notes.push('台帳が空だったため初回取込としてやり直しました');
+      Logger.log('台帳が空でした。初回取込としてやり直します。');
     }
 
-    stats.added = macosUpsertReleases_(led, releases, asBackfill);
+    stats.added = macosUpsertReleases_(led, releases);
 
-    // 初回は「いま出ているもの」を記録するだけ。追跡もしないし通知もしない。
+    // **初回取込でも通知は送る。**1 リリース 1 通知で、黙るのは人が「適用済」にした行と、
+    // 管理OS で対象外にした系統だけ（macosShouldNotify_）。
     //
-    // Security Index は 2024 年まで遡って 81 行返す（2026-09-08 実測）。
-    // 素直に追跡対象にすると翌日 87 通の Slack が飛び、6 分制限で途中死し、
-    // 通知状態が PENDING のまま残って翌日また最初からになる（設計確定書 §2.3）。
+    // 通知量を抑えているのは「初回かどうか」ではなく MACOS_HISTORY_DAYS の窓のほう。
+    // Security Index は 2024 年まで遡って 81 行返すが（2026-09-08 実測）、台帳に入るのは
+    // 直近 90 日ぶんだけなので、初回に届くのはその範囲の管理対象の版に限られる
+    // （2026-09-11 実測で 8 版）。
     if (asBackfill) {
       props.setProperty(MACOS_INITIALIZED_PROP, 'TRUE');
       stats.notes.push('初回取込 ' + stats.added + ' 件');
@@ -504,7 +504,7 @@ function macosSaveLedger_(led) {
  *
  * @return {number} 新規に追加した行数
  */
-function macosUpsertReleases_(led, releases, isBackfill) {
+function macosUpsertReleases_(led, releases) {
   const byVersion = {};
   led.recs.forEach(function (rec) { byVersion[String(rec.version)] = rec; });
 
@@ -1457,13 +1457,16 @@ function macosCheckReadiness_() {
  * 初回取込をやり直す。
  *
  * 1 回目の実行で情報源の一部が取れていなかった場合に使う。
- * このあと macosDaily() を 1 回実行すると、いま公開されているものを取り直して
  * このあと macosDaily() を 1 回実行すると、いま公開されているものを取り直す。
  * 台帳は消さない（消す必要が無い。同じ版は上書きされる）。
+ *
+ * **台帳に残っている版の通知は飛ばない。**通知状態が「送信済」のまま上書きされないため。
+ * ただし取り直した結果その行の配布判断が変われば、通常どおり 1 通届く。
+ * 台帳を空にしてから実行すれば、直近 90 日ぶんが新規として入り直して通知される。
  */
 function macosReinitialize() {
   PropertiesService.getScriptProperties().setProperty(MACOS_INITIALIZED_PROP, 'FALSE');
-  Logger.log('初回取込をやり直す状態にしました。次に macosDaily() を 1 回実行してください（通知は飛びません）。');
+  Logger.log('初回取込をやり直す状態にしました。次に macosDaily() を 1 回実行してください。');
 }
 
 function macosRunReadinessCheck() {
