@@ -1162,10 +1162,11 @@ function macosBuildDecisionPayload_(rec, decision, isFirst, ai, kev) {
   const ssUrl = macosSpreadsheetUrl_();
   if (ssUrl) links.push('<' + ssUrl + '|macOS台帳>');
 
-  // 注意書きは 1 行に畳む。毎日同じ文が 3 行続くと 3 回目から読まれない。
+  // 注意書きは毎回出るので増やさない。**ツールの読み方は readme.gs で 1 回覚えるもの。**
+  // 「急ぎの対応は不要は安全の意味ではない」は毎通に付けていたが、リード文が既に
+  // 「実悪用記載なし・KEV 一致なし」と守備範囲を書いており、事実を足していなかった。
+  // 毎回出る文は数回で背景になり、対策したつもりになるぶん悪い（2026-09-11 に削除）。
   const notes = [];
-  if (decision === MACOS_D_NEXT) notes.push('「急ぎの対応は不要」は安全の保証ではなく、現時点で臨時更新の条件に当たらないという判定です。');
-  if (managed === 'TRUE') notes.push('端末モデル / CPU 個別の条件は対象外。');
   if (ai.ok) notes.push('要約のみ AI で、判断・CVE・KEV はコードです。');
 
   const foot = [];
