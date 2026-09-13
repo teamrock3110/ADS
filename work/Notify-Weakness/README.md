@@ -39,7 +39,7 @@ Google スプレッドシート + Apps Script。毎朝 9 時台に Fortinet と 
 
 ### コードのどこを見るか
 
-本体は 1 ファイル 4,835 行だが、**全部を読む必要はない。**
+本体は 1 ファイル 4,651 行だが、**全部を読む必要はない。**
 セクションのコメントバナー（`// =====`）で区切ってある。
 
 | やること | 見るセクション | 行数 |
@@ -247,10 +247,9 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
 
 ---
 
-## 2. スプレッドシート（5シート）
+## 2. スプレッドシート（4シート）
 
-シート名は 2026-09-13 から「NW」で始まる（`NW台帳` / `NW処理済み` / `NW実行履歴` / `NW資産` /
-`NW判断記録`）。macOS 監視の `macOS台帳` などと同じスプレッドシートに並ぶので、接頭辞で見分ける。
+シート名は 2026-09-13 から「NW」で始まる（`NW台帳` / `NW処理済み` / `NW実行履歴` / `NW資産`）。macOS 監視の `macOS台帳` などと同じスプレッドシートに並ぶので、接頭辞で見分ける。
 下の見出しは接頭辞を省いて書く。旧名のシートは `nwSetup()` が改名する（列も行も触らない）。
 
 コードは列を **key / label の配列**（`NW_LEDGER_COLS` など）で持ち、見出し文字列をキーにしない。
@@ -343,34 +342,12 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
   判定はバージョンの突き合わせで行うため、この表がいつ時点のものか分からないと
   判定の根拠も定まらない
 
-### 2.5 判断記録（7列）— 人が下した対応の判断。ツールは書かない
+### 2.5 判断記録（2026-09-13 に廃止）
 
-```
-判断日 | アドバイザリID | CVE | 判断 | 根拠 | 判断者 | 対象時点
-```
+人の判断でツールの判定を上書きするシートを持っていたが、利用者が求めた運用ではなく、
+プレ運用 1 週間で 1 行も書かれなかったので、シートと読み込み（`nwApplyHumanDecision_` 一式）を外した。
+「対応しない」と決めた記録は議事録側に残す。ツールに戻す案は再提案しない。
 
-**なぜ台帳の列にしないか**: `nwRemoveRowsFor_` がアドバイザリの改訂ごとに台帳の行を
-消して書き直すので、人が書いた内容は消える。台帳は再生成できるツールの出力、
-ここは再生成できない人の記録、と役割を分ける。
-
-- `CVE` が空の行はそのアドバイザリ全体に効く。Cisco の複数 CVE をまとめて処理できる
-- **`対象時点` は改訂検知用。**判断は「そのアドバイザリの、その時点の内容」に対して
-  下したもの。改訂で影響範囲や修正版が変わったのに前回の「対応不要」が効き続けたら
-  見逃しになる。台帳の最終更新日が対象時点より新しければ判断を無効にし、
-  ツールの判定へ戻す（既読判定を `current_release_date` と版で行うのと同じ考え方）
-- `対象時点` は人が入れる。**空欄だとその行は無視される**ので、書き忘れに注意
-  （以前はメニューから自動で入れていたが、使われないので 2026-09-07 に削除した）
-- `判断` はプルダウン。語彙は `NW_DECISION_VERDICT` のキーが正
-
-| 判断 | 自社影響 | 台帳 | Slack |
-|---|---|---|---|
-| 対応不要（定期更新枠） | `なし` に落とす | 残る | 出ない |
-| 対応済み | `なし` に落とす | 残る | 出ない |
-| 対応する（実施待ち） | `あり（対応検討）` | 残る | 出る |
-| 保留 | 変えない | 残る | ツールの判定次第 |
-
-新しい判定値は作っていない。「なし」に落とせば台帳には残り Slack からは外れるという
-既存の仕組みが、そのまま「臨時更新しないと判断した記録を残す」監査要件を満たす。
 - **資産シートの見出しを直すときは入力済みの行を消さないこと。**台帳や処理済みと違い、
   資産シートは人が手で維持している唯一の入力で、消すと復元できない
 
@@ -656,27 +633,11 @@ CVE-2026-71408 / UI DoS attack
 `nwIsFortinetFeatureVocab_` で同じ強制があり、ベンダーで差を付ける根拠は無い（§4.5）。
 
 
-### 4.13 人の判断はルールの外側でかぶせる
+### 4.13 人の判断はコードに混ぜない（2026-09-13 に仕組みごと廃止）
 
-`nwDecideNotification_` は 2 段になっている。
-
-```
-nwDecideNotification_(row, assets)
-  ├ nwDecideByRules_()      ツールのルールで判定する（従来の中身そのまま）
-  └ nwApplyHumanDecision_() 判断記録があれば上書きする
-```
-
-人の判断をルールの中へ混ぜない。混ぜると判定根拠を読んでも、それがツール由来か
-人由来か分からなくなる。分けておけば「ツールはこう判定し、人がこう覆した」が追える。
-
-上書きした行は AI を呼ばない（`needsDisplayAi = false` / `needsCodeDisplay = true`）。
-人が結論を出した行の影響機能を分類しても結論は変わらない。ただし表示列は空にせず、
-コードのフォールバックで埋める。
-
-**判断記録の読み込みは効かせない側に倒す。**語彙にない判断と、対象時点が空の行は
-捨ててログに出す。とくに対象時点が無いと改訂の有無を判定できず、分からないまま
-「対応不要」を効かせると見逃しになる。捨てられた行はツールの判定のまま台帳に
-出続けるので、間違いに気づける。
+判断記録シートで判定を上書きする 2 段構え（`nwDecideByRules_` → `nwApplyHumanDecision_`）を
+持っていたが §2.5 のとおり外した。`nwDecideNotification_` はルール判定だけになった。
+人の判断はツールの外（議事録）に残す。
 
 ### 4.14 通知で隠す件数は、隠れる行が何かで決める
 
@@ -734,7 +695,7 @@ GAS ファイル 2 枚。Apps Script は全ファイルでグローバルスコ�
 
 | ファイル | 行数 | 関数 | 中身 |
 |---|---|---|---|
-| `fortinet_psirt_watcher_v7.gs` | 4,835 | 186 | 本体（NW） |
+| `fortinet_psirt_watcher_v7.gs` | 4,651 | 180 | 本体（NW） |
 | `fortinet_psirt_watcher_v7_tests.gs` | 664 | 24 | 動作確認用（NW） |
 | `macos_release_monitor.gs` | 1,824 | 75 | macOS リリース監視。NW とは postSlack_ / kevCatalogWithStatus_ / callGemini_ / countAiRequest_ / SLACK_WEBHOOK_PROP だけ共有 |
 
@@ -768,10 +729,9 @@ GAS エディタへの手貼りで、確認用の関数はほとんど変わら�
            NW_AI_CHUNK_SIZE=10 / NW_KEEP_OUT_OF_SCOPE_MONTHS=3
            NW_SLACK_MAX_ITEMS=15 / NW_NOTIFY_WHEN_NO_HITS=false
            NW_LEDGER_COLS(14) / NW_STATE_COLS(10) / NW_RUNLOG_COLS(11) / NW_ASSET_COLS(9)
-           NW_DECISION_COLS(7)  … key / label の配列。見出し行は nwHeaders_() で作る
-           NW_DECISION_VERDICT / nwDecisions_
+           … key / label の配列。見出し行は nwHeaders_() で作る
            NW_STATE_VERSION_UNAVAILABLE='未取得' / aiRequestCount_ / nwRunStats_
-エントリ   nwSetup() / nwClearRunData() / nwEnsureDecisionSheet_()
+エントリ   nwSetup() / nwClearRunData() / nwRenameLegacySheets_()
            nwDaily() / nwReprocessFortinet() / nwReprocessCisco()
 取得       nwFetchRssItems_() / nwSlugifyTitle_() / nwCsafUrlFor_() / nwFetchCsaf_() / nwFetchAllCsaf_()
            nwFetchCiscoCsafRssItems_() / nwFetchCiscoCsafBatch_() / nwFetchCiscoHumanRssIndex_()
@@ -784,7 +744,7 @@ GAS エディタへの手貼りで、確認用の関数はほとんど変わら�
            nwJudgeCiscoVersions_() / nwNarrowFixVersion_()
 判定       nwReadAssets_() / nwNormProduct_() / nwAssetsForProduct_() / nwIsLedgerRow_() / nwCiscoDocCveClasses_()
            nwNewJpcertAlerts_() / nwFetchJpcertAlerts_() / nwJpcertKeywords_() / nwMarkJpcertSeen_()
-           nwDecideByRules_() / nwApplyHumanDecision_() / nwReadDecisions_() / nwLookupDecision_()
+           nwDecideByRules_()
            nwDecideNotification_() / nwJudgeOsApplicability_() / nwRuleGate_() / nwFinalizeVerdict_()
            nwNeedsAdvisoryProcessing_() / nwOwnershipJudgement_() / nwJudgeReasonText_()
            nwIsKevListed_() / nwFetchKevCatalog_() / nwImpactSeverity_()
@@ -847,8 +807,6 @@ Cisco の Security Hardening Release が重なった月だった可能性があ�
 - **対応基準の室長承認** — `社内ルール案_OS更新基準.md`。2026-09-04 に条件4の
   読み方（CVSS ベクター）が固まり、KEV の §5 は 2026-09-01 に承認済み。出せる状態
 - **資産棚卸しの運用ルール** — `更新日` 列は作ったが、いつ誰が確認するか未定（v3 §6.3-7）
-- **判断記録を誰がいつ書くか** — シートはあるが運用が無い。
-  書かれても、いまは判定の上書きに使うだけ（§4.13）
 - **Gemini 無料枠のデータ利用を判断する** — 無料枠は入力が Google の製品改善に使用される。
   当初の設計では「資産シートに実データを入れる前に有料化を判断する」としていたが、
   **判断した記録が残っていない**まま実データで運用に入っている。渡しているのは
@@ -864,7 +822,7 @@ Cisco の Security Hardening Release が重なった月だった可能性があ�
 |---|---|
 | 影響機能の 67% が「その他」 | 原因は分類器ではなく、Cisco の Security Hardening Release で CVE 側に材料が無かったこと。`document.notes` の CWE 表を読み、条件4を CVSS ベクターへ移した（§4.9 / §4.12） |
 | KEV 連携の基準未承認 | 2026-09-01 承認。登録主体を判定根拠に添える（社内ルール §5） |
-| 人の判断が残らない | 判断記録シート（§2.5 / §4.13） |
+| 人の判断が残らない | 判断記録シートを作ったが、2026-09-13 に「不要」で廃止（§2.5） |
 | CSAF が取れない件の製品を捏造 | 製品を名乗らない（§4.7） |
 | ツールの守備範囲外の情報 | JPCERT/CC の注意喚起だけ拾う（§4.8） |
 | テストが本体と同居 | 2 ファイルへ分離（§5） |

@@ -532,47 +532,6 @@ var NW_RUNLOG_COLS = [
 ];
 var NW_RUNLOG_HEADERS = nwHeaders_(NW_RUNLOG_COLS);
 
-/**
- * 人が下した対応の判断を残すシート。ツールは書かない。人だけが書く。
- *
- * 台帳に列を足す案は成立しない。nwRemoveRowsFor_ がアドバイザリの改訂ごとに
- * 台帳の行を消して書き直すので、人が書いた内容が消える。台帳は再生成できる
- * ツールの出力、ここは再生成できない人の記録、と役割を分ける。
- *
- * 列は「いつ・何に対して・どう決めたか・なぜ・誰が」の順。
- * 対象時点は改訂検知用。人が入れる（空欄だとその行は無視される）。
- */
-var NW_SHEET_DECISION = 'NW判断記録';
-
-var NW_DECISION_COLS = [
-  { key: 'decidedAt',  label: '判断日' },
-  { key: 'advisoryId', label: 'アドバイザリID' },
-  { key: 'cve',        label: 'CVE' },
-  { key: 'action',     label: '判断' },
-  { key: 'note',       label: '根拠' },
-  { key: 'by',         label: '判断者' },
-  { key: 'asOf',       label: '対象時点' }
-];
-var NW_DECISION_HEADERS = nwHeaders_(NW_DECISION_COLS);
-
-/**
- * 人の判断と、それが自社影響をどう上書きするか。
- *
- * null は「判定を変えない」。保留はツールの判定をそのまま残すための語で、
- * 記録だけ先に置きたいときに使う。
- *
- * 新しい判定値は作らない。「なし」に落とせば台帳には残り Slack からは外れる、
- * という既存の仕組みがそのまま監査要件（判断した記録を残す）を満たす。
- */
-var NW_DECISION_VERDICT = {
-  '対応不要（定期更新枠）': NW_V_NONE,
-  '対応済み':               NW_V_NONE,
-  '対応する（実施待ち）':   NW_V_ACT,
-  '保留':                   null
-};
-
-/** 1 実行のあいだ判断記録を読み直さないための入れ物。実行ごとに空から始まる。 */
-var nwDecisions_ = null;
 
 /**
  * 1 回の実行（nwDaily）で集めた統計。
@@ -613,36 +572,6 @@ var NW_STATE_VERSION_UNAVAILABLE = '未取得';
 // エントリポイント
 // ============================================================
 
-/**
- * 判断記録シートを用意する。既にあれば何もしない（人が書いた行を触らない）。
- * 判断列にはプルダウンを付ける。語彙から外れた値は nwReadDecisions_ が捨てるので、
- * 入力の時点で外せないようにしておく。
- */
-function nwEnsureDecisionSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sh = ss.getSheetByName(NW_SHEET_DECISION);
-  if (sh) return sh;
-
-  sh = ss.insertSheet(NW_SHEET_DECISION);
-  sh.appendRow(NW_DECISION_HEADERS);
-  sh.setFrozenRows(1);
-  sh.setColumnWidth(nwCol_(NW_DECISION_COLS, 'note'), 380);
-  sh.setColumnWidth(nwCol_(NW_DECISION_COLS, 'action'), 180);
-  nwApplyDecisionValidation_(sh, 2, 200);
-  Logger.log('「' + NW_SHEET_DECISION + '」シートを作成しました。');
-  return sh;
-}
-
-/** 判断列のプルダウン。語彙は NW_DECISION_VERDICT のキーがそのまま正。 */
-function nwApplyDecisionValidation_(sh, startRow, numRows) {
-  const rule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(Object.keys(NW_DECISION_VERDICT), true)
-    .setAllowInvalid(false)
-    .build();
-  sh.getRange(startRow, nwCol_(NW_DECISION_COLS, 'action'), numRows, 1)
-    .setDataValidation(rule);
-}
-
 function nwSetup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   nwRenameLegacySheets_(ss);
@@ -669,8 +598,6 @@ function nwSetup() {
     Logger.log('「' + NW_SHEET_ASSET + '」シートは既にあります。列を変えたときはシートを手で直してください（README §2.4）。');
   }
 
-  nwEnsureDecisionSheet_();
-
   let state = ss.getSheetByName(NW_SHEET_STATE);
   if (!state) {
     state = ss.insertSheet(NW_SHEET_STATE);
@@ -690,7 +617,7 @@ function nwSetup() {
 }
 
 /**
- * 旧名のシート（台帳 / 資産 / 処理済み / 実行履歴 / 判断記録）を「NW〜」へ改名する。
+ * 旧名のシート（台帳 / 資産 / 処理済み / 実行履歴）を「NW〜」へ改名する。
  *
  * 2026-09 に macOS 監視（macOS台帳 など）と並べたとき区別が付くよう、NW 側にも接頭辞を付けた。
  * 改名だけで列も行も触らない。新名のシートが既にあれば旧名はそのまま残す（手で確認してもらう）。
@@ -699,7 +626,7 @@ function nwSetup() {
 function nwRenameLegacySheets_(ss) {
   const pairs = [
     ['台帳', NW_SHEET_LEDGER], ['資産', NW_SHEET_ASSET], ['処理済み', NW_SHEET_STATE],
-    ['実行履歴', NW_SHEET_RUNLOG], ['判断記録', NW_SHEET_DECISION]
+    ['実行履歴', NW_SHEET_RUNLOG]
   ];
   pairs.forEach(function (p) {
     const oldSh = ss.getSheetByName(p[0]);
@@ -3217,124 +3144,13 @@ function nwFinalizeVerdict_(row, opts) {
 }
 
 /**
- * 自社影響を決める。ツールのルールで判定してから、人の判断があれば上書きする。
+ * 自社影響を決める。ツールのルールだけで判定する。
  *
- * 2 段に分けているのは「ツールがどう判定し、人がどう覆したか」を分けて
- * 追えるようにするため。人の判断をルールの中へ混ぜると、判定根拠を読んでも
- * それがツール由来か人由来か分からなくなる。
+ * 人の判断でここを上書きする仕組み（判断記録シート）は 2026-09-13 に外した。
+ * 利用者が求めていない運用で、1 行も書かれないまま残っていたため。
  */
 function nwDecideNotification_(row, assets) {
   nwDecideByRules_(row, assets);
-  nwApplyHumanDecision_(row);
-}
-
-/** 判断記録を 1 実行につき 1 回だけ読む。 */
-function nwGetDecisions_() {
-  if (!nwDecisions_) nwDecisions_ = nwReadDecisions_();
-  return nwDecisions_;
-}
-
-/**
- * 判断記録シートを読み、`アドバイザリID|CVE` で引けるようにする。
- * CVE 欄が空の行はそのアドバイザリ全体に効く（キーは `ID|`）。
- *
- * 語彙にない判断と、対象時点が空の行は捨ててログに出す。
- * とくに対象時点が無い行は改訂の有無を判定できない。分からないまま
- * 「対応不要」を効かせると見逃しになるので、効かせない側に倒す。
- * 捨てた行はツールの判定のまま台帳に出続けるので、間違いに気づける。
- */
-function nwReadDecisions_() {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NW_SHEET_DECISION);
-  if (!sh || sh.getLastRow() < 2) return {};
-
-  const n = sh.getLastRow() - 1;
-  const range = sh.getRange(2, 1, n, NW_DECISION_COLS.length);
-  const text = range.getDisplayValues();   // ID は =HYPERLINK() のことがある
-  const vals = range.getValues();          // 日付は Date のまま欲しい
-
-  const map = {};
-  let dropped = 0;
-  for (let i = 0; i < n; i++) {
-    const t = nwRowToRec_(NW_DECISION_COLS, text[i]);
-    const v = nwRowToRec_(NW_DECISION_COLS, vals[i]);
-    const id = String(t.advisoryId || '').trim();
-    if (!id) continue;
-
-    const action = String(t.action || '').trim();
-    if (!NW_DECISION_VERDICT.hasOwnProperty(action)) {
-      Logger.log('判断記録: ' + id + ' の判断「' + action + '」は語彙に無いので無視します。');
-      dropped++;
-      continue;
-    }
-
-    const asOf = v.asOf;
-    if (!(asOf instanceof Date) || isNaN(asOf.getTime())) {
-      Logger.log('判断記録: ' + id + ' は対象時点が空なので無視します。' +
-                 '改訂されたかどうかを判定できません。');
-      dropped++;
-      continue;
-    }
-
-    map[id + '|' + String(t.cve || '').trim().toUpperCase()] = {
-      decidedAt: v.decidedAt,
-      action: action,
-      note: String(t.note || '').trim(),
-      by: String(t.by || '').trim(),
-      asOf: asOf
-    };
-  }
-  const kept = Object.keys(map).length;
-  if (kept || dropped) Logger.log('判断記録: 有効 ' + kept + ' 件 / 無視 ' + dropped + ' 件');
-  return map;
-}
-
-/**
- * この行に効く判断を引く。CVE 指定があればそれを優先し、無ければアドバイザリ全体の判断。
- *
- * 判断はそのアドバイザリの「その時点の内容」に対して下したもの。改訂で影響範囲や
- * 修正版が変わったのに前回の「対応不要」が効き続けたら見逃しになる。
- * 最終更新日が対象時点より新しければ判断は無効にし、ツールの判定へ戻す。
- * 既読判定を current_release_date と版で行っているのと同じ考え方。
- */
-function nwLookupDecision_(row) {
-  const id = String(row.advisoryId || '').trim();
-  if (!id) return null;
-
-  const all = nwGetDecisions_();
-  const d = all[id + '|' + String(row.cve || '').trim().toUpperCase()] || all[id + '|'];
-  if (!d) return null;
-
-  if (row.pubDate instanceof Date && nwYmd_(row.pubDate) > nwYmd_(d.asOf)) {
-    Logger.log('判断記録: ' + id + ' は ' + nwYmd_(d.asOf) + ' 以降に改訂されたため、' +
-               '判断「' + d.action + '」を無効にしました。');
-    return null;
-  }
-  return d;
-}
-
-/**
- * ツールの判定に人の判断をかぶせる。
- *
- * AI は呼ばない。人が結論を出した行の影響機能を分類しても結論は変わらない。
- * ただし表示列は空にせず、コードのフォールバックで埋める（needsCodeDisplay）。
- */
-function nwApplyHumanDecision_(row) {
-  const d = nwLookupDecision_(row);
-  if (!d) return;
-
-  const verdict = NW_DECISION_VERDICT[d.action];
-  if (verdict) row.verdict = verdict;
-
-  row.reasonPhrase = nwYmd_(d.decidedAt) + ' に ' + (d.by || '記名なし') +
-                     ' が「' + d.action + '」と判断' +
-                     (d.note ? '（' + nwTruncateJa_(d.note, 60) + '）' : '');
-  row.reason = nwBuildDecisionReason_(row);
-
-  row._lockedVerdict = true;
-  row.needsVerdict = false;
-  row.needsDisplayAi = false;
-  row.needsFortinetAi = false;
-  row.needsCodeDisplay = true;
 }
 
 /**
