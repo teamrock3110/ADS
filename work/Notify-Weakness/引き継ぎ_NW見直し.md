@@ -213,3 +213,10 @@ readme.gs は §4 を削って 8 節に、README §2.5 / §4.13 は廃止の記�
 **会社側 GAS の食い違いを解消する手順**: main の 3 ファイル＋macOS を貼り、`GEMINI_BACKEND` を `'vertex'` に変え、
 `nwSetup()`・トリガー張り替え（`main`→`nwDaily`）・`nwTestSharedConstants()`（15 / 15）・`nwTestAi()`。
 会社側で足した簡易 `testAi()` は不要になるので消す。会社側の共有ユーザで macOS 側（`macosSelfTest()`）の確認は未実施。
+
+### 9-5. 反映完了（2026-09-14）
+
+利用者が個人 GAS・会社 GAS とも貼り替えて **「確認 OK」**。会社側は `GEMINI_BACKEND = 'vertex'`、
+本体と確認用の食い違いは解消。git の main（`89b5e97`）が両方の GAS の正。
+NW 見直し（命名・シート・列構造・判断記録廃止・v6 互換削除・Gemini 経路）はここで閉じる。
+次にコードを触るのは、プレ運用の観測で不満が出てから（README §6）。
