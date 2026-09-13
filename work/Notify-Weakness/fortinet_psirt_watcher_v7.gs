@@ -2391,42 +2391,30 @@ function nwReadAssets_() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NW_SHEET_ASSET);
   if (!sh || sh.getLastRow() < 2) return [];
 
-  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
-  const isV7 = headers.indexOf('ベンダー') !== -1;
-
-  if (isV7) {
-    const values = sh.getRange(2, 1, sh.getLastRow() - 1, NW_ASSET_COLS.length).getValues();
-    return values.map(function (row) { return nwRowToRec_(NW_ASSET_COLS, row); })
-      .filter(function (a) { return a.product || a.model; })
-      .map(function (a) {
-        return {
-          vendor: String(a.vendor || '').trim(),
-          category: String(a.category || '').trim(),
-          product: String(a.product || '').trim(),
-          model: String(a.model || '').trim(),
-          version: String(a.version || '').trim(),
-          count: a.count,
-          toolTarget: String(a.toolTarget || 'はい').trim(),
-          note: String(a.note || '').trim(),
-          updatedAt: a.updatedAt || ''
-        };
-      });
+  // 見出しが v7 形式（先頭が「ベンダー」）でなければ止める。v6 形式の互換読みは
+  // 2026-09-13 に外した。黙って別の解釈で読むと、判定の根拠が分からなくなる。
+  const first = String(sh.getRange(1, 1).getValue() || '').trim();
+  if (first !== NW_ASSET_COLS[0].label) {
+    throw new Error('「' + NW_SHEET_ASSET + '」の見出しが想定と違います（1 列目が「' + first + '」）。' +
+                    'README §2.4 の列順に直してください。');
   }
 
-  // v6 互換
-  const values = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
-  return values.filter(function (r) { return r[0]; }).map(function (r) {
-    return {
-      vendor: NW_VENDOR_FORTINET,
-      category: '',
-      product: String(r[0]).trim(),
-      model: '',
-      version: String(r[1]).trim(),
-      count: r[2],
-      toolTarget: 'はい',
-      note: String(r[4] || '').trim()
-    };
-  });
+  const values = sh.getRange(2, 1, sh.getLastRow() - 1, NW_ASSET_COLS.length).getValues();
+  return values.map(function (row) { return nwRowToRec_(NW_ASSET_COLS, row); })
+    .filter(function (a) { return a.product || a.model; })
+    .map(function (a) {
+      return {
+        vendor: String(a.vendor || '').trim(),
+        category: String(a.category || '').trim(),
+        product: String(a.product || '').trim(),
+        model: String(a.model || '').trim(),
+        version: String(a.version || '').trim(),
+        count: a.count,
+        toolTarget: String(a.toolTarget || 'はい').trim(),
+        note: String(a.note || '').trim(),
+        updatedAt: a.updatedAt || ''
+      };
+    });
 }
 
 function nwFortinetAssets_(assets) {

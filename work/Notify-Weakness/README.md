@@ -39,7 +39,7 @@ Google スプレッドシート + Apps Script。毎朝 9 時台に Fortinet と 
 
 ### コードのどこを見るか
 
-本体は 1 ファイル 4,651 行だが、**全部を読む必要はない。**
+本体は 1 ファイル 4639 行だが、**全部を読む必要はない。**
 セクションのコメントバナー（`// =====`）で区切ってある。
 
 | やること | 見るセクション | 行数 |
@@ -695,7 +695,7 @@ GAS ファイル 2 枚。Apps Script は全ファイルでグローバルスコ�
 
 | ファイル | 行数 | 関数 | 中身 |
 |---|---|---|---|
-| `fortinet_psirt_watcher_v7.gs` | 4,651 | 180 | 本体（NW） |
+| `fortinet_psirt_watcher_v7.gs` | 4639 | 180 | 本体（NW） |
 | `fortinet_psirt_watcher_v7_tests.gs` | 664 | 24 | 動作確認用（NW） |
 | `macos_release_monitor.gs` | 1,824 | 75 | macOS リリース監視。NW とは postSlack_ / kevCatalogWithStatus_ / callGemini_ / countAiRequest_ / SLACK_WEBHOOK_PROP だけ共有 |
 
