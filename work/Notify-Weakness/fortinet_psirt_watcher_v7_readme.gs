@@ -43,12 +43,14 @@
  * 2. シートは 5 枚
  * ============================================================
  *
- *   台帳       判断が要る行だけ。ここが作業リスト。並びは自社影響順
- *   処理済み   公表された全件の記録。「今月 N 件のうち対象は M 件」の分母
- *              追記型なので既存行は書き換わらない
- *   実行履歴   1 実行 1 行。**行が途切れていたら、その日は動いていない**
- *   資産       自社機器。**人が手で維持する唯一の入力。消すと復元できない**
- *   判断記録   人が下した判断。ツールは書かない（下記 4 を参照）
+ * シート名は「NW」で始まる（macOS 監視の「macOS台帳」などと並べて区別するため。2026-09-13）。
+ *
+ *   NW台帳       判断が要る行だけ。ここが作業リスト。並びは自社影響順
+ *   NW処理済み   公表された全件の記録。「今月 N 件のうち対象は M 件」の分母
+ *                追記型なので既存行は書き換わらない
+ *   NW実行履歴   1 実行 1 行。**行が途切れていたら、その日は動いていない**
+ *   NW資産       自社機器。**人が手で維持する唯一の入力。消すと復元できない**
+ *   NW判断記録   人が下した判断。ツールは書かない（下記 4 を参照）
  *
  * Slack は該当がある日しか鳴らない。つまり「該当なしの日」「取得に失敗した日」
  * 「トリガーが消えて動かなかった日」が全部おなじ静けさに見える。
@@ -59,14 +61,16 @@
  * 3. 手で実行できる関数（上の実行ドロップダウン）
  * ============================================================
  *
- *   main                 日次実行の本体。トリガーが毎朝呼ぶので普段は触らない
- *   setup                シート 5 枚を作る（初回のみ）
- *   clearRunData         台帳と処理済みを空にする。資産シートは触らない
- *   reprocessFortinet    Fortinet の処理済み・台帳を消して 50 件取り直す（Slack 1 通）
- *   reprocessCisco       同じことを Cisco で（Slack 1 通）
+ * NW の関数は nw で始まる。macOS 監視は macos で始まる（下記 9）。
+ *
+ *   nwDaily                日次実行の本体。トリガーが毎朝呼ぶので普段は触らない
+ *   nwSetup                シート 5 枚を作る（初回のみ）。旧名（台帳 など）のシートがあれば NW〜 に改名する
+ *   nwClearRunData         NW台帳と NW処理済みを空にする。NW資産は触らない
+ *   nwReprocessFortinet    Fortinet の処理済み・台帳を消して 50 件取り直す（Slack 1 通）
+ *   nwReprocessCisco       同じことを Cisco で（Slack 1 通）
  *
  * 日次トリガーは画面から設定する。左メニューの時計アイコン → トリガーを追加 →
- * 関数 `main` / 時間主導型 / 日付ベースのタイマー / 午前 9〜10 時。
+ * 関数 `nwDaily` / 時間主導型 / 日付ベースのタイマー / 午前 9〜10 時。
  * **同じ関数のトリガーを二重に作らないこと。**二重だと 1 日 2 回動き Slack も 2 通来る。
  *
  * スクリプト プロパティ（プロジェクトの設定 → スクリプト プロパティ）
@@ -106,7 +110,7 @@
  * ============================================================
  *
  *   実行履歴に行が無い日がある
- *     → その日は実行されていない（トリガーが消えた等）。main() は落ちても
+ *     → その日は実行されていない（トリガーが消えた等）。nwDaily() は落ちても
  *        finally で行を残すので、行が無い＝未実行
  *
  *   影響機能が空 / AI 3 列が埋まらない
@@ -125,10 +129,10 @@
  *        コードのフォールバックで埋まる。頻発するなら AI_PROVIDER = 'claude'
  *
  *   Cisco が台帳に出ない
- *     → reprocessCisco() を実行する。台帳だけ消しても処理済みが残ると再取得しない
+ *     → nwReprocessCisco() を実行する。台帳だけ消しても処理済みが残ると再取得しない
  *
  *   台帳・処理済みの列がずれた
- *     → 見出し行を手で直してから reprocessFortinet() → reprocessCisco()
+ *     → 見出し行を手で直してから nwReprocessFortinet() → nwReprocessCisco()
  *
  *   「CSAF未作成 1」が毎日ログに出る
  *     → 正常。FG-IR-22-059 は Fortinet が CSAF を出す前（2025年3月以前）の案件で、
@@ -142,11 +146,11 @@
  * 6. コードを直す人へ
  * ============================================================
  *
- * main.gs は `// =====` のバナーでセクションに区切ってある。全部読む必要はない。
+ * 本体（fortinet_psirt_watcher_v7.gs）は `// =====` のバナーでセクションに区切ってある。全部読む必要はない。
  *
  *   機器・統制語彙・しきい値を変える   「設定」（先頭）
  *   判定基準を変える                   「通知判定」＋「OS 該当・ベンダー別判定」
- *   台帳の列を変える                   「設定」の LEDGER_HEADERS ＋「台帳への記録」
+ *   台帳の列を変える                   「設定」の NW_LEDGER_COLS（key / label）。行を書く側は key で引くのでここだけ
  *   Slack の見た目を変える             「Slack 通知」
  *
  * **触る前に、そのセクションのコメントを必ず読むこと。**「なぜこの実装なのか」
@@ -168,56 +172,66 @@
  * ファイルは 3 枚。Apps Script は全ファイルでグローバルスコープを共有するので、
  * 並び順は関係ない。
  *
- *   main.gs     本体。変更のたびに貼る
- *   test.gs     動作確認用。ほとんど変わらない
- *   readme.gs   このファイル
+ *   本体      fortinet_psirt_watcher_v7.gs。変更のたびに貼る
+ *   test.gs   動作確認用。ほとんど変わらない
+ *   readme.gs このファイル
+ *   （macOS 監視は macos_release_monitor.gs。下記 9）
  *
- * **確認用の中身を main.gs 側に貼り足さないこと。**同じ関数が 2 回定義され、
+ * **確認用の中身を本体側に貼り足さないこと。**同じ関数が 2 回定義され、
  * あとに読まれた方が勝つ。エラーは出ないので気づけない。
  *
  * **別ファイルから参照する定数は、本体側で const ではなく var で宣言する。**
  * Apps Script は別ファイルのトップレベル const を参照できないことがある
- * （実測: test.gs から V_INVEST が ReferenceError）。関数と var は確実に共有される。
- * これを守れているかを testSharedConstants() が見張っている。
+ * （実測: test.gs から NW_V_INVEST が ReferenceError）。関数と var は確実に共有される。
+ * これを守れているかを nwTestSharedConstants() が見張っている。
+ *
+ * ■ 2026-09-13 の貼り替え（関数名・シート名に NW の接頭辞を付けた版）に限って、貼ったあとに 2 つ
+ *
+ *   1. nwSetup() を 1 回実行する。既存の「台帳」「資産」「処理済み」「実行履歴」「判断記録」が
+ *      「NW台帳」… に改名される。列も行も触らない。ログに「改名しました」が 5 行出れば完了
+ *   2. トリガーを張り替える。旧 `main` のトリガーを削除し、`nwDaily` で作り直す（上記 3）。
+ *      旧トリガーを残すと `main` が無いので毎朝エラー通知が来る
+ *
+ *   確認用ファイル・readme.gs も同じ版に貼り替える（関数名が変わっている）。
  *
  *
  * ============================================================
  * 8. 貼ったあとのテスト
  * ============================================================
  *
- * **testSharedConstants() を最初に実行する。**「13 / 13 件」と出れば、確認用ファイルから
+ * **nwTestSharedConstants() を最初に実行する。**「13 / 13 件」と出れば、確認用ファイルから
  * 本体の定数が見えている。1 件でも NG なら他は ReferenceError で落ちるだけで原因が読めない。
  *
  * 次にこの 3 つが通れば、判定は変わっていない。
  *
- *   testRuleGate()          ルールゲート: 8 / 8 件
- *   testJudge()             自社影響3値: 17 / 17 件
- *   testGateBeforeAi()      ゲートの前置き: 2 / 2 件
+ *   nwTestRuleGate()          ルールゲート: 8 / 8 件
+ *   nwTestJudge()             自社影響3値: 17 / 17 件
+ *   nwTestGateBeforeAi()      ゲートの前置き: 2 / 2 件
  *
  * 余裕があれば（すべてネットワーク不要）
  *
- *   testVersion()               バージョン比較: 14 / 14 件
- *   testFeatureExposure()       機能の設定依存分類: 8 / 8 件
- *   testGuessFortinetFeature()  影響機能の復元: 8 / 8 件
- *   testCiscoWorkaround()       回避策の分解: 7 / 7 件
- *   testCiscoFeatureNormalize() 6 件
- *   testExternalSurface()       5 件
- *   testImpactJaFromVector()    ユーザ影響ベクター: 3 / 3 件
- *   testCiscoInformationalSkip() notice は台帳行 0
- *   testCheckSteps() / testStripCheckLabels() / testSlackBlocks()
+ *   nwTestVersion()               バージョン比較: 14 / 14 件
+ *   nwTestFeatureExposure()       機能の設定依存分類: 8 / 8 件
+ *   nwTestGuessFortinetFeature()  影響機能の復元: 8 / 8 件
+ *   nwTestCiscoWorkaround()       回避策の分解: 7 / 7 件
+ *   nwTestCiscoFeatureNormalize() 6 件
+ *   nwTestExternalSurface()       5 件
+ *   nwTestImpactJaFromVector()    ユーザ影響ベクター: 3 / 3 件
+ *   nwTestCiscoInformationalSkip() notice は台帳行 0
+ *   nwTestCheckSteps() / nwTestStripCheckLabels() / nwTestSlackBlocks()
  *
  * ネットワークや API キーが要るもの
  *
- *   testCiscoRss()   Cisco CSAF RSS 件数: 50（認証不要）
- *   testProps()      API キーと Webhook が OK と出る
- *   testAi()         1 行分の AI 出力（GEMINI_API_KEY が必要）
- *   testRss() / testCsaf() / testCsafUrls() / testJpcertAlerts()
+ *   nwTestCiscoRss()   Cisco CSAF RSS 件数: 50（認証不要）
+ *   nwTestProps()      API キーと Webhook が OK と出る
+ *   nwTestAi()         1 行分の AI 出力（GEMINI_API_KEY が必要）
+ *   nwTestRss() / nwTestCsaf() / nwTestCsafUrls() / nwTestJpcertAlerts()
  *
- * テストが通ったら main() を 1 回。差分ゼロの日なら 7〜10 秒で終わる。
+ * テストが通ったら nwDaily() を 1 回。差分ゼロの日なら 7〜10 秒で終わる。
  *
  *
  * ============================================================
- * 6. macOS リリース監視（2026-09-08 追加）
+ * 9. macOS リリース監視（2026-09-08 追加）
  * ============================================================
  *
  * ■ 何をするか
@@ -277,7 +291,7 @@
  *   3. macosSelfTest() → PASS を確認
  *   4. macosRunReadinessCheck() → PASS を確認
  *   5. 画面のトリガー設定で `macosDaily` を毎日 10〜11 時に張る
- *      （`main` は 9〜10 時のまま。**同じ関数のトリガーを二重に作らないこと**）
+ *      （`nwDaily` は 9〜10 時のまま。**同じ関数のトリガーを二重に作らないこと**）
  *   6. **1 回目の実行で、直近 90 日に公開された版がまとめて通知される。**
  *      管理対象を TRUE にした系統のぶんだけ届く（2026-09-11 時点で 8 版）。
  *      **初日に数通まとめて来るのは正常。**2 回目以降は新しく出たものだけ

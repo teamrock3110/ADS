@@ -39,14 +39,14 @@ Google スプレッドシート + Apps Script。毎朝 9 時台に Fortinet と 
 
 ### コードのどこを見るか
 
-本体は 1 ファイル 5,333 行だが、**全部を読む必要はない。**
+本体は 1 ファイル 4,835 行だが、**全部を読む必要はない。**
 セクションのコメントバナー（`// =====`）で区切ってある。
 
 | やること | 見るセクション | 行数 |
 |---|---|---:|
 | 機器・統制語彙を変える | `設定`（先頭） | 486 |
 | 判定基準を変える | `通知判定` / `OS 該当・ベンダー別判定` | 1,116 |
-| 台帳の列を変える | `設定` の `LEDGER_HEADERS` と `台帳への記録` | 743 |
+| 台帳の列を変える | `設定` の `NW_LEDGER_COLS` | 743 |
 | Slack の見た目を変える | `Slack 通知` | 476 |
 
 ### 判定基準を変えるときの順序
@@ -128,8 +128,8 @@ Slack で1通通知する。**目的は「対応要否の自動決定」では�
 ### 1.1 処理経路
 
 ```
-日次9時トリガー main()
-  ├ runFortinet_()
+日次9時トリガー nwDaily()
+  ├ nwRunFortinet_()
   │   資産シート読み込み
   │   → RSS 取得（ir.xml・最新50件）
   │   → 50件すべての CSAF を fetchAll で並列取得（約3〜5秒）
@@ -139,7 +139,7 @@ Slack で1通通知する。**目的は「対応要否の自動決定」では�
   │   → 【コード】製品突合 + バージョン数値比較 → 自社影響を全行で確定
   │   → 【AI】あり判定の行だけ日本語化（10件ずつ）
   │   → 台帳へ書く → 処理済みに記録する（この順序が重要。§4.3）
-  ├ runCisco_()
+  ├ nwRunCisco_()
   │   csaf_20.xml から更新のあった分だけ CSAF を取得（直列・300ms間隔）
   │   以降は Fortinet と同じ
   ├ JPCERT/CC 注意喚起（自社ベンダー該当・未通知のみ。判定には混ぜない）
@@ -212,7 +212,7 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
 | `>=X.Y\|<=A.B.C`（2 桁の下限） | 1 | `FortiProxy >=7.4\|<=7.4.13` |
 | 非数値を含む | 1 | `FortiSASE 25.1.c` |
 
-最後の 1 件は数値比較できない。**推測せず「不明」に落とす**（`matchesSpec_`）。
+最後の 1 件は数値比較できない。**推測せず「不明」に落とす**（`nwMatchesSpec_`）。
 製品名に空白を含むもの（`FortiSOAR PaaS` / `FortiAnalyzer Cloud`）があるので、
 文字列の先頭 1 語を製品名とみなす実装は誤る。製品名は `scores[].products` から取る。
 
@@ -233,7 +233,7 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
 ### 1.5 設計原則（実装で厳守）
 
 - **決定的な処理はコード、自然言語処理のみ LLM**
-  - コード: バージョン比較(`matchesSpec_`)、製品突合(`normProduct_`)、自社影響(`decideNotification_`)、無認証リモート(`isUnauthRemote_`)、修正版の系列絞り込み(`narrowFixVersion_`)、既読管理
+  - コード: バージョン比較(`nwMatchesSpec_`)、製品突合(`nwNormProduct_`)、自社影響(`nwDecideNotification_`)、無認証リモート(`nwIsUnauthRemote_`)、修正版の系列絞り込み(`nwNarrowFixVersion_`)、既読管理
   - LLM: 影響機能名の抽出、日本語平易化、確認方法の提示
 - **公式記載の範囲のみ出力**: 用語の言い換えは許容、被害の推測は禁止
 - **安全側に倒す**: 判定できないものは正直に出す。`なし` に丸めない
@@ -248,6 +248,13 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
 ---
 
 ## 2. スプレッドシート（5シート）
+
+シート名は 2026-09-13 から「NW」で始まる（`NW台帳` / `NW処理済み` / `NW実行履歴` / `NW資産` /
+`NW判断記録`）。macOS 監視の `macOS台帳` などと同じスプレッドシートに並ぶので、接頭辞で見分ける。
+下の見出しは接頭辞を省いて書く。旧名のシートは `nwSetup()` が改名する（列も行も触らない）。
+
+コードは列を **key / label の配列**（`NW_LEDGER_COLS` など）で持ち、見出し文字列をキーにしない。
+行を書く側（`nwToRowArray_` など）は key で値を用意し、並びは配列が決める。
 
 ### 2.1 台帳（14列・左6列固定）— 対応要否を判断する作業リスト
 
@@ -264,11 +271,11 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
 - **KEV は CVSS の隣**。悪用実績は CVSS より強い信号
 - 並びは `自社影響` 順（あり（対応検討）→ あり（影響調査）→ なし）、第2キーが最終更新日の降順。
   作業リストなので、未処理の重い行が新しい「なし」の下に沈まないようにしている
-- 台帳に載せるのは自社製品の行と、製品を特定できなかった行だけ（`isLedgerRow_`）
-- **古い `なし` だけ3か月で落とす**（`KEEP_OUT_OF_SCOPE_MONTHS`）。`あり` は年齢で切らない
+- 台帳に載せるのは自社製品の行と、製品を特定できなかった行だけ（`nwIsLedgerRow_`）
+- **古い `なし` だけ3か月で落とす**（`NW_KEEP_OUT_OF_SCOPE_MONTHS`）。`あり` は年齢で切らない
 - 最終列は `=HYPERLINK(url, "FG-IR-26-150")`
-- **列順を変えるときは `LEDGER_HEADERS` と `toRowArray_()` の両方を必ず同時に直す。**
-  列幅は列名で引くようにしたので幅だけずれることはない
+- **列順を変えるときは `NW_LEDGER_COLS` だけ直す。**`nwToRowArray_()` も列幅も key で引くので、
+  並びはこの配列だけが決める
 
 ### 2.2 処理済み（10列）— 公表全件の記録。分母であり、除外の根拠
 
@@ -293,11 +300,11 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
   セルの値は ID のままなので判定は壊れない
 - **既読判定はこのシートを見る（台帳ではない）。** 台帳には自社製品の行しか無いため
 - `CSAF版` は Fortinet では常に `0`。CSAF を読めなかった行だけ `未取得`
-- 最終更新日の降順に自動で並べ替える（`sortState_`）
-- **追記型で既存行を書き換えない。**列を増やしたら `reprocessFortinet()` / `reprocessCisco()` が要る
+- 最終更新日の降順に自動で並べ替える（`nwSortState_`）
+- **追記型で既存行を書き換えない。**列を増やしたら `nwReprocessFortinet()` / `nwReprocessCisco()` が要る
 
 自社判定が `対象外-情報通知` の行は、公表件数として数えない。Cisco の Advance Notification は
-同じ内容を個別アドバイザリで出し直す重複なので、入れると水増しになる（`STATE_JUDGE_INFO`）。
+同じ内容を個別アドバイザリで出し直す重複なので、入れると水増しになる（`NW_STATE_JUDGE_INFO`）。
 
 ### 2.3 実行履歴（11列）— 1実行1行。動いた事実そのもの
 
@@ -305,14 +312,14 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
 実行日時 | 結果 | 確認件数 | 差分なし | 更新あり | 対象 | 対象以外 | 失敗 | 所要秒 | AI呼び出し | 備考
 ```
 
-**なぜ要るか**: Slack は該当ありの日だけ鳴る（`NOTIFY_WHEN_NO_HITS = false`）。
+**なぜ要るか**: Slack は該当ありの日だけ鳴る（`NW_NOTIFY_WHEN_NO_HITS = false`）。
 つまり「該当なしだった日」「取得に失敗した日」「トリガーが消えて実行されなかった日」が
 すべて同じ静けさに見える。実行ログの保持期間も短く後から遡れない。
 **行が途切れていれば実行されていない日**と読めるようにするためのシート。
 
 - 数字は左から右へ一直線。`確認件数 = 差分なし + 更新あり`、`更新あり = 対象 + 対象以外`
 - **単位はアドバイザリ件数**。台帳の行数ではない（1 アドバイザリが CVE × 製品で複数行に開き、
-  さらに古い「なし」を `isLedgerRow_` が落とすので、どう数えても一致しない）。
+  さらに古い「なし」を `nwIsLedgerRow_` が落とすので、どう数えても一致しない）。
   この列が答えるのは「自社の資産に当たる公表がいくつあったか」であって、台帳が何行増えたかではない
 - `対象以外` は残差。`対象外-未保有` / `対象外-OS影響外` / `対象外-情報通知` に加えて
   **`判定不能`（CSAF が取れず判定できなかった件）も入る**。だから「対象外」とは呼ばない。
@@ -321,10 +328,10 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
   合計すると「確認100なのに取得50、残り50はどこへ？」という誤読を生む
 - `備考` は更新・失敗・エラーがあった日だけ書く。平常日は空欄。
   **何か書いてある行が見るべき行**
-- `main()` が落ちても `finally` で記録する。エラー内容も備考に入る
+- `nwDaily()` が落ちても `finally` で記録する。エラー内容も備考に入る
 - `AI呼び出し` は実際に投げた HTTP リクエスト数。リトライとフォールバックも1回ずつ数える
   （枠を減らすのはプロンプト数ではなくリクエスト数のため）
-- `reprocess*()` など `main()` 以外からの実行では行を作らない
+- `reprocess*()` など `nwDaily()` 以外からの実行では行を作らない
 
 ### 2.4 資産（9列）
 
@@ -342,7 +349,7 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
 判断日 | アドバイザリID | CVE | 判断 | 根拠 | 判断者 | 対象時点
 ```
 
-**なぜ台帳の列にしないか**: `removeRowsFor_` がアドバイザリの改訂ごとに台帳の行を
+**なぜ台帳の列にしないか**: `nwRemoveRowsFor_` がアドバイザリの改訂ごとに台帳の行を
 消して書き直すので、人が書いた内容は消える。台帳は再生成できるツールの出力、
 ここは再生成できない人の記録、と役割を分ける。
 
@@ -353,7 +360,7 @@ Cisco は前提が成り立つので差分取得のままでよい（全件取�
   ツールの判定へ戻す（既読判定を `current_release_date` と版で行うのと同じ考え方）
 - `対象時点` は人が入れる。**空欄だとその行は無視される**ので、書き忘れに注意
   （以前はメニューから自動で入れていたが、使われないので 2026-09-07 に削除した）
-- `判断` はプルダウン。語彙は `DECISION_VERDICT` のキーが正
+- `判断` はプルダウン。語彙は `NW_DECISION_VERDICT` のキーが正
 
 | 判断 | 自社影響 | 台帳 | Slack |
 |---|---|---|---|
@@ -400,7 +407,7 @@ CSAF が取れない
 
 ### 4.2 削除してから書く
 
-台帳への書き込み前に、これから書く分を**記録の有無に関わらず**削除する（`removeRowsFor_`）。
+台帳への書き込み前に、これから書く分を**記録の有無に関わらず**削除する（`nwRemoveRowsFor_`）。
 前回の実行が台帳を書いた直後に落ちていると記録が付いておらず、
 消さずに追記すると同じ行が二重に並ぶ。
 
@@ -415,8 +422,8 @@ CSAF が取れない
 翌日以降は既知として扱われて改訂まで台帳に載らない（静かな取りこぼし）。
 この順なら記録が付かないので次の実行でやり直せる。
 
-`fillLedgerDisplay_` は `reasonPhrase` を通知要否の理由で上書きするため、
-処理済みの判定根拠に使う値は `snapshotJudgeRows_` で**AI 生成前に控えておく**。
+`nwFillLedgerDisplay_` は `reasonPhrase` を通知要否の理由で上書きするため、
+処理済みの判定根拠に使う値は `nwSnapshotJudgeRows_` で**AI 生成前に控えておく**。
 
 ### 4.4 判定根拠は2種類ある
 
@@ -425,7 +432,7 @@ CSAF が取れない
 | 台帳の `判定根拠` | なぜ緊急ではないのか（通知要否） | `悪用に管理者権限が必要なため` |
 | 処理済みの `判定根拠` | なぜ対象と判定したのか（自社該当） | `FortiOS 7.4.11｜影響範囲内` |
 
-`decideNotification_` は版が影響範囲内の行に社内ルールを当てて `reasonPhrase` を
+`nwDecideNotification_` は版が影響範囲内の行に社内ルールを当てて `reasonPhrase` を
 前者で上書きするので、**処理済み側で `reasonPhrase` を使ってはいけない**。
 
 ### 4.5 ベンダー差は「根拠のある非対称」だけ許す
@@ -436,25 +443,25 @@ v7 で意図的に残している非対称と、その根拠。
 |---|---|---|---|
 | CSAF の取得 | 全件 | 差分のみ | フィードの日付が CSAF を反映するか（§1.2） |
 | 取得の並列度 | `fetchAll` 並列 | 直列＋300ms | Cisco は API 側の作法に合わせている |
-| 失敗時の扱い | `lastSeenDate_` ＋ `hasError` を渡す | 同じ | 2026-09-01 に揃えた（下記） |
+| 失敗時の扱い | `nwLastSeenDate_` ＋ `hasError` を渡す | 同じ | 2026-09-01 に揃えた（下記） |
 
 根拠を書けない非対称は残さない。
 
 **2026-09-01 に揃えた 2 点**（どちらも動作は変わらない。読み比べたときに
 「なぜ違うのか」を考えさせないための統一）。
 
-- 失敗時の日付を Cisco も `lastSeenDate_` に通す。Cisco の item は `revisedOn` を
+- 失敗時の日付を Cisco も `nwLastSeenDate_` に通す。Cisco の item は `revisedOn` を
   持たないので `it.pubDate` と同値（実測で確認済み）
-- `needsAdvisoryProcessing_` に Cisco 側も `hasError` を渡す。渡さないと、記録済みなのに
+- `nwNeedsAdvisoryProcessing_` に Cisco 側も `hasError` を渡す。渡さないと、記録済みなのに
   CSAF が取れなかった件で版の比較（記録は `未取得`／取得結果は空）が永久に一致せず、
-  毎日その件を作り直して Slack にも出し続ける。**いまは `selectRssCsafCandidates_` が
+  毎日その件を作り直して Slack にも出し続ける。**いまは `nwSelectRssCsafCandidates_` が
   手前で弾くので表面化しないが、それは偶然**で、この関数自身が両ベンダーで同じ答えを
   返せなければ揃っているとは言えない。設計書に記録の無かった非対称
 
 ### 4.6 Slack の宛先は 1 つ
 
 Webhook URL はスクリプトプロパティ `SLACK_WEBHOOK_URL` の 1 本。プロパティ名は定数
-`SLACK_WEBHOOK_PROP` に置き、`notifySlack_` だけが読む。
+`SLACK_WEBHOOK_PROP` に置き、`nwNotifySlack_` だけが読む。
 
 **このプロパティ名を改名しないこと。** 改名した .gs を貼った瞬間、プロパティを直すまで
 日次通知が黙って止まり、それは「該当が無くて静かな日」と見分けが付かない（§4.1 と同じ理由）。
@@ -473,20 +480,20 @@ CSAF が取れなかった行の `product` は空にする。**知らないも�
 充てていた。「分からない」が「FortiOS だと分かった」に化けるうえ、自社が持っていない
 製品のアドバイザリ（RoomOS・BroadWorks・Crosswork など）まで自社製品として
 「あり（影響調査）」で台帳に載っていた。CSAF が取れたときは
-`ciscoAdvisoryTargetsAssets_` が弾いているのに、取れないと素通りする経路だった。
+`nwCiscoAdvisoryTargetsAssets_` が弾いているのに、取れないと素通りする経路だった。
 
-判定層は最初からこの形を想定して作られていた。`decideNotification_` は空の `product` を
-見て「影響調査・OS=不明」に落とし、`toRowArray_` は `r.product || '不明'` と表示する。
-塞いでいたのは `isLedgerRow_` の `if (!row.product) return false;` の 1 行だけで、
+判定層は最初からこの形を想定して作られていた。`nwDecideNotification_` は空の `product` を
+見て「影響調査・OS=不明」に落とし、`nwToRowArray_` は `r.product || '不明'` と表示する。
+塞いでいたのは `nwIsLedgerRow_` の `if (!row.product) return false;` の 1 行だけで、
 フォールバック行が製品をでっち上げてその経路を迂回していた。
 
 いまは `noCsaf: true` を立てた行だけが製品なしで台帳を通る。通常の行で製品が空なのは
 抽出の失敗なので従来どおり落とす。通さないと、取得に失敗した件が台帳から消えて
 誰も気づけなくなる。
 
-理由は `reason` ではなく `reasonPhrase` に置く。`reason` は `decideNotification_` が
+理由は `reason` ではなく `reasonPhrase` に置く。`reason` は `nwDecideNotification_` が
 「OS=… | KEV=…」の見出しごと組み立て直すので、行の側で書いても消える。
-`decideNotification_` は行が持っている `reasonPhrase` を優先する
+`nwDecideNotification_` は行が持っている `reasonPhrase` を優先する
 （CSAF が取れなかった行にとって「製品を特定できない」は結果であって理由ではない）。
 
 **タイトルから製品を当てにはいかない。** Cisco の人向け RSS のタイトルには製品名が
@@ -536,16 +543,16 @@ CVE が無いので台帳の行と機械的に突き合わせられない。KEV 
   「ツールが自社影響ありと判断した」と読まれる
 - **該当 0 件の日でも注意喚起があれば送る。**そうしないと「CVE の該当が無い日」に
   注意喚起が消える
-- 既読は送れた分だけ進める（`markJpcertSeen_` は `notifySlack_` が true を返したときだけ）。
+- 既読は送れた分だけ進める（`nwMarkJpcertSeen_` は `nwNotifySlack_` が true を返したときだけ）。
   先に印を付けると、Webhook が失効していた日の注意喚起が誰にも届かないまま消える
-- 取得に失敗しても main() は止めない。補助の経路で本体の日次処理を落とすのは本末転倒
+- 取得に失敗しても nwDaily() は止めない。補助の経路で本体の日次処理を落とすのは本末転倒
 
 ### 4.9 条件4は CVSS ベクターで判定する。材料が無いときに「なし」と言わない
 
-条件3（`AV:N / PR:N / UI:N`）を `ruleGate_` が CVSS ベクターから読んでいるのに、
+条件3（`AV:N / PR:N / UI:N`）を `nwRuleGate_` が CVSS ベクターから読んでいるのに、
 条件4だけ英文のキーワード照合という別の方法を使っていた。ベンダーが記述文に
 何を書くかに依存するので、Cisco の Security Hardening Release のように説明が
-CWE 分類しか無い件で機能しない。**条件4も同じベクターから読む**（`impactSeverity_`）。
+CWE 分類しか無い件で機能しない。**条件4も同じベクターから読む**（`nwImpactSeverity_`）。
 
 | ベクター | 意味 | 戻り値 | 判定 |
 |---|---|---|---|
@@ -567,22 +574,22 @@ AI と記述文へ落ちるのはベクターが読めないとき（CVSS v4、R
 **`A:H` を「業務停止」と読めるのは、この判定へ来る行が `always` の機能に絞られて
 いるから。**CVSS の `A:H` は「影響を受けるコンポーネントの可用性が完全に失われる」で、
 コンポーネント＝機器全体とは限らない（デーモン 1 本でも `A:H` は付く）。基盤が止まれば
-業務が止まるので、`FEATURE_ALWAYS_ON` の行に限れば正しい。管理画面の DoS は `config`
-なので手前で「影響調査」になる。**`FEATURE_ALWAYS_ON` に設定依存の機能を足すと
+業務が止まるので、`NW_FEATURE_ALWAYS_ON` の行に限れば正しい。管理画面の DoS は `config`
+なので手前で「影響調査」になる。**`NW_FEATURE_ALWAYS_ON` に設定依存の機能を足すと
 この前提が崩れる**ので、足すときは条件4の読み方も見直すこと。
 `Scope` は見ない（`S:U` でも基盤が止まれば業務は止まるので、絞ると見逃す）。
 `AC`（攻撃の難しさ）も見ない（条件3が `AV`/`PR`/`UI` だけのため。2026-09-04 に現状維持で確認）。
 
 #### 材料が無いときに「なし」と言わない
 
-`finalizeVerdict_` の `always` 分岐は、深刻でなければ `なし`（掌握にも業務停止にも
+`nwFinalizeVerdict_` の `always` 分岐は、深刻でなければ `なし`（掌握にも業務停止にも
 至らないため）にしていた。**深刻度を判定する材料が無い行にもそう言っていた。**
 
-材料の有無は `impactSeverity_` の戻り値で分ける（`yes` / `infoleak` / `no` / `unknown`）。
+材料の有無は `nwImpactSeverity_` の戻り値で分ける（`yes` / `infoleak` / `no` / `unknown`）。
 ベクターが読めれば `C/I/A` から `yes` か `infoleak` か `no` を返し、**読めないときだけ**
 AI の出力と記述文へ落ちる。そこでも当てられなければ `unknown` を返し、
 `影響調査`（影響の種類を特定できず深刻度を判定できないため）に留める。
-`V_INVEST` の定義（設定を見ていない以上、確認前の正しい状態は影響調査）と同じ理由。
+`NW_V_INVEST` の定義（設定を見ていない以上、確認前の正しい状態は影響調査）と同じ理由。
 **「無い」ではなく「分からない」を返せることがこの関数の要点。**
 
 実例（2026-09-04）。Cisco の Security Hardening Release は影響の種類が CWE 分類でしか
@@ -590,14 +597,14 @@ AI の出力と記述文へ落ちる。そこでも当てられなければ `unk
 語彙照合では拾えない。この分岐が無いと **CVSS 8.6 の 4 件が黙って「なし」に落ち、
 Slack からも消える**。
 
-`isSevereImpact_` に足す CWE 語彙は**掌握に至るものだけ**にする
+`nwIsSevereImpact_` に足す CWE 語彙は**掌握に至るものだけ**にする
 （access control / neutralization of special elements / memory buffer / out-of-bounds）。
 DoS 系を無理に足さない。CWE の分類は「その CWE で起きうる最悪」を指しているだけで、
 その機器で実際に業務停止まで行くかは書いていない。断定できないものは上の分岐が受ける。
 
 ### 4.10 製品を特定できない行に、機器固有のコマンドを出させない
 
-`normalizeHowToCheck_` の先頭で、`noCsaf` の行と製品が空の行は `CHECK_STEPS_NO_CSAF`
+`nwNormalizeHowToCheck_` の先頭で、`noCsaf` の行と製品が空の行は `NW_CHECK_STEPS_NO_CSAF`
 に固定する。AI は RSS の説明文から機器固有のコマンドを推測できてしまうので、ここで止める。
 
 実例（2026-09-06 の実運用）。CSAF が取れなかった `FG-IR-22-059`（OpenSSL ライブラリの
@@ -605,9 +612,9 @@ DoS 系を無理に足さない。CWE の分類は「その CWE で起きうる�
 なのに、確認方法は特定できている前提**になっていて矛盾する。打っても意味がなく、
 出力が無いと「影響なし」と誤解される。
 
-`formatOfficialAction_` は**空文字を返さない。**Fortinet で修正版が取れないと空を
+`nwFormatOfficialAction_` は**空文字を返さない。**Fortinet で修正版が取れないと空を
 返していたので、台帳の列が空欄になり入力漏れと区別が付かなかった（§4.1）。しかも
-Slack 側は `slackActionLine_` が「アドバイザリを確認」を補っていたため、**同じ行が
+Slack 側は `nwSlackActionLine_` が「アドバイザリを確認」を補っていたため、**同じ行が
 台帳と Slack で違って見えていた。**補うのは 1 箇所だけにする。
 
 ### 4.11 AI が外した日でも同じ結論になるようにする
@@ -615,7 +622,7 @@ Slack 側は `slackActionLine_` が「アドバイザリを確認」を補って
 AI は**同じアドバイザリでも日によって違う答えを返す。**分類が落ちると
 「その他 → 影響機能を特定できないため」になり、確認の手がかりが消える。
 
-実測（2026-09-06、`reprocessFortinet()` を 2 回まわして比較）:
+実測（2026-09-06、`nwReprocessFortinet()` を 2 回まわして比較）:
 
 ```
 CVE-2026-71408 / UI DoS attack
@@ -623,7 +630,7 @@ CVE-2026-71408 / UI DoS attack
   2 回目  影響機能=その他    「影響機能を特定できないため」
 ```
 
-`guessFortinetFeature_` は AI が外したときの保険だが、題名の `UI` を拾う規則が
+`nwGuessFortinetFeature_` は AI が外したときの保険だが、題名の `UI` を拾う規則が
 無かったので復元できなかった（`web.?ui` にも `\bgui\b` にも当たらない）。
 規則を 1 つ足して決定的にした。
 
@@ -631,32 +638,32 @@ CVE-2026-71408 / UI DoS attack
 これは保険の穴で、1 行で潰せる。語彙そのものが無いもの（キャプティブポータルなど）は
 別の話で、実データを溜めてから足す。
 
-`testGuessFortinetFeature()` が AI の出力を空にして題名だけで決まることを見ている。
+`nwTestGuessFortinetFeature()` が AI の出力を空にして題名だけで決まることを見ている。
 **抜き取り検証で「たまたま良かった日」を見ても意味がない**ので、ここは機械で押さえる。
 
 ### 4.12 統制語彙はベンダーによらず強制する
 
-`isJunkCiscoFeature_` は英語の断片だけを弾いていたので、AI が返した日本語は
+`nwIsJunkCiscoFeature_` は英語の断片だけを弾いていたので、AI が返した日本語は
 何でも通っていた。実測で「アクセス制御」「CLI処理」「メモリ管理」のような
 **脆弱性の種類**が影響機能の欄に入った。機能とは軸が違う。
 
-`featureExposure_` はそれらを `unknown` としか読めないので判定は動かない一方、
+`nwFeatureExposure_` はそれらを `unknown` としか読めないので判定は動かない一方、
 台帳を眺めたときに「特定できていない行」が実際より少なく見える。**判定は変わらないのに
 見え方だけ壊れる**ので、
 「影響機能を特定できていない行の割合」が過少に出て、直したつもりになる。
 
-`CISCO_FEATURE_VOCAB` を定義して語彙外を弾く。Fortinet には
-`isFortinetFeatureVocab_` で同じ強制があり、ベンダーで差を付ける根拠は無い（§4.5）。
+`NW_CISCO_FEATURE_VOCAB` を定義して語彙外を弾く。Fortinet には
+`nwIsFortinetFeatureVocab_` で同じ強制があり、ベンダーで差を付ける根拠は無い（§4.5）。
 
 
 ### 4.13 人の判断はルールの外側でかぶせる
 
-`decideNotification_` は 2 段になっている。
+`nwDecideNotification_` は 2 段になっている。
 
 ```
-decideNotification_(row, assets)
-  ├ decideByRules_()      ツールのルールで判定する（従来の中身そのまま）
-  └ applyHumanDecision_() 判断記録があれば上書きする
+nwDecideNotification_(row, assets)
+  ├ nwDecideByRules_()      ツールのルールで判定する（従来の中身そのまま）
+  └ nwApplyHumanDecision_() 判断記録があれば上書きする
 ```
 
 人の判断をルールの中へ混ぜない。混ぜると判定根拠を読んでも、それがツール由来か
@@ -677,13 +684,13 @@ Slack に出るのは `あり（対応検討）` と `あり（影響調査）` 
 つまり **表示上限で隠れる行は、すべて人が見る必要のある行**になる。
 上限は「読みやすさ」ではなく「隠してよいか」で決める。
 
-`SLACK_MAX_ITEMS = 15`。数えているのは台帳の行数（CVE × 製品）なので、
+`NW_SLACK_MAX_ITEMS = 15`。数えているのは台帳の行数（CVE × 製品）なので、
 Cisco の複数 CVE アドバイザリが 1 本あるだけで旧値の 5 を超えていた（ClamAV は 1 本で 7 行）。
 15 の根拠は Slack 側の制約: 1 メッセージ 50 ブロック、カード 1 枚が divider + section の
 2 ブロック、ヘッダ・サマリ・末尾で 4 ブロック。15 枚で 34 ブロック。
 計算上 23 枚まで入るがそこまで上げないのは、読む側の限界が手前にあるため。
 
-2 行目のサマリは `buildSlackPayload_(shown, sheetUrl, all)` の第 3 引数で**全件を渡して数える**。
+2 行目のサマリは `nwBuildSlackPayload_(shown, sheetUrl, all)` の第 3 引数で**全件を渡して数える**。
 `shown` で数えると内訳とカード枚数が一致してしまい、切られた事実がどこにも出ない。
 読む人は 2 行目を「今日の該当件数」として読むので、そこが表示件数だと末尾の数字と繋がらない。
 
@@ -727,20 +734,21 @@ GAS ファイル 2 枚。Apps Script は全ファイルでグローバルスコ�
 
 | ファイル | 行数 | 関数 | 中身 |
 |---|---|---|---|
-| `fortinet_psirt_watcher_v7.gs` | 5,333 | 202 | 本体 |
-| `fortinet_psirt_watcher_v7_tests.gs` | 708 | 25 | 動作確認用 |
+| `fortinet_psirt_watcher_v7.gs` | 4,835 | 186 | 本体（NW） |
+| `fortinet_psirt_watcher_v7_tests.gs` | 664 | 24 | 動作確認用（NW） |
+| `macos_release_monitor.gs` | 1,824 | 75 | macOS リリース監視。NW とは postSlack_ / kevCatalogWithStatus_ / callGemini_ / countAiRequest_ / SLACK_WEBHOOK_PROP だけ共有 |
 
 **確認用ファイルから参照する定数は、本体側で `const` ではなく `var` で宣言する。**
 
 Apps Script は全ファイルをグローバルスコープで実行するが、**別ファイルのトップレベル
-`const` は参照できないことがある**（2026-09-06 実測: `test.gs` の `testAi` から
-`V_INVEST` が `ReferenceError`）。関数と `var` はファイルをまたいで確実に共有される。
+`const` は参照できないことがある**（2026-09-06 実測: `test.gs` の `nwTestAi` から
+`NW_V_INVEST` が `ReferenceError`）。関数と `var` はファイルをまたいで確実に共有される。
 
-対象は 13 個（`AI_PROVIDER` / `V_ACT` / `V_INVEST` / `V_NONE` / `VENDOR_FORTINET` /
-`VENDOR_CISCO` / `KEV_YES` / `KEV_NO` / `SLACK_WEBHOOK_PROP` / `SSL_VPN_ENABLED` /
-`CHECK_STEPS_FORTINET` / `CHECK_STEPS_NO_CSAF` / `CHECK_STEPS_CISCO_DEFAULT`）。
+対象は 13 個（`AI_PROVIDER` / `NW_V_ACT` / `NW_V_INVEST` / `NW_V_NONE` / `NW_VENDOR_FORTINET` /
+`NW_VENDOR_CISCO` / `NW_KEV_YES` / `NW_KEV_NO` / `SLACK_WEBHOOK_PROP` / `NW_SSL_VPN_ENABLED` /
+`NW_CHECK_STEPS_FORTINET` / `NW_CHECK_STEPS_NO_CSAF` / `NW_CHECK_STEPS_CISCO_DEFAULT`）。
 確認用から新しい定数を参照したくなったら、その宣言も `var` へ変えて
-`testSharedConstants()` の一覧に足す。**`testSharedConstants()` を他のテストより先に
+`nwTestSharedConstants()` の一覧に足す。**`nwTestSharedConstants()` を他のテストより先に
 実行する**。ここが通らない状態で他を動かしても ReferenceError で落ちるだけで原因が読めない。
 
 確認用ファイル自身はトップレベルで `const` / `let` を宣言しない（同じ理由で、
@@ -756,51 +764,52 @@ GAS エディタへの手貼りで、確認用の関数はほとんど変わら�
 
 ```
 設定定数   AI_PROVIDER / GEMINI_MODEL(+FALLBACKS) / CLAUDE_MODEL(Haiku)
-           RSS_URL / CSAF_BASE / CISCO_CSAF_RSS_URL / KEV_FEED_URL / JPCERT_RSS_URL
-           AI_CHUNK_SIZE=10 / KEEP_OUT_OF_SCOPE_MONTHS=3
-           SLACK_MAX_ITEMS=15 / NOTIFY_WHEN_NO_HITS=false
-           LEDGER_HEADERS(14) / STATE_HEADERS(10) / RUNLOG_HEADERS(11) / ASSET_HEADERS(9)
-           DECISION_HEADERS(7) / DECISION_VERDICT / decisions_
-           STATE_VERSION_UNAVAILABLE='未取得' / aiRequestCount_ / runStats_
-エントリ   setup() / clearRunData() / ensureDecisionSheet_()
-           main() / reprocessFortinet() / reprocessCisco()
-取得       fetchRssItems_() / slugifyTitle_() / csafUrlFor_() / fetchCsaf_() / fetchAllCsaf_()
-           fetchCiscoCsafRssItems_() / fetchCiscoCsafBatch_() / fetchCiscoHumanRssIndex_()
-           selectRssCsafCandidates_()【Cisco専用】/ csafDate_() / csafUpdatedAt_()
-           lastSeenDate_() / ymd_()
-展開       extractRows_() / extractCiscoRowsFromCsaf_() / noVulnRow_()
-           extractFortinetRowFallback_() / extractCiscoRowFallback_()
-           ciscoCsafProductNames_() / csafCveList_()
-バージョン parseVersion_() / compareVersion_() / matchesSpec_() / judgeVersions_()
-           judgeCiscoVersions_() / narrowFixVersion_()
-判定       readAssets_() / normProduct_() / assetsForProduct_() / isLedgerRow_() / ciscoDocCveClasses_()
-           newJpcertAlerts_() / fetchJpcertAlerts_() / jpcertKeywords_() / markJpcertSeen_()
-           decideByRules_() / applyHumanDecision_() / readDecisions_() / lookupDecision_()
-           decideNotification_() / judgeOsApplicability_() / ruleGate_() / finalizeVerdict_()
-           needsAdvisoryProcessing_() / ownershipJudgement_() / judgeReasonText_()
-           isKevListed_() / fetchKevCatalog_() / impactSeverity_()
-AI         enrichWithAI_() / buildEnrichPrompt_() / callGemini_() / callGeminiModel_()
-           callClaude_() / countAiRequest_() / fillLedgerDisplay_()
-出力       getKnownState_() / removeRowsFor_() / writeState_() / sortState_()
-           snapshotJudgeRows_() / advisoryIdCell_() / advisoryUrlFor_()
-           toRowArray_() / writeLedger_() / sortLedger_() / formatLedger_()
-           writeRunLog_() / startRunStats_() / addVendorStats_() / notifySlack_()
+           NW_RSS_URL / NW_CSAF_BASE / NW_CISCO_CSAF_RSS_URL / KEV_FEED_URL / NW_JPCERT_RSS_URL
+           NW_AI_CHUNK_SIZE=10 / NW_KEEP_OUT_OF_SCOPE_MONTHS=3
+           NW_SLACK_MAX_ITEMS=15 / NW_NOTIFY_WHEN_NO_HITS=false
+           NW_LEDGER_COLS(14) / NW_STATE_COLS(10) / NW_RUNLOG_COLS(11) / NW_ASSET_COLS(9)
+           NW_DECISION_COLS(7)  … key / label の配列。見出し行は nwHeaders_() で作る
+           NW_DECISION_VERDICT / nwDecisions_
+           NW_STATE_VERSION_UNAVAILABLE='未取得' / aiRequestCount_ / nwRunStats_
+エントリ   nwSetup() / nwClearRunData() / nwEnsureDecisionSheet_()
+           nwDaily() / nwReprocessFortinet() / nwReprocessCisco()
+取得       nwFetchRssItems_() / nwSlugifyTitle_() / nwCsafUrlFor_() / nwFetchCsaf_() / nwFetchAllCsaf_()
+           nwFetchCiscoCsafRssItems_() / nwFetchCiscoCsafBatch_() / nwFetchCiscoHumanRssIndex_()
+           nwSelectRssCsafCandidates_()【Cisco専用】/ nwCsafDate_() / nwCsafUpdatedAt_()
+           nwLastSeenDate_() / nwYmd_()
+展開       nwExtractRows_() / nwExtractCiscoRowsFromCsaf_() / nwNoVulnRow_()
+           nwExtractFortinetRowFallback_() / nwExtractCiscoRowFallback_()
+           nwCiscoCsafProductNames_() / nwCsafCveList_()
+バージョン nwParseVersion_() / nwCompareVersion_() / nwMatchesSpec_() / nwJudgeVersions_()
+           nwJudgeCiscoVersions_() / nwNarrowFixVersion_()
+判定       nwReadAssets_() / nwNormProduct_() / nwAssetsForProduct_() / nwIsLedgerRow_() / nwCiscoDocCveClasses_()
+           nwNewJpcertAlerts_() / nwFetchJpcertAlerts_() / nwJpcertKeywords_() / nwMarkJpcertSeen_()
+           nwDecideByRules_() / nwApplyHumanDecision_() / nwReadDecisions_() / nwLookupDecision_()
+           nwDecideNotification_() / nwJudgeOsApplicability_() / nwRuleGate_() / nwFinalizeVerdict_()
+           nwNeedsAdvisoryProcessing_() / nwOwnershipJudgement_() / nwJudgeReasonText_()
+           nwIsKevListed_() / nwFetchKevCatalog_() / nwImpactSeverity_()
+AI         nwEnrichWithAI_() / nwBuildEnrichPrompt_() / callGemini_() / callGeminiModel_()
+           callClaude_() / countAiRequest_() / nwFillLedgerDisplay_()
+出力       nwGetKnownState_() / nwRemoveRowsFor_() / nwWriteState_() / nwSortState_()
+           nwSnapshotJudgeRows_() / nwAdvisoryIdCell_() / nwAdvisoryUrlFor_()
+           nwToRowArray_() / nwWriteLedger_() / nwSortLedger_() / nwFormatLedger_()
+           nwWriteRunLog_() / nwStartRunStats_() / nwAddVendorStats_() / nwNotifySlack_()
            slackWebhookUrl_() / operationalSlackTarget_() / postSlack_()
-           sampleSlackRows_()（testSlackBlocks が使う）
+           nwSampleSlackRows_()（nwTestSlackBlocks が使う）
 ```
 
 `_tests.gs` 側（22 関数）:
 
 ```
-testProps() / testRss() / testCsafUrls() / testCsaf() / testCiscoRss()
-testVersion() / testJudge() / testRuleGate() / testGateBeforeAi()
-testFeatureExposure() / testStripCheckLabels() / testCiscoWorkaround()
-testCheckSteps() / testCiscoInformationalSkip() / testImpactJaFromVector()
-testTitleJaFromAdvisory() / testCiscoFeatureNormalize() / testExternalSurface()
-testSlackBlocks() / testAi() ほか
+nwTestProps() / nwTestRss() / nwTestCsafUrls() / nwTestCsaf() / nwTestCiscoRss()
+nwTestVersion() / nwTestJudge() / nwTestRuleGate() / nwTestGateBeforeAi()
+nwTestFeatureExposure() / nwTestStripCheckLabels() / nwTestCiscoWorkaround()
+nwTestCheckSteps() / nwTestCiscoInformationalSkip() / nwTestImpactJaFromVector()
+testTitleJaFromAdvisory() / nwTestCiscoFeatureNormalize() / nwTestExternalSurface()
+nwTestSlackBlocks() / nwTestAi() ほか
 ```
 
-**`sampleSlackRows_()` は本体に残した。**確認用側の `testSlackBlocks()` が呼ぶ
+**`nwSampleSlackRows_()` は本体に残した。**確認用側の `nwTestSlackBlocks()` が呼ぶ
 （同一スコープなので動く）。
 
 ---
@@ -883,9 +892,9 @@ Cisco の Security Hardening Release が重なった月だった可能性があ�
   ClamAV 型は製品名すら書かない。Fortinet のタイトルには製品名が無い。
   当たったケースを信じてしまうぶん、名乗らないより悪い（§4.7）
 - **Slack のカードをアドバイザリ単位にまとめる** — 一見きれいだが、`影響` は
-  `fallbackImpactJa_` が CVE のベクターから引き、`推奨対応` の修正版は
-  `ciscoFixedVersions_(vuln, …)` が CVE ごとの `product_status` から引き、
-  自社影響そのものも `ruleGate_(row)` が CVE のベクターを見て決めている。
+  `nwFallbackImpactJa_` が CVE のベクターから引き、`推奨対応` の修正版は
+  `nwCiscoFixedVersions_(vuln, …)` が CVE ごとの `product_status` から引き、
+  自社影響そのものも `nwRuleGate_(row)` が CVE のベクターを見て決めている。
   同じアドバイザリでも CVE ごとに割れるので、1 枚にまとめると代表値を選ぶことになり、
   選んだ瞬間に他の CVE については誤りになる。とくに修正版を低い方に丸めると
   「更新したのに直っていない」を生む。**やるなら集約規則の設計から**

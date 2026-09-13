@@ -11,6 +11,19 @@
  *   GEMINI_API_KEY / ANTHROPIC_API_KEY / SLACK_WEBHOOK_URL /
  *   JPCERT_SEEN_AT（ツールが書く）
  *
+ * 名前の規則（macos_release_monitor.gs と同じ）:
+ *   NW 専用の関数は nw〜、定数は NW_〜、シートは「NW〜」。macOS 側は macos〜 / MACOS_〜 / 「macOS〜」。
+ *   接頭辞の無いものは両モジュールで共有する部品で、次の 5 つだけ。
+ *     postSlack_             Slack 送信
+ *     kevCatalogWithStatus_  CISA KEV の取得（取得可否と出典まで返す）
+ *     callGemini_            Gemini 呼び出し（内部で callGeminiModel_ / callClaude_ を使う）
+ *     countAiRequest_        AI 消費の計数。sharedAiCountToday_ で当日合計を読む（無料枠を食い合わないため）
+ *     SLACK_WEBHOOK_PROP     Webhook を入れるプロパティ名
+ *   これらの引数や戻り値を変えるときは macOS 側の呼び出しも直すこと。
+ *
+ * シートの列は key / label の配列で持ち、見出し文字列をコードのキーにしない
+ * （macOS 設計確定書 §2.4。見出しを変えた瞬間に全参照が undefined になる型を避ける）。
+ *
  * CSAF とは:
  *   ベンダーが脆弱性情報を機械可読な JSON で公開しているファイル。Fortinet / Cisco とも
  *   これが主経路で、影響バージョン・修正版・CVSS・影響の種類が構造化されて入っている。
@@ -26,12 +39,12 @@
  * const ではなく **var** で宣言する。
  *
  * Apps Script は全ファイルをグローバルスコープで実行するが、別ファイルのトップレベル
- * const は参照できないことがある（2026-09-06 実測: test.gs の testAi から V_INVEST が
+ * const は参照できないことがある（2026-09-06 実測: test.gs の nwTestAi から NW_V_INVEST が
  * ReferenceError）。var と関数はファイルをまたいで確実に共有される。
  *
- * 対象: AI_PROVIDER / V_ACT / V_INVEST / V_NONE / VENDOR_FORTINET / VENDOR_CISCO /
- *       KEV_YES / KEV_NO / SLACK_WEBHOOK_PROP / SSL_VPN_ENABLED /
- *       CHECK_STEPS_FORTINET / CHECK_STEPS_NO_CSAF / CHECK_STEPS_CISCO_DEFAULT
+ * 対象: AI_PROVIDER / NW_V_ACT / NW_V_INVEST / NW_V_NONE / NW_VENDOR_FORTINET / NW_VENDOR_CISCO /
+ *       NW_KEV_YES / NW_KEV_NO / SLACK_WEBHOOK_PROP / NW_SSL_VPN_ENABLED /
+ *       NW_CHECK_STEPS_FORTINET / NW_CHECK_STEPS_NO_CSAF / NW_CHECK_STEPS_CISCO_DEFAULT
  *
  * 確認用ファイルから新しい定数を参照したくなったら、その宣言も var に変えること。
  * 値を書き換えないという約束は var でも変わらない（機械が守らないだけ）。
@@ -46,7 +59,7 @@ var AI_PROVIDER = 'gemini';
  * 2026-09-06 に ai.google.dev/gemini-api/docs/models で実在を確認した安定版。
  * **モデル ID を変えるときは必ず同ページで確かめること。**推測で置かない。
  */
-const GEMINI_MODEL = 'gemini-3.8-flash';
+var GEMINI_MODEL = 'gemini-3.8-flash';
 /**
  * 上のモデルが使えないときに順に試す。退避する条件は 2 つ（callGemini_ 参照）。
  *   - 無料枠（1日20回程度・実測）を使い切った
@@ -55,14 +68,14 @@ const GEMINI_MODEL = 'gemini-3.8-flash';
  * **1日上限はモデルごとに別勘定なので、段を増やすとその分だけ粘れる。**
  * いずれも 2026-09-06 時点の安定版。世代を上げたときは 1 つ前を先頭に残す。
  */
-const GEMINI_MODEL_FALLBACKS = [
+var GEMINI_MODEL_FALLBACKS = [
   'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash'
 ];
 /**
  * Claude のモデル ID。判定はコードが行い、AI は日本語生成だけなので Haiku で足りる。
  * 呼び出しには ANTHROPIC_API_KEY（スクリプト プロパティ）が要る。
  */
-const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+var CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
 
 /**
  * AI に投げた HTTP リクエストの回数。実行履歴に残して無料枠の消費を追えるようにする。
@@ -71,7 +84,7 @@ const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
  * リトライもモデルのフォールバックも 1 回ずつ数える。枠を減らすのはリクエストだから。
  * 呼び出しは AI 生成の内側 3 階層で起きるため、引数で持ち回らずここで数える。
  */
-let aiRequestCount_ = 0;
+var aiRequestCount_ = 0;
 
 function countAiRequest_() {
   aiRequestCount_++;
@@ -108,18 +121,18 @@ function sharedAiCountToday_() {
   } catch (e) { return 0; }
 }
 
-const RSS_URL = 'https://filestore.fortinet.com/fortiguard/rss/ir.xml';
+var NW_RSS_URL = 'https://filestore.fortinet.com/fortiguard/rss/ir.xml';
 /** Cisco CSAF RSS（主経路）。link/guid に CSAF JSON の URL が直接入る */
-const CISCO_CSAF_RSS_URL = 'https://sec.cloudapps.cisco.com/security/center/csaf_20.xml';
+var NW_CISCO_CSAF_RSS_URL = 'https://sec.cloudapps.cisco.com/security/center/csaf_20.xml';
 /** Cisco 通常 RSS（補助）。CSAF 失敗時のタイトル・概要・人向け URL */
-const CISCO_RSS_URL = 'https://sec.cloudapps.cisco.com/security/center/psirtrss20/CiscoSecurityAdvisory.xml';
-const CSAF_BASE = 'https://filestore.fortinet.com/fortiguard/psirt/csaf_';
+var NW_CISCO_RSS_URL = 'https://sec.cloudapps.cisco.com/security/center/psirtrss20/CiscoSecurityAdvisory.xml';
+var NW_CSAF_BASE = 'https://filestore.fortinet.com/fortiguard/psirt/csaf_';
 
-var VENDOR_FORTINET = 'Fortinet';
-var VENDOR_CISCO = 'Cisco';
+var NW_VENDOR_FORTINET = 'Fortinet';
+var NW_VENDOR_CISCO = 'Cisco';
 
-const SHEET_LEDGER = '台帳';
-const SHEET_ASSET = '資産';
+var NW_SHEET_LEDGER = 'NW台帳';
+var NW_SHEET_ASSET = 'NW資産';
 
 /**
  * 処理したアドバイザリを 1 行ずつ記録するシート。
@@ -129,7 +142,7 @@ const SHEET_ASSET = '資産';
  * さらに「今月 Fortinet から公表：N 件」という分母も出せなくなる。
  * 取得した事実はここに残し、台帳は判断に使う行だけに保つ。
  */
-const SHEET_STATE = '処理済み';
+var NW_SHEET_STATE = 'NW処理済み';
 
 /**
  * 自社影響「なし」の行を台帳に残す期間（か月）。0 で無制限。
@@ -141,7 +154,7 @@ const SHEET_STATE = '処理済み';
  *
  * 「なし」を落としても分母は壊れない。処理済みシートには全件残る。
  */
-const KEEP_OUT_OF_SCOPE_MONTHS = 3;
+var NW_KEEP_OUT_OF_SCOPE_MONTHS = 3;
 
 /**
  * Slack に 1 通で個別表示する最大件数。超えた分は末尾に件数だけ出す。
@@ -154,7 +167,7 @@ const KEEP_OUT_OF_SCOPE_MONTHS = 3;
  * section の 2 ブロック、ヘッダ・サマリ・末尾で 4 ブロック。15 枚なら 34 ブロック。
  * 計算上は 23 枚まで入るが、読む側の限界がブロック上限より手前にある。
  */
-const SLACK_MAX_ITEMS = 15;
+var NW_SLACK_MAX_ITEMS = 15;
 
 /**
  * Slack の Webhook URL を入れるスクリプトプロパティ名。
@@ -165,31 +178,31 @@ const SLACK_MAX_ITEMS = 15;
 var SLACK_WEBHOOK_PROP = 'SLACK_WEBHOOK_URL';
 
 /** Slack 末尾の外部一覧。URL は表示せずリンクテキストだけ出す */
-const SECURITY_NEXT_VULN_URL = 'https://www.security-next.com/category/cat177';
+var NW_SECURITY_NEXT_VULN_URL = 'https://www.security-next.com/category/cat177';
 
 /** 影響ありが 0 件のときも Slack に流すか。日次実行では false が静か */
-const NOTIFY_WHEN_NO_HITS = false;
+var NW_NOTIFY_WHEN_NO_HITS = false;
 
 /** 1回の AI 呼び出しで処理する行数。無料枠は回数課金なので、通知対象はできるだけ1回にまとめる */
-const AI_CHUNK_SIZE = 10;
+var NW_AI_CHUNK_SIZE = 10;
 
 /**
  * 自社影響の3値。社内ルール（社内ルール案_OS更新基準.md）の写し。
  *
  * ベースラインは年1回の定期OS更新。ツールの役割は次の切り分けだけ。
- *   V_ACT    臨時更新の条件を満たす。対応時期を検討する
- *   V_INVEST 設定次第で影響が変わる。確認方法を実行して判断する
- *   V_NONE   定期更新で足りる。臨時更新しない根拠がある
+ *   NW_V_ACT    臨時更新の条件を満たす。対応時期を検討する
+ *   NW_V_INVEST 設定次第で影響が変わる。確認方法を実行して判断する
+ *   NW_V_NONE   定期更新で足りる。臨時更新しない根拠がある
  *
  * 「影響が partial だから待てる」のような結論をツールが勝手に出さないこと。
- * 設定を見ていない以上、確認前の正しい状態は V_INVEST である。
+ * 設定を見ていない以上、確認前の正しい状態は NW_V_INVEST である。
  */
-var V_ACT = 'あり（対応検討）';
-var V_INVEST = 'あり（影響調査）';
-var V_NONE = 'なし';
+var NW_V_ACT = 'あり（対応検討）';
+var NW_V_INVEST = 'あり（影響調査）';
+var NW_V_NONE = 'なし';
 
 /** SSL-VPN を外面から除外する（無効化済みの場合は false） */
-var SSL_VPN_ENABLED = false;
+var NW_SSL_VPN_ENABLED = false;
 
 /**
  * JPCERT/CC の RDF。注意喚起（/at/）だけ拾い、Weekly Report（/wr/）は捨てる。
@@ -202,41 +215,43 @@ var SSL_VPN_ENABLED = false;
  * 頻度は年約 29 件（2023〜2026 の 4 年分 106 件を全数確認）。そのうち
  * Fortinet / Cisco 系は 6 件＝年 1.5 件なので、Slack に足しても埋もれない。
  */
-const JPCERT_RSS_URL = 'https://www.jpcert.or.jp/rss/jpcert.rdf';
+var NW_JPCERT_RSS_URL = 'https://www.jpcert.or.jp/rss/jpcert.rdf';
 
 /** 通知済みの注意喚起 ID。スクリプトプロパティにカンマ区切りで置く。 */
-const JPCERT_SEEN_PROP = 'JPCERT_SEEN_AT';
+var NW_JPCERT_SEEN_PROP = 'JPCERT_SEEN_AT';
 
 /** 既読 ID の保持上限。年 30〜40 件なので 200 あれば 5 年分。 */
-const JPCERT_SEEN_MAX = 200;
+var NW_JPCERT_SEEN_MAX = 200;
 
-const KEV_FEED_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
+var KEV_FEED_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
 /**
  * CISA 本家が落ちたときの代替。2026-09-08 実測で catalogVersion・件数とも本家と一致
  * （2026.09.04 / 1,695 件）。本家が 200 を返さなかったときだけ使う。
  *
  * 代替を足した理由は、取得失敗が「KEV 掲載なし」と同じ見た目になっていたから。
- * isKevListed_ は例外を握りつぶして false を返すので、CISA が落ちた日は
+ * nwIsKevListed_ は例外を握りつぶして false を返すので、CISA が落ちた日は
  * 全 CVE が「なし」になり、KEV で「調査」へ引き上げるはずの行が静かに消えていた。
  */
-const KEV_FEED_FALLBACK_URL = 'https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json';
+var KEV_FEED_FALLBACK_URL = 'https://raw.githubusercontent.com/cisagov/kev-data/nwDaily/known_exploited_vulnerabilities.json';
 
 /** 直近の KEV 取得結果。実行履歴の備考へ「照合できたか」を出すために持つ。 */
-let kevLastStatus_ = null;
+var kevLastStatus_ = null;
 
 /** Fortinet AI が選ぶ影響機能（外面判定の統制語彙） */
-const FORTINET_AI_FEATURES = [
+var NW_FORTINET_AI_FEATURES = [
   'IPsec VPN', 'SSL-VPN', '管理GUI', 'SSH',
   'アンチウイルスエンジン', 'IPSエンジン', 'Webフィルタ', 'SSLインスペクション',
   'データプレーン', 'その他', '不明'
 ];
 
 /** CISA KEV 掲載の有無（台帳表示用） */
-var KEV_YES = 'あり';
-var KEV_NO = 'なし';
+var NW_KEV_YES = 'あり';
+var NW_KEV_NO = 'なし';
 
 /**
  * 台帳の列。**14 列**で、順序は下の配列そのもの（README §2.1）。
+ * key はコード側の名前、label はシートの見出し。両者は独立している（macOS 設計確定書 §2.4）。
+ * 行を書くのは nwToRowArray_ で、この配列の順に key を引くので、列順を変えるときはここだけ直す。
  *
  * 列は確認する人の思考順に並べる。
  *   いつ検知した何か → どれくらい危ないか → どんな影響か → なぜその判定か
@@ -244,31 +259,61 @@ var KEV_NO = 'なし';
  * 毎日動いて新着が積まれる表なので、最終更新日は付随情報ではなく
  * 「その行が自分にとって新しいか」を判断する一次情報として先頭に置く。
  */
-const LEDGER_HEADERS = [
-  '最終更新日',   // 1  いつ検知したか
-  '自社影響',     // 2  あり（対応検討）/ あり（影響調査）/ なし。並べ替えの第1キー
-  '製品',         // 3
-  'CVE',          // 4
-  'CVSS',         // 5
-  'KEV',          // 6  あり / なし。悪用実績は CVSS より強い信号なので隣に置く
-  '脆弱性名',     // 7  CSAF / RSS の文書タイトル（短い表示）
-  'ユーザ影響',   // 8  最悪ケース50字以内
-  '影響機能',     // 9
-  '判定根拠',     // 10 OS=… | KEV=… | ◯◯のため「結論」
-  '確認方法',     // 11 確認ポイント／コマンド／判断
-  '公式推奨対応', // 12 ベンダー公式（日本語）
-  'アドバイザリ', // 13
+var NW_LEDGER_COLS = [
+  { key: 'pubDate',    label: '最終更新日' },   // 1  いつ検知したか
+  { key: 'verdict',    label: '自社影響' },     // 2  あり（対応検討）/ あり（影響調査）/ なし。並べ替えの第1キー
+  { key: 'product',    label: '製品' },         // 3
+  { key: 'cve',        label: 'CVE' },          // 4
+  { key: 'cvss',       label: 'CVSS' },         // 5
+  { key: 'kev',        label: 'KEV' },          // 6  あり / なし。悪用実績は CVSS より強い信号なので隣に置く
+  { key: 'title',      label: '脆弱性名' },     // 7  CSAF / RSS の文書タイトル（短い表示）
+  { key: 'impactJa',   label: 'ユーザ影響' },   // 8  最悪ケース50字以内
+  { key: 'feature',    label: '影響機能' },     // 9
+  { key: 'reason',     label: '判定根拠' },     // 10 OS=… | KEV=… | ◯◯のため「結論」
+  { key: 'howToCheck', label: '確認方法' },     // 11 確認ポイント／コマンド／判断
+  { key: 'action',     label: '公式推奨対応' }, // 12 ベンダー公式（日本語）
+  { key: 'advisory',   label: 'アドバイザリ' }, // 13
   // 14 判定の検算用。条件3（AV/PR/UI）も条件4（C/I/A）もこの値から決まるのに、
   //    台帳に無いと読む人が判定根拠の正しさを確かめられない（§4.4 と同じ理由）。
   //    毎回スキャンする値ではないので末尾に置き、左6列固定の設計を崩さない。
-  'CVSSベクター'
+  { key: 'vector',     label: 'CVSSベクター' }
 ];
+var NW_LEDGER_HEADERS = nwHeaders_(NW_LEDGER_COLS);
+
+/** 列定義（key / label の配列）から見出し行を作る。 */
+function nwHeaders_(cols) {
+  return cols.map(function (c) { return c.label; });
+}
+
+/** key から 1 始まりの列番号を引く。無い key はバグなので投げる（空欄に化けさせない）。 */
+function nwCol_(cols, key) {
+  for (let i = 0; i < cols.length; i++) if (cols[i].key === key) return i + 1;
+  throw new Error('列定義に無い key: ' + key);
+}
+
+/** 1 行の配列を key で引けるオブジェクトにする。 */
+function nwRowToRec_(cols, row) {
+  const rec = {};
+  cols.forEach(function (c, i) {
+    const v = row[i];
+    rec[c.key] = (v === undefined || v === null) ? '' : v;
+  });
+  return rec;
+}
+
+/** key で引けるオブジェクトを、列定義の順の配列にする。 */
+function nwRecToRow_(cols, rec) {
+  return cols.map(function (c) {
+    const v = rec[c.key];
+    return (v === undefined || v === null) ? '' : v;
+  });
+}
 
 /**
  * 機能別の確認手順（行動可能）。AI 出力が不合格のときこれで差し替える。
  * 書式: 確認ポイント / コマンド / 判断 の3行。
  */
-var CHECK_STEPS_FORTINET = {
+var NW_CHECK_STEPS_FORTINET = {
   '管理GUI': [
     '確認ポイント：管理用インターフェースで HTTP/HTTPS 管理が許可されているか',
     'コマンド：show system interface',
@@ -332,11 +377,11 @@ var CHECK_STEPS_FORTINET = {
  * Cisco のアドバイザリは Vulnerable Products / Determine 節に
  * 正確な確認コマンドと、悪用不可になる除外条件（`ip http active-session-modules none` など）
  * まで書いている。手書きのこの表より必ず詳しいので、AI にはその節を優先させる
- * （ciscoConfigHints_ で渡し、buildEnrichPrompt_ で優先を指示）。
+ * （nwCiscoConfigHints_ で渡し、nwBuildEnrichPrompt_ で優先を指示）。
  *
  * ここを使うのは、AI が失敗したか、行動できない文言を返したときだけ。
  */
-const CHECK_STEPS_CISCO = [
+var NW_CHECK_STEPS_CISCO = [
   {
     re: /http|webui|web-based|web based|management/i,
     text: [
@@ -387,14 +432,14 @@ const CHECK_STEPS_CISCO = [
   }
 ];
 
-var CHECK_STEPS_CISCO_DEFAULT = [
+var NW_CHECK_STEPS_CISCO_DEFAULT = [
   '確認ポイント：版は対象済み（追加の版確認は不要）',
   'アクション：アドバイザリで更新先を確認し、定期更新枠に載せる',
   '判断：臨時対応は不要。次回メンテで更新すれば足りる'
 ].join('\n');
 
 /** あり（影響調査）向け。定期更新定型は使わない */
-const CHECK_STEPS_CISCO_INVEST = [
+var NW_CHECK_STEPS_CISCO_INVEST = [
   '確認ポイント：アドバイザリの Affected Products / Determine 節で影響条件を特定する',
   'アクション：該当機能の有効可否を実機で確認し、使っていなければなし／使っていれば対応検討へ振り分ける',
   '判断：条件が分かれば設定確認コマンドを打つ。分からなければ室で共有して判断'
@@ -406,16 +451,26 @@ const CHECK_STEPS_CISCO_INVEST = [
  * この表がいつ時点のものかが分からないと、判定結果の根拠も定まらない。
  * 「更新日」は人が棚卸しした日を手で入れる欄。ツールは書き込まない。
  */
-const ASSET_HEADERS = ['ベンダー', '種別', '製品', '機種', 'バージョン', '台数', 'ツール対象',
-                       '備考', '更新日'];
+var NW_ASSET_COLS = [
+  { key: 'vendor',     label: 'ベンダー' },
+  { key: 'category',   label: '種別' },
+  { key: 'product',    label: '製品' },
+  { key: 'model',      label: '機種' },
+  { key: 'version',    label: 'バージョン' },
+  { key: 'count',      label: '台数' },
+  { key: 'toolTarget', label: 'ツール対象' },
+  { key: 'note',       label: '備考' },
+  { key: 'updatedAt',  label: '更新日' }
+];
+var NW_ASSET_HEADERS = nwHeaders_(NW_ASSET_COLS);
 
-const DEFAULT_ASSET_ROWS = [
-  [VENDOR_FORTINET, 'UTM', 'FortiOS', 'FortiGate 120G', '7.4.11', 1, 'はい', '', ''],
-  [VENDOR_CISCO, 'Switch', 'IOS-XE', 'C9200-24PXG-E', '17.15.5', 1, 'はい', '', ''],
-  [VENDOR_CISCO, 'Switch', 'IOS-XE', 'C9200L-24PXG-4X', '17.15.5', 1, 'はい', '', ''],
-  [VENDOR_CISCO, 'WLC', 'IOS-XE', 'Catalyst 9800-L', '17.15.5', 1, 'はい', '版は実機確認推奨', ''],
-  [VENDOR_CISCO, 'AP', '—', 'CW9166I-Q', '', 1, 'はい', 'WLC管理下', ''],
-  [VENDOR_FORTINET, '—', '—', 'FortiClient EMS', '', 1, 'いいえ', 'クライアント・対象外', ''],
+var NW_DEFAULT_ASSET_ROWS = [
+  [NW_VENDOR_FORTINET, 'UTM', 'FortiOS', 'FortiGate 120G', '7.4.11', 1, 'はい', '', ''],
+  [NW_VENDOR_CISCO, 'Switch', 'IOS-XE', 'C9200-24PXG-E', '17.15.5', 1, 'はい', '', ''],
+  [NW_VENDOR_CISCO, 'Switch', 'IOS-XE', 'C9200L-24PXG-4X', '17.15.5', 1, 'はい', '', ''],
+  [NW_VENDOR_CISCO, 'WLC', 'IOS-XE', 'Catalyst 9800-L', '17.15.5', 1, 'はい', '版は実機確認推奨', ''],
+  [NW_VENDOR_CISCO, 'AP', '—', 'CW9166I-Q', '', 1, 'はい', 'WLC管理下', ''],
+  [NW_VENDOR_FORTINET, '—', '—', 'FortiClient EMS', '', 1, 'いいえ', 'クライアント・対象外', ''],
   ['Netgear', 'Switch', '—', 'MS510TXM', '', 1, 'いいえ', '別ベンダー', ''],
   ['Netgear', 'Switch', '—', 'GS108Tv3', '', 1, 'いいえ', '別ベンダー', ''],
   ['Soliton', 'RADIUS', '—', 'NetAttest EPS-edge SX06', '', 1, 'いいえ', '別ベンダー', '']
@@ -427,19 +482,30 @@ const DEFAULT_ASSET_ROWS = [
  * → 対象か対象外か → なぜそう判定したか → 何の製品でどんな内容か → 深掘り」。
  * ツールが書きやすい順ではない。CSAF版は人が見る値ではないので末尾に置く。
  */
-const STATE_HEADERS = ['最終更新日', '初回公表日', 'ベンダー', 'CVE', 'タイトル', '自社判定',
-                       '判定根拠', '対象製品', 'アドバイザリID', 'CSAF版'];
+var NW_STATE_COLS = [
+  { key: 'updatedAt',   label: '最終更新日' },
+  { key: 'initialDate', label: '初回公表日' },
+  { key: 'vendor',      label: 'ベンダー' },
+  { key: 'cve',         label: 'CVE' },
+  { key: 'title',       label: 'タイトル' },
+  { key: 'judgement',   label: '自社判定' },
+  { key: 'reason',      label: '判定根拠' },
+  { key: 'products',    label: '対象製品' },
+  { key: 'advisoryId',  label: 'アドバイザリID' },
+  { key: 'csafVersion', label: 'CSAF版' }
+];
+var NW_STATE_HEADERS = nwHeaders_(NW_STATE_COLS);
 
 
 /**
  * 実行履歴。1 回の実行につき、ベンダーごとに 1 行。
  *
- * Slack は「判断が要る行があった日」だけ鳴る（NOTIFY_WHEN_NO_HITS = false）。
+ * Slack は「判断が要る行があった日」だけ鳴る（NW_NOTIFY_WHEN_NO_HITS = false）。
  * つまり「該当なしだった日」「取得に失敗した日」「トリガーが消えて実行されなかった日」が
  * すべて "Slack が静か" という同じ見え方になる。実行ログは保持期間が短く後から遡れない。
  * 動いた事実だけはここに残し、行が途切れていれば止まったと分かるようにする。
  */
-const SHEET_RUNLOG = '実行履歴';
+var NW_SHEET_RUNLOG = 'NW実行履歴';
 /*
  * 列は「確認 → 新規・改訂 → 判定 → 失敗」の順に、上流から下流へ一直線に読めるようにする。
  * 取得件数（実際に CSAF を何本ダウンロードしたか）はここに置かない。
@@ -447,26 +513,47 @@ const SHEET_RUNLOG = '実行履歴';
  * 「確認 100 なのに取得 50、残り 50 はどこへ？」という誤読を生むため、内訳へ回す。
  *
  * **「対象」「対象以外」はアドバイザリ件数で、台帳の行数ではない。**台帳は 1 アドバイザリが
- * CVE × 製品で複数行に開くうえ、古い「なし」を isLedgerRow_ が落とすので、どう数えても
+ * CVE × 製品で複数行に開くうえ、古い「なし」を nwIsLedgerRow_ が落とすので、どう数えても
  * この列とは一致しない。答えるのは「自社の資産に当たる公表がいくつあったか」であり、
  * 台帳に何行増えたかではない。
  */
-const RUNLOG_HEADERS = ['実行日時', '結果', '確認件数', '差分なし', '更新あり', '対象',
-                        '対象以外', '失敗', '所要秒', 'AI呼び出し', '備考'];
+var NW_RUNLOG_COLS = [
+  { key: 'ranAt',      label: '実行日時' },
+  { key: 'result',     label: '結果' },
+  { key: 'checked',    label: '確認件数' },
+  { key: 'unchanged',  label: '差分なし' },
+  { key: 'updated',    label: '更新あり' },
+  { key: 'target',     label: '対象' },
+  { key: 'nonTarget',  label: '対象以外' },
+  { key: 'failed',     label: '失敗' },
+  { key: 'seconds',    label: '所要秒' },
+  { key: 'aiCalls',    label: 'AI呼び出し' },
+  { key: 'note',       label: '備考' }
+];
+var NW_RUNLOG_HEADERS = nwHeaders_(NW_RUNLOG_COLS);
 
 /**
  * 人が下した対応の判断を残すシート。ツールは書かない。人だけが書く。
  *
- * 台帳に列を足す案は成立しない。removeRowsFor_ がアドバイザリの改訂ごとに
+ * 台帳に列を足す案は成立しない。nwRemoveRowsFor_ がアドバイザリの改訂ごとに
  * 台帳の行を消して書き直すので、人が書いた内容が消える。台帳は再生成できる
  * ツールの出力、ここは再生成できない人の記録、と役割を分ける。
  *
  * 列は「いつ・何に対して・どう決めたか・なぜ・誰が」の順。
  * 対象時点は改訂検知用。人が入れる（空欄だとその行は無視される）。
  */
-const SHEET_DECISION = '判断記録';
+var NW_SHEET_DECISION = 'NW判断記録';
 
-const DECISION_HEADERS = ['判断日', 'アドバイザリID', 'CVE', '判断', '根拠', '判断者', '対象時点'];
+var NW_DECISION_COLS = [
+  { key: 'decidedAt',  label: '判断日' },
+  { key: 'advisoryId', label: 'アドバイザリID' },
+  { key: 'cve',        label: 'CVE' },
+  { key: 'action',     label: '判断' },
+  { key: 'note',       label: '根拠' },
+  { key: 'by',         label: '判断者' },
+  { key: 'asOf',       label: '対象時点' }
+];
+var NW_DECISION_HEADERS = nwHeaders_(NW_DECISION_COLS);
 
 /**
  * 人の判断と、それが自社影響をどう上書きするか。
@@ -477,33 +564,33 @@ const DECISION_HEADERS = ['判断日', 'アドバイザリID', 'CVE', '判断', 
  * 新しい判定値は作らない。「なし」に落とせば台帳には残り Slack からは外れる、
  * という既存の仕組みがそのまま監査要件（判断した記録を残す）を満たす。
  */
-const DECISION_VERDICT = {
-  '対応不要（定期更新枠）': V_NONE,
-  '対応済み':               V_NONE,
-  '対応する（実施待ち）':   V_ACT,
+var NW_DECISION_VERDICT = {
+  '対応不要（定期更新枠）': NW_V_NONE,
+  '対応済み':               NW_V_NONE,
+  '対応する（実施待ち）':   NW_V_ACT,
   '保留':                   null
 };
 
 /** 1 実行のあいだ判断記録を読み直さないための入れ物。実行ごとに空から始まる。 */
-let decisions_ = null;
+var nwDecisions_ = null;
 
 /**
- * 1 回の実行（main）で集めた統計。
+ * 1 回の実行（nwDaily）で集めた統計。
  *
  * 履歴は「1 日 1 実行 = 1 行」で読めるのが理想なので、ベンダーごとの処理は
- * ここへ足すだけにして、書き出しは main() が最後に 1 回だけ行う。
+ * ここへ足すだけにして、書き出しは nwDaily() が最後に 1 回だけ行う。
  * ベンダー別の数字は「内訳」列に残すので、異常時の切り分けはできる。
  */
-let runStats_ = null;
+var nwRunStats_ = null;
 
-function startRunStats_() {
-  runStats_ = { startedAt: Date.now(), aiAtStart: aiRequestCount_, vendors: [] };
+function nwStartRunStats_() {
+  nwRunStats_ = { startedAt: Date.now(), aiAtStart: aiRequestCount_, vendors: [] };
 }
 
-/** main() の外から呼ばれた場合（reprocessCisco など）は何もしない。 */
-function addVendorStats_(vendor, s) {
-  if (!runStats_) return;
-  runStats_.vendors.push({
+/** nwDaily() の外から呼ばれた場合（nwReprocessCisco など）は何もしない。 */
+function nwAddVendorStats_(vendor, s) {
+  if (!nwRunStats_) return;
+  nwRunStats_.vendors.push({
     vendor: vendor,
     rss: s.rss || 0, fetched: s.fetched || 0, ok: s.ok || 0,
     missing: s.missing || 0, failed: s.failed || 0,
@@ -520,7 +607,7 @@ function addVendorStats_(vendor, s) {
  * （Fortinet の版は常に "0" なので、日付が初回公表日のままだと版だけが手がかりになる）。
  * この列は "0" と空欄の取り違えで一度全件を誤検知した場所でもある。
  */
-const STATE_VERSION_UNAVAILABLE = '未取得';
+var NW_STATE_VERSION_UNAVAILABLE = '未取得';
 
 // ============================================================
 // エントリポイント
@@ -528,65 +615,66 @@ const STATE_VERSION_UNAVAILABLE = '未取得';
 
 /**
  * 判断記録シートを用意する。既にあれば何もしない（人が書いた行を触らない）。
- * 判断列にはプルダウンを付ける。語彙から外れた値は readDecisions_ が捨てるので、
+ * 判断列にはプルダウンを付ける。語彙から外れた値は nwReadDecisions_ が捨てるので、
  * 入力の時点で外せないようにしておく。
  */
-function ensureDecisionSheet_() {
+function nwEnsureDecisionSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sh = ss.getSheetByName(SHEET_DECISION);
+  let sh = ss.getSheetByName(NW_SHEET_DECISION);
   if (sh) return sh;
 
-  sh = ss.insertSheet(SHEET_DECISION);
-  sh.appendRow(DECISION_HEADERS);
+  sh = ss.insertSheet(NW_SHEET_DECISION);
+  sh.appendRow(NW_DECISION_HEADERS);
   sh.setFrozenRows(1);
-  sh.setColumnWidth(DECISION_HEADERS.indexOf('根拠') + 1, 380);
-  sh.setColumnWidth(DECISION_HEADERS.indexOf('判断') + 1, 180);
-  applyDecisionValidation_(sh, 2, 200);
-  Logger.log('「判断記録」シートを作成しました。');
+  sh.setColumnWidth(nwCol_(NW_DECISION_COLS, 'note'), 380);
+  sh.setColumnWidth(nwCol_(NW_DECISION_COLS, 'action'), 180);
+  nwApplyDecisionValidation_(sh, 2, 200);
+  Logger.log('「' + NW_SHEET_DECISION + '」シートを作成しました。');
   return sh;
 }
 
-/** 判断列のプルダウン。語彙は DECISION_VERDICT のキーがそのまま正。 */
-function applyDecisionValidation_(sh, startRow, numRows) {
+/** 判断列のプルダウン。語彙は NW_DECISION_VERDICT のキーがそのまま正。 */
+function nwApplyDecisionValidation_(sh, startRow, numRows) {
   const rule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(Object.keys(DECISION_VERDICT), true)
+    .requireValueInList(Object.keys(NW_DECISION_VERDICT), true)
     .setAllowInvalid(false)
     .build();
-  sh.getRange(startRow, DECISION_HEADERS.indexOf('判断') + 1, numRows, 1)
+  sh.getRange(startRow, nwCol_(NW_DECISION_COLS, 'action'), numRows, 1)
     .setDataValidation(rule);
 }
 
-function setup() {
+function nwSetup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  nwRenameLegacySheets_(ss);
 
-  let ledger = ss.getSheetByName(SHEET_LEDGER);
+  let ledger = ss.getSheetByName(NW_SHEET_LEDGER);
   if (!ledger) {
-    ledger = ss.insertSheet(SHEET_LEDGER);
-    ledger.appendRow(LEDGER_HEADERS);
+    ledger = ss.insertSheet(NW_SHEET_LEDGER);
+    ledger.appendRow(NW_LEDGER_HEADERS);
     ledger.setFrozenRows(1);
-    formatLedger_(ledger);
-    Logger.log('「台帳」シートを作成しました。');
+    nwFormatLedger_(ledger);
+    Logger.log('「' + NW_SHEET_LEDGER + '」シートを作成しました。');
   } else {
-    Logger.log('「台帳」シートは既にあります。列を変えたときはシートを手で直してください（README §2.1）。');
+    Logger.log('「' + NW_SHEET_LEDGER + '」シートは既にあります。列を変えたときはシートを手で直してください（README §2.1）。');
   }
 
-  let asset = ss.getSheetByName(SHEET_ASSET);
+  let asset = ss.getSheetByName(NW_SHEET_ASSET);
   if (!asset) {
-    asset = ss.insertSheet(SHEET_ASSET);
-    asset.appendRow(ASSET_HEADERS);
-    DEFAULT_ASSET_ROWS.forEach(function (r) { asset.appendRow(r); });
+    asset = ss.insertSheet(NW_SHEET_ASSET);
+    asset.appendRow(NW_ASSET_HEADERS);
+    NW_DEFAULT_ASSET_ROWS.forEach(function (r) { asset.appendRow(r); });
     asset.setFrozenRows(1);
-    Logger.log('「資産」シートを作成しました。');
+    Logger.log('「' + NW_SHEET_ASSET + '」シートを作成しました。');
   } else {
-    Logger.log('「資産」シートは既にあります。列を変えたときはシートを手で直してください（README §2.4）。');
+    Logger.log('「' + NW_SHEET_ASSET + '」シートは既にあります。列を変えたときはシートを手で直してください（README §2.4）。');
   }
 
-  ensureDecisionSheet_();
+  nwEnsureDecisionSheet_();
 
-  let state = ss.getSheetByName(SHEET_STATE);
+  let state = ss.getSheetByName(NW_SHEET_STATE);
   if (!state) {
-    state = ss.insertSheet(SHEET_STATE);
-    state.appendRow(STATE_HEADERS);
+    state = ss.insertSheet(NW_SHEET_STATE);
+    state.appendRow(NW_STATE_HEADERS);
     state.setFrozenRows(1);
     state.setColumnWidth(1, 80);
     state.setColumnWidth(2, 100);
@@ -595,44 +683,68 @@ function setup() {
     state.setColumnWidth(5, 400);
     state.setColumnWidth(6, 280);
     state.setColumnWidth(7, 70);
-    Logger.log('「処理済み」シートを作成しました。分母（今月の公表件数）はここから数えます。');
+    Logger.log('「' + NW_SHEET_STATE + '」シートを作成しました。分母（今月の公表件数）はここから数えます。');
   } else {
-    Logger.log('「処理済み」シートは既にあります。');
+    Logger.log('「' + NW_SHEET_STATE + '」シートは既にあります。');
   }
 }
 
 /**
+ * 旧名のシート（台帳 / 資産 / 処理済み / 実行履歴 / 判断記録）を「NW〜」へ改名する。
+ *
+ * 2026-09 に macOS 監視（macOS台帳 など）と並べたとき区別が付くよう、NW 側にも接頭辞を付けた。
+ * 改名だけで列も行も触らない。新名のシートが既にあれば旧名はそのまま残す（手で確認してもらう）。
+ * 一度改名すれば旧名は無くなるので、以後は何もしない。
+ */
+function nwRenameLegacySheets_(ss) {
+  const pairs = [
+    ['台帳', NW_SHEET_LEDGER], ['資産', NW_SHEET_ASSET], ['処理済み', NW_SHEET_STATE],
+    ['実行履歴', NW_SHEET_RUNLOG], ['判断記録', NW_SHEET_DECISION]
+  ];
+  pairs.forEach(function (p) {
+    const oldSh = ss.getSheetByName(p[0]);
+    if (!oldSh || p[0] === p[1]) return;
+    if (ss.getSheetByName(p[1])) {
+      Logger.log('「' + p[0] + '」と「' + p[1] + '」が両方あります。どちらを使うか手で確認してください。');
+      return;
+    }
+    oldSh.setName(p[1]);
+    Logger.log('「' + p[0] + '」シートを「' + p[1] + '」に改名しました。');
+  });
+}
+
+/**
  * 「台帳」と「処理済み」の 2 行目以降を削除する（見出し行は残す）。
- * main() の再取得前や列構成変更後に使う。資産シートは触らない。
+ * nwDaily() の再取得前や列構成変更後に使う。資産シートは触らない。
  * 誤実行防止のため確認ダイアログを出す。
  */
-function clearRunData() {
+function nwClearRunData() {
   let ui;
   try {
     ui = SpreadsheetApp.getUi();
   } catch (e) {
-    throw new Error('clearRunData() は確認ダイアログを出すため、対象のスプレッドシートを開いた状態で実行してください。');
+    throw new Error('nwClearRunData() は確認ダイアログを出すため、対象のスプレッドシートを開いた状態で実行してください。');
   }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  const ledger = ss.getSheetByName(SHEET_LEDGER);
-  const state = ss.getSheetByName(SHEET_STATE);
+  const ledger = ss.getSheetByName(NW_SHEET_LEDGER);
+  const state = ss.getSheetByName(NW_SHEET_STATE);
   if (!ledger && !state) {
-    ui.alert('削除対象なし', '「台帳」「処理済み」シートが見つかりません。setup() を先に実行してください。', ui.ButtonSet.OK);
+    ui.alert('削除対象なし', '「' + NW_SHEET_LEDGER + '」「' + NW_SHEET_STATE + '」シートが見つかりません。nwSetup() を先に実行してください。', ui.ButtonSet.OK);
     return;
   }
 
   const ledgerRows = ledger && ledger.getLastRow() > 1 ? ledger.getLastRow() - 1 : 0;
   const stateRows = state && state.getLastRow() > 1 ? state.getLastRow() - 1 : 0;
   if (!ledgerRows && !stateRows) {
-    ui.alert('削除対象なし', '「台帳」「処理済み」に削除するデータ行がありません。', ui.ButtonSet.OK);
-    Logger.log('clearRunData: 削除対象のデータ行なし');
+    ui.alert('削除対象なし', '「' + NW_SHEET_LEDGER + '」「' + NW_SHEET_STATE + '」に削除するデータ行がありません。', ui.ButtonSet.OK);
+    Logger.log('nwClearRunData: 削除対象のデータ行なし');
     return;
   }
 
   const lines = [];
-  if (ledgerRows) lines.push('・台帳: ' + ledgerRows + ' 行');
-  if (stateRows) lines.push('・処理済み: ' + stateRows + ' 行');
+  if (ledgerRows) lines.push('・' + NW_SHEET_LEDGER + ': ' + ledgerRows + ' 行');
+  if (stateRows) lines.push('・' + NW_SHEET_STATE + ': ' + stateRows + ' 行');
   const answer = ui.alert(
     'データ削除の確認',
     '次のデータ行をすべて削除します（見出しの 1 行目は残します）。\n\n' +
@@ -642,18 +754,18 @@ function clearRunData() {
   );
   if (answer !== ui.Button.YES) {
     ui.alert('キャンセルしました。データは削除していません。');
-    Logger.log('clearRunData: ユーザーがキャンセル');
+    Logger.log('nwClearRunData: ユーザーがキャンセル');
     return;
   }
 
-  const removedLedger = deleteSheetDataRows_(SHEET_LEDGER);
-  const removedState = deleteSheetDataRows_(SHEET_STATE);
+  const removedLedger = nwDeleteSheetDataRows_(NW_SHEET_LEDGER);
+  const removedState = nwDeleteSheetDataRows_(NW_SHEET_STATE);
   const summary = [];
-  if (removedLedger) summary.push('台帳 ' + removedLedger + ' 行');
-  if (removedState) summary.push('処理済み ' + removedState + ' 行');
+  if (removedLedger) summary.push(NW_SHEET_LEDGER + ' ' + removedLedger + ' 行');
+  if (removedState) summary.push(NW_SHEET_STATE + ' ' + removedState + ' 行');
   const msg = summary.length ? summary.join(' / ') + ' を削除しました。' : '削除する行はありませんでした。';
-  ui.alert('削除完了', msg + '\n\nmain() を実行して再取得できます。', ui.ButtonSet.OK);
-  Logger.log('clearRunData: ' + msg);
+  ui.alert('削除完了', msg + '\n\nnwDaily() を実行して再取得できます。', ui.ButtonSet.OK);
+  Logger.log('nwClearRunData: ' + msg);
 }
 
 /**
@@ -662,78 +774,78 @@ function clearRunData() {
  *
  * 注意: 50 件を一度に再処理するため実行が長い。過去に同等の処理量で
  * 6 分の実行時間制限に到達している。制限に当たると、処理済みには記録されたが
- * 台帳には入らなかった件が残る（writeState_ が台帳書き込みより先に走るため）。
+ * 台帳には入らなかった件が残る（nwWriteState_ が台帳書き込みより先に走るため）。
  * その場合はもう一度この関数を実行すれば、消してからやり直すので回復する。
  */
-function reprocessFortinet() {
-  const removedState = deleteVendorStateRows_(VENDOR_FORTINET);
-  const removedLedger = deleteVendorLedgerRows_(VENDOR_FORTINET);
+function nwReprocessFortinet() {
+  const removedState = nwDeleteVendorStateRows_(NW_VENDOR_FORTINET);
+  const removedLedger = nwDeleteVendorLedgerRows_(NW_VENDOR_FORTINET);
   Logger.log('Fortinet 再取得の準備: 処理済み ' + removedState + ' 行 / 台帳 ' +
              removedLedger + ' 行を削除');
 
-  const rows = runFortinet_();
-  Logger.log('reprocessFortinet 完了: 台帳へ ' + rows.length + ' 行');
-  if (rows.length) notifySlack_(rows);
+  const rows = nwRunFortinet_();
+  Logger.log('nwReprocessFortinet 完了: 台帳へ ' + rows.length + ' 行');
+  if (rows.length) nwNotifySlack_(rows);
   else Logger.log('Fortinet 台帳 0 行。ログの「自社影響」「OS該当」を確認してください。');
   return rows;
 }
 
 /**
  * Cisco の処理済み・台帳だけ消して再取得する。
- * 処理済みに残っていると main() は Cisco を再取得しない。
+ * 処理済みに残っていると nwDaily() は Cisco を再取得しない。
  */
-function reprocessCisco() {
-  const removedState = deleteVendorStateRows_(VENDOR_CISCO);
-  const removedLedger = deleteVendorLedgerRows_(VENDOR_CISCO);
+function nwReprocessCisco() {
+  const removedState = nwDeleteVendorStateRows_(NW_VENDOR_CISCO);
+  const removedLedger = nwDeleteVendorLedgerRows_(NW_VENDOR_CISCO);
   Logger.log('Cisco 再取得の準備: 処理済み ' + removedState + ' 行 / 台帳 ' + removedLedger + ' 行を削除');
 
-  const rows = runCisco_();
-  Logger.log('reprocessCisco 完了: 台帳へ ' + rows.length + ' 行');
-  if (rows.length) notifySlack_(rows);
+  const rows = nwRunCisco_();
+  Logger.log('nwReprocessCisco 完了: 台帳へ ' + rows.length + ' 行');
+  if (rows.length) nwNotifySlack_(rows);
   else Logger.log('Cisco 台帳 0 行。ログの「資産対象外」「情報通知」を確認してください。');
   return rows;
 }
 
-function deleteVendorStateRows_(vendor) {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_STATE);
+function nwDeleteVendorStateRows_(vendor) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NW_SHEET_STATE);
   if (!sh || sh.getLastRow() < 2) return 0;
   const n = sh.getLastRow() - 1;
-  const cVendor = STATE_HEADERS.indexOf('ベンダー') + 1;
-  const cId = STATE_HEADERS.indexOf('アドバイザリID') + 1;
+  const cVendor = nwCol_(NW_STATE_COLS, 'vendor');
+  const cId = nwCol_(NW_STATE_COLS, 'advisoryId');
   const vendors = sh.getRange(2, cVendor, n, 1).getDisplayValues();
   const ids = sh.getRange(2, cId, n, 1).getDisplayValues();
   let removed = 0;
   for (let i = n - 1; i >= 0; i--) {
     const rowVendor = String(vendors[i][0] || '').trim();
     const id = String(ids[i][0] || '').trim();
-    if (rowVendor !== vendor && vendorFromAdvisoryId_(id) !== vendor) continue;
-    deleteSheetRowSafe_(sh, i + 2);
+    if (rowVendor !== vendor && nwVendorFromAdvisoryId_(id) !== vendor) continue;
+    nwDeleteSheetRowSafe_(sh, i + 2);
     removed++;
   }
   return removed;
 }
 
-function deleteVendorLedgerRows_(vendor) {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LEDGER);
+function nwDeleteVendorLedgerRows_(vendor) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NW_SHEET_LEDGER);
   if (!sh || sh.getLastRow() < 2) return 0;
   const n = sh.getLastRow() - 1;
-  const col = COL['アドバイザリ'];
+  const col = nwCol_(NW_LEDGER_COLS, 'advisory');
   const ids = sh.getRange(2, col, n, 1).getDisplayValues();
   let removed = 0;
   for (let i = n - 1; i >= 0; i--) {
-    if (vendorFromAdvisoryId_(ids[i][0]) !== vendor) continue;
-    deleteSheetRowSafe_(sh, i + 2);
+    if (nwVendorFromAdvisoryId_(ids[i][0]) !== vendor) continue;
+    nwDeleteSheetRowSafe_(sh, i + 2);
     removed++;
   }
   return removed;
 }
 
 /** 指定シートの 2 行目以降を削除する。削除した行数を返す。 */
-function deleteSheetDataRows_(sheetName) {
+function nwDeleteSheetDataRows_(sheetName) {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (!sh || sh.getLastRow() < 2) return 0;
   const count = sh.getLastRow() - 1;
-  clearSheetDataRows_(sh);
+  nwClearSheetDataRows_(sh);
   return count;
 }
 
@@ -742,7 +854,7 @@ function deleteSheetDataRows_(sheetName) {
  * （「固定されていない行をすべて削除することはできません」）。
  * 中身を消して、余った空行だけ詰める。2行目は必ず残す。
  */
-function clearSheetDataRows_(sh) {
+function nwClearSheetDataRows_(sh) {
   const last = sh.getLastRow();
   if (last < 2) return;
   const cols = Math.max(sh.getLastColumn(), 1);
@@ -750,7 +862,7 @@ function clearSheetDataRows_(sh) {
   if (last > 2) sh.deleteRows(3, last - 2);
 }
 
-function deleteSheetRowSafe_(sh, row) {
+function nwDeleteSheetRowSafe_(sh, row) {
   const frozen = sh.getFrozenRows() || 0;
   if (sh.getMaxRows() - 1 <= frozen) {
     sh.getRange(row, 1, 1, Math.max(sh.getLastColumn(), 1)).clearContent();
@@ -759,43 +871,43 @@ function deleteSheetRowSafe_(sh, row) {
   sh.deleteRow(row);
 }
 
-function main() {
-  startRunStats_();
+function nwDaily() {
+  nwStartRunStats_();
   let runError = '';
   try {
-    const fortinetRows = runFortinet_();
-    const ciscoRows = runCisco_();
+    const fortinetRows = nwRunFortinet_();
+    const ciscoRows = nwRunCisco_();
     const notifyRows = fortinetRows.concat(ciscoRows);
 
     // JPCERT の注意喚起は判定に混ぜない。取得して通知へ渡すだけ。
-    const alerts = newJpcertAlerts_(readAssets_());
-    runStats_.jpcert = alerts.length;
+    const alerts = nwNewJpcertAlerts_(nwReadAssets_());
+    nwRunStats_.jpcert = alerts.length;
 
     if (notifyRows.length || alerts.length) {
-      if (notifySlack_(notifyRows, alerts)) markJpcertSeen_(alerts);
+      if (nwNotifySlack_(notifyRows, alerts)) nwMarkJpcertSeen_(alerts);
     }
-    Logger.log('main() 完了（Fortinet 台帳 ' + fortinetRows.length +
+    Logger.log('nwDaily() 完了（Fortinet 台帳 ' + fortinetRows.length +
                ' 行 / Cisco 台帳 ' + ciscoRows.length + ' 行）');
   } catch (e) {
-    Logger.log('main() 失敗: ' + e);
+    Logger.log('nwDaily() 失敗: ' + e);
     runError = String(e);
     throw e;
   } finally {
     // 落ちた実行こそ履歴に残す。行が無い＝そもそも実行されなかった、と読めるようにする。
-    writeRunLog_(runError);
+    nwWriteRunLog_(runError);
   }
 }
 
-function runFortinet_() {
-  const assets = fortinetAssets_(readAssets_());
+function nwRunFortinet_() {
+  const assets = nwFortinetAssets_(nwReadAssets_());
   if (!assets.length) {
     Logger.log('警告: Fortinet 対象の資産がありません。');
   }
 
-  const allItems = fetchRssItems_();
+  const allItems = nwFetchRssItems_();
   // 処理済みシートはこの実行の中で書き換わらない（間にあるのは外部取得とメールだけ）ので、
   // 1 実行につき 1 回だけ読む。
-  const known = getKnownState_(VENDOR_FORTINET);
+  const known = nwGetKnownState_(NW_VENDOR_FORTINET);
 
   // RSS の日付では CSAF の改訂を判断できないため、毎回すべて取得する。
   // 実測: RSS の pubDate / description の "Revised on" と CSAF の current_release_date は
@@ -806,7 +918,7 @@ function runFortinet_() {
   // 既読判定は CSAF の実データ 1 本に寄せる。fetchAll のパラレル取得で 50 件およそ 5 秒。
   Logger.log('Fortinet RSS: 全 ' + allItems.length +
              ' 件の CSAF を取得します（RSS の日付は CSAF の改訂を表さないため毎回全件）');
-  const fetched = fetchAllCsaf_(allItems);
+  const fetched = nwFetchAllCsaf_(allItems);
 
   let allLedgerRows = [];
   let processedCount = 0;
@@ -815,7 +927,7 @@ function runFortinet_() {
   // RSS は 50 件しか持たないので、対象は必ず 1 回で捌ける。
   // 以前はここを while で回してバッチ分割していたが、2 周目に入る条件が構造上存在しなかった。
   const todo = fetched.filter(function (f) {
-    return needsAdvisoryProcessing_(f.item.ir, f.updatedAt, f.version, known, !!f.error);
+    return nwNeedsAdvisoryProcessing_(f.item.ir, f.updatedAt, f.version, known, !!f.error);
   });
 
   if (!todo.length) Logger.log('Fortinet: 新着・改訂ともになし。');
@@ -827,12 +939,12 @@ function runFortinet_() {
     const revised = todo.filter(function (f) { return known.dates[f.item.ir]; });
     if (revised.length) {
       Logger.log('改訂を検知: ' + revised.map(function (f) {
-        return f.item.ir + '（' + known.dates[f.item.ir] + ' → ' + ymd_(f.updatedAt) + '）';
+        return f.item.ir + '（' + known.dates[f.item.ir] + ' → ' + nwYmd_(f.updatedAt) + '）';
       }).join(', '));
     }
     // 記録の有無に関わらず、これから書く分は先に消す。前回の実行が台帳を書いた直後に
     // 落ちていると記録が付いておらず、消さずに追記すると同じ行が二重に並ぶ。
-    removeRowsFor_(VENDOR_FORTINET, todo.map(function (f) { return f.item.ir; }));
+    nwRemoveRowsFor_(NW_VENDOR_FORTINET, todo.map(function (f) { return f.item.ir; }));
 
     let rows = [];
     todo.forEach(function (f) {
@@ -841,18 +953,18 @@ function runFortinet_() {
                    f.item.ir + ' / ' + f.error);
         // RSS に CVSS と説明文があるので、それだけで台帳の行にする。
         // 台帳から落とすと実行ログ以外に痕跡が残らない。
-        rows.push(extractFortinetRowFallback_(f.item));
+        rows.push(nwExtractFortinetRowFallback_(f.item));
         return;
       }
-      rows = rows.concat(extractRows_(f.csaf, f.item));
+      rows = rows.concat(nwExtractRows_(f.csaf, f.item));
     });
     Logger.log('展開後の行数: ' + rows.length);
 
-    rows.forEach(function (r) { decideNotification_(r, assets); });
+    rows.forEach(function (r) { nwDecideNotification_(r, assets); });
 
-    const counts = countVerdicts_(rows);
-    Logger.log('全 ' + rows.length + ' 行: ' + V_ACT + ' ' + counts[V_ACT] +
-               ' / ' + V_INVEST + ' ' + counts[V_INVEST] + ' / ' + V_NONE + ' ' + counts[V_NONE]);
+    const counts = nwCountVerdicts_(rows);
+    Logger.log('全 ' + rows.length + ' 行: ' + NW_V_ACT + ' ' + counts[NW_V_ACT] +
+               ' / ' + NW_V_INVEST + ' ' + counts[NW_V_INVEST] + ' / ' + NW_V_NONE + ' ' + counts[NW_V_NONE]);
 
     // 取得に失敗した件も記録する（Cisco と同じ方針）。
     // 以前は記録せず翌日やり直していたが、それは失敗が台帳に出ず誰も気づけなかったため。
@@ -866,29 +978,29 @@ function runFortinet_() {
       if (!f.error) return f;
       // 版の欄を空にせず印を置く。空欄のままだと「入力漏れ」と区別が付かない。
       return { item: f.item, csaf: f.csaf, updatedAt: f.updatedAt,
-               version: STATE_VERSION_UNAVAILABLE, error: f.error, missing: f.missing };
+               version: NW_STATE_VERSION_UNAVAILABLE, error: f.error, missing: f.missing };
     });
-    const judgeRows = snapshotJudgeRows_(rows);
+    const judgeRows = nwSnapshotJudgeRows_(rows);
 
-    const ledgerRows = rows.filter(function (r) { return isLedgerRow_(r, assets); });
+    const ledgerRows = rows.filter(function (r) { return nwIsLedgerRow_(r, assets); });
     Logger.log('Fortinet 台帳: ' + ledgerRows.length + ' / ' + rows.length + ' 行');
 
-    fillLedgerDisplay_(ledgerRows);
+    nwFillLedgerDisplay_(ledgerRows);
 
-    writeLedger_(ledgerRows);
+    nwWriteLedger_(ledgerRows);
 
     // 処理済みへの記録は台帳へ書き終えてから。逆順だと、AI 生成中に 6 分の実行時間制限に
     // 当たったとき「処理済みには記録されたが台帳には無い」状態が残り、
     // 翌日以降は既知として扱われて改訂まで台帳に載らない。
     // この順なら、途中で落ちても記録が付かないので次の実行でやり直せる。
-    mergeCounts_(labelTotals, writeState_(VENDOR_FORTINET, recordable, judgeRows, assets));
+    nwMergeCounts_(labelTotals, nwWriteState_(NW_VENDOR_FORTINET, recordable, judgeRows, assets));
 
     allLedgerRows = allLedgerRows.concat(ledgerRows);
   }
 
-  if (allLedgerRows.length) sortLedger_();
+  if (allLedgerRows.length) nwSortLedger_();
 
-  addVendorStats_(VENDOR_FORTINET, {
+  nwAddVendorStats_(NW_VENDOR_FORTINET, {
     rss: allItems.length,
     fetched: fetched.length,
     ok: fetched.filter(function (f) { return !f.error; }).length,
@@ -910,17 +1022,17 @@ function runFortinet_() {
  * 判断した記録そのものが監査で必要になる。通知から外れるだけで台帳からは消えない。
  *
  * ただし古い「なし」は落とす。定期更新で解消済みの行が積み上がると、判断が必要な行が
- * 埋もれて台帳を開かなくなる（KEEP_OUT_OF_SCOPE_MONTHS）。
+ * 埋もれて台帳を開かなくなる（NW_KEEP_OUT_OF_SCOPE_MONTHS）。
  * 落としても処理済みシートには全件残るので、取得した事実は消えない。
  */
-function isLedgerRow_(row, assets) {
+function nwIsLedgerRow_(row, assets) {
   // 製品が分からない行を通すのは、CSAF が取れなかったときだけ。
   // それ以外で製品が空なのは抽出の失敗なので、従来どおり落とす。
   // 通さないと、取得に失敗した件が台帳から消えて誰も気づけなくなる。
   if (!row.product) return !!row.noCsaf;
-  if (!assetsForProduct_(assets, row.product).length) return false;
+  if (!nwAssetsForProduct_(assets, row.product).length) return false;
   if (row.osStatus === '対象外') return false;
-  if (row.verdict === V_NONE && isStaleOutOfScope_(row.pubDate)) return false;
+  if (row.verdict === NW_V_NONE && nwIsStaleOutOfScope_(row.pubDate)) return false;
   return true;
 }
 
@@ -931,14 +1043,14 @@ function isLedgerRow_(row, assets) {
  * 影響機能を分類しても結論が変わらない行に API を使う理由がない。
  * ただし列を空にはしない。空欄だと「AI が失敗した行」と区別できなくなる。
  */
-function fillLedgerDisplay_(rows) {
+function nwFillLedgerDisplay_(rows) {
   const needAi = rows.filter(function (r) { return r.needsVerdict || r.needsDisplayAi; });
   const codeOnly = rows.filter(function (r) { return r.needsCodeDisplay; });
   if (!needAi.length && !codeOnly.length) return;
 
   if (needAi.length) {
     try {
-      enrichWithAI_(needAi);
+      nwEnrichWithAI_(needAi);
     } catch (e) {
       Logger.log('AI 生成に失敗しました。フォールバックで表示列を埋めます: ' + e);
     }
@@ -948,25 +1060,25 @@ function fillLedgerDisplay_(rows) {
   }
 
   needAi.concat(codeOnly).forEach(function (r) {
-    applyFallbackDisplayFields_(r);
-    if (r.needsVerdict && !r._lockedVerdict) finalizeVerdict_(r);
-    else if (r.feature && r.feature !== '—') r.reason = buildDecisionReason_(r);
+    nwApplyFallbackDisplayFields_(r);
+    if (r.needsVerdict && !r._lockedVerdict) nwFinalizeVerdict_(r);
+    else if (r.feature && r.feature !== '—') r.reason = nwBuildDecisionReason_(r);
     // finalize で影響機能が変わった場合に確認方法を合わせ直す
-    r.howToCheck = normalizeHowToCheck_(r);
-    r.cveSummaryJa = slackContentsJa_(r);
-    r.impactJa = preferImpactJa_(r);
+    r.howToCheck = nwNormalizeHowToCheck_(r);
+    r.cveSummaryJa = nwSlackContentsJa_(r);
+    r.impactJa = nwPreferImpactJa_(r);
   });
 }
 
 /**
  * AI のユーザ影響を採用しつつ、CVSS と明らかに矛盾する文はフォールバックへ戻す。
  */
-function preferImpactJa_(row) {
-  const ai = truncateJa_(row.impactJa || '', 50);
-  const fb = truncateJa_(fallbackImpactJa_(row), 50);
+function nwPreferImpactJa_(row) {
+  const ai = nwTruncateJa_(row.impactJa || '', 50);
+  const fb = nwTruncateJa_(nwFallbackImpactJa_(row), 50);
   if (!ai) return fb;
 
-  const parts = parseCvssCia_(row.vector);
+  const parts = nwParseCvssCia_(row.vector);
   if (parts) {
     const takeoverWords = /掌握|乗っ取|改ざん|傍受/;
     const dosOnly = parts.C === 'N' && parts.I === 'N' && parts.A === 'H';
@@ -975,18 +1087,18 @@ function preferImpactJa_(row) {
     if (fullCia && /停止|全断/.test(ai) && !takeoverWords.test(ai)) return fb;
     if (parts.A !== 'H' && /拠点の通信/.test(ai)) return fb;
   }
-  if (isReloadDos_(row) && /応答停止/.test(ai) && !/再起動/.test(ai)) return fb;
-  if (isMgmtPlaneDos_(row) && /拠点の通信/.test(ai)) return fb;
+  if (nwIsReloadDos_(row) && /応答停止/.test(ai) && !/再起動/.test(ai)) return fb;
+  if (nwIsMgmtPlaneDos_(row) && /拠点の通信/.test(ai)) return fb;
   return ai;
 }
 
 /** 「なし」を台帳から落としてよいほど古いか。 */
-function isStaleOutOfScope_(pubDate) {
-  if (!KEEP_OUT_OF_SCOPE_MONTHS) return false;
+function nwIsStaleOutOfScope_(pubDate) {
+  if (!NW_KEEP_OUT_OF_SCOPE_MONTHS) return false;
   if (!(pubDate instanceof Date) || isNaN(pubDate.getTime())) return false;
 
   const limit = new Date();
-  limit.setMonth(limit.getMonth() - KEEP_OUT_OF_SCOPE_MONTHS);
+  limit.setMonth(limit.getMonth() - NW_KEEP_OUT_OF_SCOPE_MONTHS);
   return pubDate < limit;
 }
 
@@ -995,38 +1107,38 @@ function isStaleOutOfScope_(pubDate) {
 // ============================================================
 
 /** CSAF JSON の URL 組み立て保険。主経路は CSAF RSS の guid/link を使う */
-const CISCO_CSAF_BASE = 'https://tools.cisco.com/security/center/contentjson/CiscoSecurityAdvisory/';
+var NW_CISCO_CSAF_BASE = 'https://tools.cisco.com/security/center/contentjson/CiscoSecurityAdvisory/';
 
-function runCisco_() {
-  const assets = ciscoAssets_(readAssets_());
+function nwRunCisco_() {
+  const assets = nwCiscoAssets_(nwReadAssets_());
   if (!assets.length) {
     Logger.log('Cisco: ツール対象の資産がありません。スキップします。');
-    addVendorStats_(VENDOR_CISCO, { note: '資産に対象機器が無くスキップ' });
+    nwAddVendorStats_(NW_VENDOR_CISCO, { note: '資産に対象機器が無くスキップ' });
     return [];
   }
 
-  const allItems = fetchCiscoCsafRssItems_();
-  const known = getKnownState_(VENDOR_CISCO);
+  const allItems = nwFetchCiscoCsafRssItems_();
+  const known = nwGetKnownState_(NW_VENDOR_CISCO);
 
-  const candidates = selectRssCsafCandidates_(allItems, known, function (it) { return it.id; },
+  const candidates = nwSelectRssCsafCandidates_(allItems, known, function (it) { return it.id; },
     function (it) { return it.pubDate; });
   Logger.log('Cisco CSAF RSS: 全 ' + allItems.length + ' 件 → CSAF 取得 ' + candidates.length +
              ' 件（残りは前回から更新なし。Cisco はフィードの日付が CSAF と一致するため差分のみ取得）');
 
-  const fetched = fetchCiscoCsafBatch_(candidates);
+  const fetched = nwFetchCiscoCsafBatch_(candidates);
 
   let allLedgerRows = [];
   let processedCount = 0;
   const labelTotals = {};
 
-  // 対象が必ず 1 回で捌ける理由は runFortinet_ の同じ箇所。
+  // 対象が必ず 1 回で捌ける理由は nwRunFortinet_ の同じ箇所。
   const todo = fetched.filter(function (f) {
     // hasError を渡す。渡さないと、記録済みなのに CSAF が取れなかった件で
     // 版の比較（記録は「未取得」／取得結果は空）が永久に一致せず、
     // 毎日その件を作り直して Slack にも出し続ける。
-    // いまは selectRssCsafCandidates_ が手前で弾くので表面化しないが、
+    // いまは nwSelectRssCsafCandidates_ が手前で弾くので表面化しないが、
     // それは偶然で、この関数自身が同じ答えを返せなければ揃っていない。
-    return needsAdvisoryProcessing_(f.item.id, f.updatedAt, f.version, known, !!f.error);
+    return nwNeedsAdvisoryProcessing_(f.item.id, f.updatedAt, f.version, known, !!f.error);
   });
 
   if (!todo.length) Logger.log('Cisco: 新着・改訂ともになし。');
@@ -1035,66 +1147,66 @@ function runCisco_() {
     processedCount += todo.length;
     Logger.log('Cisco 処理対象 ' + todo.length + ' 件');
 
-    // これから書く分は先に消す（理由は runFortinet_ の同じ箇所）。
-    removeRowsFor_(VENDOR_CISCO, todo.map(function (f) { return f.item.id; }));
+    // これから書く分は先に消す（理由は nwRunFortinet_ の同じ箇所）。
+    nwRemoveRowsFor_(NW_VENDOR_CISCO, todo.map(function (f) { return f.item.id; }));
 
     let humanIndex = null;
     let rows = [];
     todo.forEach(function (f) {
       if (f.error) {
         Logger.log('Cisco CSAF 取得失敗: ' + f.item.id + ' / ' + f.error);
-        if (!humanIndex) humanIndex = fetchCiscoHumanRssIndex_();
+        if (!humanIndex) humanIndex = nwFetchCiscoHumanRssIndex_();
         const human = humanIndex[f.item.id] || {};
         const fallbackItem = {
           id: f.item.id,
           title: human.title || f.item.title,
-          link: human.link || f.item.link || ciscoHumanAdvisoryUrl_(f.item.id),
+          link: human.link || f.item.link || nwCiscoHumanAdvisoryUrl_(f.item.id),
           description: human.description || '',
           pubDate: human.pubDate || f.item.pubDate
         };
-        const fb = extractCiscoRowFallback_(fallbackItem);
+        const fb = nwExtractCiscoRowFallback_(fallbackItem);
         if (fb) rows.push(fb);
         return;
       }
-      const extracted = extractCiscoRowsFromCsaf_(f.csaf, f.item, assets);
+      const extracted = nwExtractCiscoRowsFromCsaf_(f.csaf, f.item, assets);
       if (!extracted.length) {
         Logger.log('Cisco 資産対象外: ' + f.item.id);
       }
       rows = rows.concat(extracted);
     });
 
-    rows.forEach(function (r) { decideNotification_(r, assets); });
+    rows.forEach(function (r) { nwDecideNotification_(r, assets); });
 
-    const counts = countVerdicts_(rows);
-    Logger.log('Cisco 全 ' + rows.length + ' 行: ' + V_ACT + ' ' + counts[V_ACT] +
-               ' / ' + V_INVEST + ' ' + counts[V_INVEST] + ' / ' + V_NONE + ' ' + counts[V_NONE]);
+    const counts = nwCountVerdicts_(rows);
+    Logger.log('Cisco 全 ' + rows.length + ' 行: ' + NW_V_ACT + ' ' + counts[NW_V_ACT] +
+               ' / ' + NW_V_INVEST + ' ' + counts[NW_V_INVEST] + ' / ' + NW_V_NONE + ' ' + counts[NW_V_NONE]);
 
-    // 取得に失敗した件も記録する（理由は runFortinet_ の同じ箇所。両ベンダー同じ方針）。
-    // ただし版を空のままにすると selectRssCsafCandidates_ の「版が空なら再取得」に
+    // 取得に失敗した件も記録する（理由は nwRunFortinet_ の同じ箇所。両ベンダー同じ方針）。
+    // ただし版を空のままにすると nwSelectRssCsafCandidates_ の「版が空なら再取得」に
     // 毎回引っかかり、取得できない件を永久に取り続ける。印を書いてループを止める。
     const recordable = todo.map(function (f) {
       if (!f.error) return f;
       return { item: f.item, csaf: f.csaf, updatedAt: f.updatedAt,
-               version: STATE_VERSION_UNAVAILABLE, error: f.error, missing: f.missing };
+               version: NW_STATE_VERSION_UNAVAILABLE, error: f.error, missing: f.missing };
     });
-    const judgeRows = snapshotJudgeRows_(rows);
+    const judgeRows = nwSnapshotJudgeRows_(rows);
 
-    const ledgerRows = rows.filter(function (r) { return isLedgerRow_(r, assets); });
+    const ledgerRows = rows.filter(function (r) { return nwIsLedgerRow_(r, assets); });
     Logger.log('Cisco 台帳: ' + ledgerRows.length + ' / ' + rows.length + ' 行');
 
-    fillLedgerDisplay_(ledgerRows);
+    nwFillLedgerDisplay_(ledgerRows);
 
-    writeLedger_(ledgerRows);
+    nwWriteLedger_(ledgerRows);
 
-    // 処理済みへの記録は台帳へ書き終えてから（理由は runFortinet_ の同じ箇所）。
-    mergeCounts_(labelTotals, writeState_(VENDOR_CISCO, recordable, judgeRows, assets));
+    // 処理済みへの記録は台帳へ書き終えてから（理由は nwRunFortinet_ の同じ箇所）。
+    nwMergeCounts_(labelTotals, nwWriteState_(NW_VENDOR_CISCO, recordable, judgeRows, assets));
 
     allLedgerRows = allLedgerRows.concat(ledgerRows);
   }
 
-  if (allLedgerRows.length) sortLedger_();
+  if (allLedgerRows.length) nwSortLedger_();
 
-  addVendorStats_(VENDOR_CISCO, {
+  nwAddVendorStats_(NW_VENDOR_CISCO, {
     rss: allItems.length,
     fetched: fetched.length,
     ok: fetched.filter(function (f) { return !f.error; }).length,
@@ -1107,7 +1219,7 @@ function runCisco_() {
   return allLedgerRows;
 }
 
-function fetchCiscoCsaf_(itemOrId) {
+function nwFetchCiscoCsaf_(itemOrId) {
   // CSAF RSS の guid/link があればそれを使う。無ければ旧来の URL 組み立てに落とす。
   let url = '';
   let id = '';
@@ -1118,7 +1230,7 @@ function fetchCiscoCsaf_(itemOrId) {
     id = String(itemOrId || '').trim();
   }
   if (!url && id) {
-    url = CISCO_CSAF_BASE + id + '/csaf/' + id + '_csaf.json';
+    url = NW_CISCO_CSAF_BASE + id + '/csaf/' + id + '_csaf.json';
   }
   if (!url) throw new Error('CSAF URL が空です');
 
@@ -1130,7 +1242,7 @@ function fetchCiscoCsaf_(itemOrId) {
 }
 
 /** CSAF product_tree の product_id → 版番号（17.15.5 等） */
-function ciscoProductMap_(csaf) {
+function nwCiscoProductMap_(csaf) {
   const map = {};
   function walk(branch) {
     if (!branch) return;
@@ -1143,17 +1255,17 @@ function ciscoProductMap_(csaf) {
   return map;
 }
 
-function ciscoAffectedVersions_(vuln, idMap) {
+function nwCiscoAffectedVersions_(vuln, idMap) {
   const versions = [];
   ((vuln.product_status || {}).known_affected || []).forEach(function (id) {
-    const v = ciscoVersionFromName_(idMap[id]);
-    if (v) pushUnique_(versions, v);
+    const v = nwCiscoVersionFromName_(idMap[id]);
+    if (v) nwPushUnique_(versions, v);
   });
   return versions;
 }
 
 /** "17.15.5" または "Cisco IOS XE Software 17.15.5" から版番号を取る。 */
-function ciscoVersionFromName_(name) {
+function nwCiscoVersionFromName_(name) {
   const s = String(name || '').trim();
   if (!s) return '';
   if (/^\d+\.\d+/.test(s)) return s;
@@ -1172,22 +1284,22 @@ function ciscoVersionFromName_(name) {
  * 版番号は CSAF に稀に入っている場合だけ。通常は人が Software Checker で確認する。
  * （openVuln は Key 自体は有効だが、GAS の UrlFetch が id.cisco.com で Access Denied になるため使わない）
  */
-function ciscoFixedVersions_(vuln, idMap) {
+function nwCiscoFixedVersions_(vuln, idMap) {
   const versions = [];
   const status = vuln.product_status || {};
   ['fixed', 'first_fixed'].forEach(function (key) {
     (status[key] || []).forEach(function (id) {
       const name = idMap[id] || String(id);
       const m = /(\d+\.\d+(?:\.\d+)?)/.exec(name);
-      if (m) pushUnique_(versions, m[1]);
+      if (m) nwPushUnique_(versions, m[1]);
     });
   });
-  return sortVersionsAsc_(versions);
+  return nwSortVersionsAsc_(versions);
 }
 
-function sortVersionsAsc_(versions) {
+function nwSortVersionsAsc_(versions) {
   return versions.slice().sort(function (a, b) {
-    return compareVersion_(parseVersion_(a) || [0], parseVersion_(b) || [0]);
+    return nwCompareVersion_(nwParseVersion_(a) || [0], nwParseVersion_(b) || [0]);
   });
 }
 
@@ -1204,7 +1316,7 @@ function sortVersionsAsc_(versions) {
  *
  * @return {{cmds: string[], text: string, none: boolean}}
  */
-function ciscoWorkaround_(csaf) {
+function nwCiscoWorkaround_(csaf) {
   const notes = ((csaf.document || {}).notes) || [];
   const raw = notes.filter(function (n) {
     return String(n.title || '').toLowerCase().indexOf('workaround') !== -1;
@@ -1220,7 +1332,7 @@ function ciscoWorkaround_(csaf) {
   body.split(/\r?\n/).forEach(function (line) {
     const t = line.trim();
     if (!t) return;
-    if (t.length <= 80 && isCiscoConfigCommand_(t)) pushUnique_(cmds, t);
+    if (t.length <= 80 && nwIsCiscoConfigCommand_(t)) nwPushUnique_(cmds, t);
     else prose.push(t);
   });
 
@@ -1236,12 +1348,12 @@ function ciscoWorkaround_(csaf) {
 }
 
 /** 行頭が IOS の設定構文か。訳さずそのまま載せてよい行の判別に使う。 */
-function isCiscoConfigCommand_(line) {
+function nwIsCiscoConfigCommand_(line) {
   return /^(no\s|ip\s|ipv6\s|interface\s|line\s|snmp-server\s|service\s|access-list\s|transport\s|shutdown\b|config-|router\s|control-plane\b|class-map\s|policy-map\s)/i
     .test(line);
 }
 
-function ciscoConfigHints_(csaf) {
+function nwCiscoConfigHints_(csaf) {
   const hints = [];
   (((csaf.document || {}).notes) || []).forEach(function (n) {
     const t = String(n.title || '').toLowerCase();
@@ -1255,7 +1367,7 @@ function ciscoConfigHints_(csaf) {
 /**
  * 処理済みシートの「対象製品」に書く製品名を CSAF から取り出す。
  *
- * 台帳用の ciscoTargetProducts_ とは目的が違う。あちらは「自社資産のどれに当たるか」を
+ * 台帳用の nwCiscoTargetProducts_ とは目的が違う。あちらは「自社資産のどれに当たるか」を
  * 資産シート起点で絞り込むので、自社に関係ないアドバイザリでは空になる。
  * 処理済みシートはベンダーが公表した全件の記録（分母）なので、
  * 自社保有と無関係に「何の製品の脆弱性か」が読めないと、
@@ -1266,14 +1378,14 @@ function ciscoConfigHints_(csaf) {
  * 同梱先の OS も持つため、Cisco 製品名があればそちらを優先する。
  * 実測: RSS 50 件すべてで製品名を取得できた。
  */
-function ciscoCsafProductNames_(csaf) {
+function nwCiscoCsafProductNames_(csaf) {
   const out = [];
   function walk(b) {
     if (!b) return;
     const cat = String(b.category || '');
     if ((cat === 'product_family' || cat === 'product_name') && b.name) {
       const n = String(b.name).trim();
-      if (n) pushUnique_(out, n);
+      if (n) nwPushUnique_(out, n);
       return;
     }
     (b.branches || []).forEach(walk);
@@ -1290,13 +1402,13 @@ function ciscoCsafProductNames_(csaf) {
   return names;
 }
 
-function ciscoProductTreeNames_(csaf) {
+function nwCiscoProductTreeNames_(csaf) {
   const names = [];
   function walk(branch) {
     if (!branch) return;
     // 葉の product.name は版番号が多い。親の Cisco IOS XE Software も拾う。
-    if (branch.name) pushUnique_(names, branch.name);
-    if (branch.product && branch.product.name) pushUnique_(names, branch.product.name);
+    if (branch.name) nwPushUnique_(names, branch.name);
+    if (branch.product && branch.product.name) nwPushUnique_(names, branch.product.name);
     (branch.branches || []).forEach(walk);
   }
   ((csaf.product_tree || {}).branches || []).forEach(walk);
@@ -1304,9 +1416,9 @@ function ciscoProductTreeNames_(csaf) {
 }
 
 /** 製品名の突合（IOS-XE ↔ Cisco IOS XE Software 等）。 */
-function productNamesMatch_(assetProduct, csafName) {
-  const a = normProduct_(assetProduct);
-  const b = normProduct_(csafName);
+function nwProductNamesMatch_(assetProduct, csafName) {
+  const a = nwNormProduct_(assetProduct);
+  const b = nwNormProduct_(csafName);
   if (!a || !b) return false;
   if (a === b) return true;
   if (a.indexOf(b) !== -1 || b.indexOf(a) !== -1) return true;
@@ -1320,27 +1432,27 @@ function productNamesMatch_(assetProduct, csafName) {
  *   1. CSAF の product_tree に、資産シートの製品名（例: IOS-XE）が含まれる
  *   2. CSAF の known_affected 版番号が、資産シートのいずれかの版と完全一致する
  */
-function ciscoAdvisoryTargetsAssets_(csaf, assets) {
+function nwCiscoAdvisoryTargetsAssets_(csaf, assets) {
   const assetProducts = [];
   const assetVersions = [];
   assets.forEach(function (a) {
-    if (a.product && a.product !== '—') pushUnique_(assetProducts, a.product);
-    if (a.version) pushUnique_(assetVersions, String(a.version).trim());
+    if (a.product && a.product !== '—') nwPushUnique_(assetProducts, a.product);
+    if (a.version) nwPushUnique_(assetVersions, String(a.version).trim());
   });
   if (!assetProducts.length && !assetVersions.length) return false;
 
-  const treeNames = ciscoProductTreeNames_(csaf);
+  const treeNames = nwCiscoProductTreeNames_(csaf);
   for (let i = 0; i < assetProducts.length; i++) {
     for (let j = 0; j < treeNames.length; j++) {
-      if (productNamesMatch_(assetProducts[i], treeNames[j])) return true;
+      if (nwProductNamesMatch_(assetProducts[i], treeNames[j])) return true;
     }
   }
 
   if (!assetVersions.length) return false;
-  const idMap = ciscoProductMap_(csaf);
+  const idMap = nwCiscoProductMap_(csaf);
   const aff = {};
   (csaf.vulnerabilities || []).forEach(function (v) {
-    ciscoAffectedVersions_(v, idMap).forEach(function (ver) {
+    nwCiscoAffectedVersions_(v, idMap).forEach(function (ver) {
       aff[String(ver).trim().toLowerCase()] = true;
     });
   });
@@ -1348,24 +1460,24 @@ function ciscoAdvisoryTargetsAssets_(csaf, assets) {
 }
 
 /** 資産シートの製品のうち、このアドバイザリが実際に言及しているもの。 */
-function ciscoTargetProducts_(csaf, assets) {
+function nwCiscoTargetProducts_(csaf, assets) {
   const candidates = [];
   assets.forEach(function (a) {
-    if (a.product && a.product !== '—') pushUnique_(candidates, a.product);
+    if (a.product && a.product !== '—') nwPushUnique_(candidates, a.product);
   });
   if (!candidates.length) return [];
 
-  const treeNames = ciscoProductTreeNames_(csaf);
-  const idMap = ciscoProductMap_(csaf);
+  const treeNames = nwCiscoProductTreeNames_(csaf);
+  const idMap = nwCiscoProductMap_(csaf);
   const allAff = [];
   (csaf.vulnerabilities || []).forEach(function (v) {
-    ciscoAffectedVersions_(v, idMap).forEach(function (ver) { pushUnique_(allAff, ver); });
+    nwCiscoAffectedVersions_(v, idMap).forEach(function (ver) { nwPushUnique_(allAff, ver); });
   });
 
   return candidates.filter(function (p) {
-    const np = normProduct_(p);
-    if (treeNames.some(function (t) { return productNamesMatch_(p, t); })) return true;
-    const vers = assets.filter(function (a) { return normProduct_(a.product) === np; })
+    const np = nwNormProduct_(p);
+    if (treeNames.some(function (t) { return nwProductNamesMatch_(p, t); })) return true;
+    const vers = assets.filter(function (a) { return nwNormProduct_(a.product) === np; })
       .map(function (a) { return a.version; }).filter(Boolean);
     return vers.some(function (av) {
       return allAff.some(function (aff) { return aff.toLowerCase() === av.toLowerCase(); });
@@ -1379,35 +1491,35 @@ function ciscoTargetProducts_(csaf, assets) {
  * 事前告知（notice / informational）は脆弱性ではないので行を作らない
  * （処理済みシートには書くので再取得しない）。
  */
-function extractCiscoRowsFromCsaf_(csaf, item, assets) {
-  if (isCiscoInformationalAdvisory_(csaf, item)) {
+function nwExtractCiscoRowsFromCsaf_(csaf, item, assets) {
+  if (nwIsCiscoInformationalAdvisory_(csaf, item)) {
     Logger.log('Cisco 情報通知（脆弱性ではない）のため台帳対象外: ' +
                ((item && item.id) || ''));
     return [];
   }
   assets = assets || [];
-  if (!ciscoAdvisoryTargetsAssets_(csaf, assets)) {
+  if (!nwCiscoAdvisoryTargetsAssets_(csaf, assets)) {
     return [];
   }
-  const targetProducts = ciscoTargetProducts_(csaf, assets);
+  const targetProducts = nwCiscoTargetProducts_(csaf, assets);
   if (!targetProducts.length) return [];
 
   const doc = csaf.document || {};
   const tracking = doc.tracking || {};
   const advisoryId = tracking.id || item.id;
   const updatedAt = tracking.current_release_date
-    ? csafDate_(tracking.current_release_date, item.pubDate)
-    : csafDate_(tracking.initial_release_date, item.pubDate);
-  const initialAt = csafDate_(tracking.initial_release_date, updatedAt);
+    ? nwCsafDate_(tracking.current_release_date, item.pubDate)
+    : nwCsafDate_(tracking.initial_release_date, item.pubDate);
+  const initialAt = nwCsafDate_(tracking.initial_release_date, updatedAt);
   const vulnName = String(doc.title || item.title || '').trim();
-  const idMap = ciscoProductMap_(csaf);
-  const configHints = ciscoConfigHints_(csaf);
-  const docClasses = ciscoDocCveClasses_(csaf);
+  const idMap = nwCiscoProductMap_(csaf);
+  const configHints = nwCiscoConfigHints_(csaf);
+  const docClasses = nwCiscoDocCveClasses_(csaf);
   const vulns = csaf.vulnerabilities || [];
   const product = targetProducts[0];
 
   // 修正版の自動取得（openVuln）は GAS では使わない。CSAF に版があれば使い、無ければ空。
-  const workaround = ciscoWorkaround_(csaf);
+  const workaround = nwCiscoWorkaround_(csaf);
 
   if (!vulns.length) {
     // informational 以外で vulns が空は稀。フォールバック行は誤検知を増やすので作らない。
@@ -1434,12 +1546,12 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
       }
     });
 
-    const affectedVersions = ciscoAffectedVersions_(v, idMap);
+    const affectedVersions = nwCiscoAffectedVersions_(v, idMap);
     // CSAF に fixed が入っている稀な場合だけ拾う。
-    const fixedVersions = ciscoFixedVersions_(v, idMap);
+    const fixedVersions = nwCiscoFixedVersions_(v, idMap);
     const fixes = [];
     (v.remediations || []).forEach(function (r) {
-      if (r.category === 'vendor_fix' && r.details) pushUnique_(fixes, r.details);
+      if (r.category === 'vendor_fix' && r.details) nwPushUnique_(fixes, r.details);
     });
 
     // CVE 側に何も書かれていないアドバイザリがある。Security Hardening Release は
@@ -1447,13 +1559,13 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
     // その場合でも document.notes に CVE ごとの CWE 分類表が載っているので、
     // そこから補う。無いと確認する人に手がかりが 1 つも渡らない。
     const summary = [
-      noteText_(v, function (n) { return n.category === 'summary'; }),
+      nwNoteText_(v, function (n) { return n.category === 'summary'; }),
       docClasses[String(v.cve || '').toUpperCase()] || '',
       configHints
     ].filter(function (s) { return s; }).join('\n\n');
 
     return {
-      vendor: VENDOR_CISCO,
+      vendor: NW_VENDOR_CISCO,
       advisoryId: advisoryId,
       advisoryUrl: item.link,
       pubDate: updatedAt,
@@ -1464,7 +1576,7 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
       cvss: score,
       severity: severity,
       vector: vector,
-      unauthRemote: isUnauthRemote_(vector) ? 'はい' : 'いいえ',
+      unauthRemote: nwIsUnauthRemote_(vector) ? 'はい' : 'いいえ',
       affected: affectedVersions,
       fixedVersions: fixedVersions,
       workaroundCmds: workaround.cmds,
@@ -1483,21 +1595,21 @@ function extractCiscoRowsFromCsaf_(csaf, item, assets) {
 }
 
 /** CSAF 失敗時の保険（通常 RSS）。情報通知 ID は行にしない。 */
-function extractCiscoRowFallback_(item) {
-  if (isCiscoInformationalAdvisory_(null, item)) {
+function nwExtractCiscoRowFallback_(item) {
+  if (nwIsCiscoInformationalAdvisory_(null, item)) {
     Logger.log('Cisco 情報通知のためフォールバック行も作らない: ' + (item && item.id));
     return null;
   }
-  const meta = parseCiscoRssMeta_(item.description);
+  const meta = nwParseCiscoRssMeta_(item.description);
   return {
-    vendor: VENDOR_CISCO,
+    vendor: NW_VENDOR_CISCO,
     advisoryId: item.id,
     advisoryUrl: item.link,
     pubDate: item.pubDate,
     initialDate: item.pubDate,
     title: item.title,
-    cve: meta.cves[0] || extractCveFromText_(item.title + ' ' + item.description),
-    // 製品は空のまま（理由は extractFortinetRowFallback_ と同じ）。
+    cve: meta.cves[0] || nwExtractCveFromText_(item.title + ' ' + item.description),
+    // 製品は空のまま（理由は nwExtractFortinetRowFallback_ と同じ）。
     // Cisco の RSS タイトルには製品名が入るが、そこから当てにはいかない。
     // 影響製品を 1 つしか名乗らない題名があり、ClamAV 型は製品名すら書かない。
     // CSAF が無い状態で製品を断定するのは、ここで直している誤りと同じになる。
@@ -1507,12 +1619,12 @@ function extractCiscoRowFallback_(item) {
     severity: meta.severity,
     vector: '', unauthRemote: '',
     affected: [],
-    summary: decodeCiscoHtml_(item.description || ''),
+    summary: nwDecodeCiscoHtml_(item.description || ''),
     impact: '',
     fixesRaw: '',
     workaround: '',
-    verdict: V_INVEST,
-    // reason ではなく reasonPhrase に置く。reason は decideNotification_ が
+    verdict: NW_V_INVEST,
+    // reason ではなく reasonPhrase に置く。reason は nwDecideNotification_ が
     // 「OS=… | KEV=…」の見出しごと組み立て直すので、ここで書いても消える。
     reasonPhrase: 'CSAF を取得できず製品も版も特定できないため',
     selfVersion: '', fixVersion: '',
@@ -1530,7 +1642,7 @@ function extractCiscoRowFallback_(item) {
  *
  * 表が無ければ空を返す。無理に拾わない（誤った説明を付けるくらいなら何も付けない）。
  */
-function ciscoDocCveClasses_(csaf) {
+function nwCiscoDocCveClasses_(csaf) {
   const out = {};
   (((csaf || {}).document || {}).notes || []).forEach(function (n) {
     const t = String(n.text || '').replace(/\s+/g, ' ');
@@ -1550,7 +1662,7 @@ function ciscoDocCveClasses_(csaf) {
  * 例: cisco-sa-notice-* / category=csaf_informational_advisory
  * 「8/5 に公開予定のアドバイザリ一覧」であり、CVE の脆弱性情報ではない。
  */
-function isCiscoInformationalAdvisory_(csaf, item) {
+function nwIsCiscoInformationalAdvisory_(csaf, item) {
   const id = String(
     (csaf && csaf.document && csaf.document.tracking && csaf.document.tracking.id) ||
     (item && item.id) || ''
@@ -1568,8 +1680,8 @@ function isCiscoInformationalAdvisory_(csaf, item) {
   return false;
 }
 
-function parseCiscoRssMeta_(description) {
-  const html = decodeCiscoHtml_(description);
+function nwParseCiscoRssMeta_(description) {
+  const html = nwDecodeCiscoHtml_(description);
   const sir = /Security Impact Rating:\s*(\w+)/i.exec(html);
   const cvss = /CVSS Base Score:\s*([\d.]+)/i.exec(html);
   const cves = html.match(/CVE-\d{4}-\d{4,}/gi) || [];
@@ -1580,7 +1692,7 @@ function parseCiscoRssMeta_(description) {
   };
 }
 
-function decodeCiscoHtml_(s) {
+function nwDecodeCiscoHtml_(s) {
   return String(s || '')
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
     .replace(/&#039;/g, "'").replace(/&quot;/g, '"').replace(/<[^>]+>/g, ' ');
@@ -1594,8 +1706,8 @@ function decodeCiscoHtml_(s) {
  *
  * 通常 RSS はタイトル・概要・人向けページ URL の保険として別関数で読む。
  */
-function fetchCiscoCsafRssItems_() {
-  const res = UrlFetchApp.fetch(CISCO_CSAF_RSS_URL, { muteHttpExceptions: true });
+function nwFetchCiscoCsafRssItems_() {
+  const res = UrlFetchApp.fetch(NW_CISCO_CSAF_RSS_URL, { muteHttpExceptions: true });
   if (res.getResponseCode() !== 200) {
     throw new Error('Cisco CSAF RSS 取得失敗 HTTP ' + res.getResponseCode());
   }
@@ -1607,21 +1719,21 @@ function fetchCiscoCsafRssItems_() {
     const title = String(item.getChildText('title') || '').trim();
     const guid = String(item.getChildText('guid') || '').trim();
     const link = String(item.getChildText('link') || '').trim();
-    const csafUrl = normalizeCiscoCsafUrl_(guid || link);
-    const id = parseCiscoAdvisoryId_(title || csafUrl || link);
+    const csafUrl = nwNormalizeCiscoCsafUrl_(guid || link);
+    const id = nwParseCiscoAdvisoryId_(title || csafUrl || link);
     return {
       id: id,
       title: title || id,
-      link: ciscoHumanAdvisoryUrl_(id),
+      link: nwCiscoHumanAdvisoryUrl_(id),
       csafUrl: csafUrl,
       description: '',
-      pubDate: parsePubDate_(item.getChildText('pubDate'))
+      pubDate: nwParsePubDate_(item.getChildText('pubDate'))
     };
   }).filter(function (it) { return it.id && it.csafUrl; });
 }
 
 /** guid/link からクエリを落とし、https にそろえる */
-function normalizeCiscoCsafUrl_(raw) {
+function nwNormalizeCiscoCsafUrl_(raw) {
   let u = String(raw || '').trim();
   if (!u) return '';
   u = u.replace(/^http:\/\//i, 'https://').replace(/:80\//, '/');
@@ -1631,7 +1743,7 @@ function normalizeCiscoCsafUrl_(raw) {
 }
 
 /** 人向けアドバイザリページ。台帳のハイパーリンク用 */
-function ciscoHumanAdvisoryUrl_(advisoryId) {
+function nwCiscoHumanAdvisoryUrl_(advisoryId) {
   const id = String(advisoryId || '').trim();
   if (!id) return '';
   return 'https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/' + id;
@@ -1641,22 +1753,22 @@ function ciscoHumanAdvisoryUrl_(advisoryId) {
  * 通常 RSS（補助）。CSAF 取得失敗時にタイトル・概要を補う。
  * 主経路ではないので失敗しても空オブジェクトを返す。
  */
-function fetchCiscoHumanRssIndex_() {
+function nwFetchCiscoHumanRssIndex_() {
   try {
-    const res = UrlFetchApp.fetch(CISCO_RSS_URL, { muteHttpExceptions: true });
+    const res = UrlFetchApp.fetch(NW_CISCO_RSS_URL, { muteHttpExceptions: true });
     if (res.getResponseCode() !== 200) return {};
     const root = XmlService.parse(res.getContentText()).getRootElement();
     const items = root.getChild('channel').getChildren('item');
     const map = {};
     items.forEach(function (item) {
       const link = item.getChildText('link') || '';
-      const id = parseCiscoAdvisoryId_(link);
+      const id = nwParseCiscoAdvisoryId_(link);
       if (!id) return;
       map[id] = {
         title: item.getChildText('title') || '',
         link: link,
         description: item.getChildText('description') || '',
-        pubDate: parsePubDate_(item.getChildText('pubDate'))
+        pubDate: nwParsePubDate_(item.getChildText('pubDate'))
       };
     });
     return map;
@@ -1666,12 +1778,12 @@ function fetchCiscoHumanRssIndex_() {
   }
 }
 
-function parseCiscoAdvisoryId_(link) {
+function nwParseCiscoAdvisoryId_(link) {
   const m = /cisco-sa-[a-z0-9-]+/i.exec(link || '');
   return m ? m[0] : String(link || '').trim();
 }
 
-function extractCveFromText_(text) {
+function nwExtractCveFromText_(text) {
   const m = /CVE-\d{4}-\d{4,}/gi.exec(String(text || ''));
   return m ? m[0].toUpperCase() : '';
 }
@@ -1680,7 +1792,7 @@ function extractCveFromText_(text) {
  * Cisco 版番号の完全一致判定。
  * CSAF の known_affected を 17.15.5 等の版番号に展開した配列と突き合わせる。
  */
-function judgeCiscoVersions_(assetVersions, affectedVersions) {
+function nwJudgeCiscoVersions_(assetVersions, affectedVersions) {
   if (!affectedVersions.length) return { hit: false, unknown: true, matched: '' };
 
   const aff = {};
@@ -1706,7 +1818,7 @@ function judgeCiscoVersions_(assetVersions, affectedVersions) {
  * "Tue, 14 Jul 2026 00:00:00 -0700" や CSAF RSS の "2026-08-21 16:54:40.0" を Date にする。
  * 失敗したら元の文字列を返す。
  */
-function parsePubDate_(s) {
+function nwParsePubDate_(s) {
   if (!s) return '';
   const raw = String(s).trim();
   const cisco = /^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/.exec(raw);
@@ -1724,7 +1836,7 @@ function parsePubDate_(s) {
  *      → "buffer-overread-in-authd-and-wad-daemon"
  * 実測: RSS 50 件すべてでこの規則から正しい URL を組み立てられた。
  */
-function slugifyTitle_(title) {
+function nwSlugifyTitle_(title) {
   return String(title || '')
     .toLowerCase()
     .replace(/['"‘’“”]/g, '')
@@ -1733,12 +1845,12 @@ function slugifyTitle_(title) {
     .replace(/^-|-$/g, '');
 }
 
-function csafUrlFor_(item) {
-  return CSAF_BASE + slugifyTitle_(item.title) + '_' + String(item.ir).toLowerCase() + '.json';
+function nwCsafUrlFor_(item) {
+  return NW_CSAF_BASE + nwSlugifyTitle_(item.title) + '_' + String(item.ir).toLowerCase() + '.json';
 }
 
-function fetchRssItems_() {
-  const res = UrlFetchApp.fetch(RSS_URL, { muteHttpExceptions: true });
+function nwFetchRssItems_() {
+  const res = UrlFetchApp.fetch(NW_RSS_URL, { muteHttpExceptions: true });
   if (res.getResponseCode() !== 200) {
     throw new Error('RSS 取得失敗 HTTP ' + res.getResponseCode());
   }
@@ -1760,7 +1872,7 @@ function fetchRssItems_() {
       ir: m ? m[0] : link,
       title: item.getChildText('title'),
       link: link,
-      pubDate: parsePubDate_(item.getChildText('pubDate')),
+      pubDate: nwParsePubDate_(item.getChildText('pubDate')),
       revisedOn: rev ? new Date(Number(rev[1]), Number(rev[2]) - 1, Number(rev[3])) : '',
       description: desc
     };
@@ -1772,7 +1884,7 @@ function fetchRssItems_() {
 // ============================================================
 
 /**
- * CSAF を 1 件取得する（単体確認用。日次実行は fetchAllCsaf_ を使う）。
+ * CSAF を 1 件取得する（単体確認用。日次実行は nwFetchAllCsaf_ を使う）。
  *
  * かつては失敗時にアドバイザリ HTML から csaf_url を拾う「保険」を持っていたが、
  * その経路は成立しないため削除した。fortiguard.fortinet.com のアドバイザリページは
@@ -1780,8 +1892,8 @@ function fetchRssItems_() {
  * 残しておくと、失敗のたびに無駄なリクエストを 2 本増やしたうえ、
  * 「取りこぼしても回復手段がある」という誤解だけが残る。
  */
-function fetchCsaf_(item) {
-  const url = csafUrlFor_(item);
+function nwFetchCsaf_(item) {
+  const url = nwCsafUrlFor_(item);
   const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
   if (res.getResponseCode() !== 200) {
     throw new Error('CSAF 取得失敗 HTTP ' + res.getResponseCode() + ': ' + url);
@@ -1790,7 +1902,7 @@ function fetchCsaf_(item) {
 }
 
 /** Date を 'yyyy-mm-dd' にする。既読判定の突合キーに使うため文字列で揃える。 */
-function ymd_(d) {
+function nwYmd_(d) {
   if (!(d instanceof Date) || isNaN(d.getTime())) return String(d || '');
   return d.getFullYear() + '-' +
          ('0' + (d.getMonth() + 1)).slice(-2) + '-' +
@@ -1803,20 +1915,20 @@ function ymd_(d) {
  * この絞り込みは「フィードの日付が CSAF の更新を反映している」ことが前提。
  * Cisco の csaf_20.xml は CSAF から生成されているため前提が成り立つ。
  * Fortinet の ir.xml は成り立たないことが実測で分かったので、Fortinet はこの関数を
- * 使わず毎回全件を取得する（理由は runFortinet_ のコメント）。
+ * 使わず毎回全件を取得する（理由は nwRunFortinet_ のコメント）。
  *
  * CSAF 版が空欄の既存行も取り直す。取得に失敗した件には「未取得」の印を書くので、
  * ここに引っかかるのは印が付く前に記録された古い行だけ。**印を書かずに空欄のままに
  * すると、取得できない件を毎日取り続けることになる。**
  */
-function selectRssCsafCandidates_(items, known, getId, getRssDate) {
+function nwSelectRssCsafCandidates_(items, known, getId, getRssDate) {
   let skip = 0;
   const out = items.filter(function (it) {
     const id = getId(it);
     const prev = known.dates[id];
     if (!prev) return true;
     if (!known.versions[id]) return true;
-    const rssY = ymd_(getRssDate(it));
+    const rssY = nwYmd_(getRssDate(it));
     if (rssY && rssY > prev) return true;
     skip++;
     return false;
@@ -1833,38 +1945,38 @@ function selectRssCsafCandidates_(items, known, getId, getRssDate) {
  * 取得できなかった日付（RSS の pubDate で代用している）で比較しても意味がない。
  * 未記録なら true を返し、取得できなかった事実をログに出す経路へ回す。
  */
-function needsAdvisoryProcessing_(id, csafDate, csafVersion, known, hasError) {
+function nwNeedsAdvisoryProcessing_(id, csafDate, csafVersion, known, hasError) {
   if (hasError && known.dates[id]) return false;
   if (!known.dates[id]) return true;
-  if (ymd_(csafDate) !== known.dates[id]) return true;
+  if (nwYmd_(csafDate) !== known.dates[id]) return true;
   if (String(csafVersion || '') !== String(known.versions[id] || '')) return true;
   return false;
 }
 
-function csafTrackingVersion_(csaf) {
+function nwCsafTrackingVersion_(csaf) {
   const v = (((csaf || {}).document || {}).tracking || {}).version;
   return v === undefined || v === null ? '' : String(v);
 }
 
-function fetchCiscoCsafBatch_(items) {
+function nwFetchCiscoCsafBatch_(items) {
   return items.map(function (it, i) {
     if (i > 0) Utilities.sleep(300);
     try {
-      const csaf = fetchCiscoCsaf_(it);
+      const csaf = nwFetchCiscoCsaf_(it);
       return {
         item: it,
         csaf: csaf,
-        updatedAt: csafUpdatedAt_(csaf, it),
-        version: csafTrackingVersion_(csaf),
-        products: ciscoCsafProductNames_(csaf),
+        updatedAt: nwCsafUpdatedAt_(csaf, it),
+        version: nwCsafTrackingVersion_(csaf),
+        products: nwCiscoCsafProductNames_(csaf),
         error: ''
       };
     } catch (e) {
-      // 失敗時の日付は Fortinet と同じ lastSeenDate_ を通す。Cisco の item は
+      // 失敗時の日付は Fortinet と同じ nwLastSeenDate_ を通す。Cisco の item は
       // revisedOn を持たないので結果は it.pubDate と同値（実測で確認）。
       // 揃えておくのは、両ベンダーの失敗経路を読み比べたときに
       // 「なぜ違うのか」を考えさせないため。差があるなら根拠が要る（§4.5）。
-      return { item: it, csaf: null, updatedAt: lastSeenDate_(it), version: '', error: String(e) };
+      return { item: it, csaf: null, updatedAt: nwLastSeenDate_(it), version: '', error: String(e) };
     }
   });
 }
@@ -1885,9 +1997,9 @@ function fetchCiscoCsafBatch_(items) {
  *
  * 戻り値: [{ item, csaf, updatedAt, version, error, missing }]
  */
-function fetchAllCsaf_(items) {
+function nwFetchAllCsaf_(items) {
   const reqs = items.map(function (it) {
-    return { url: csafUrlFor_(it), muteHttpExceptions: true };
+    return { url: nwCsafUrlFor_(it), muteHttpExceptions: true };
   });
 
   let res;
@@ -1910,24 +2022,24 @@ function fetchAllCsaf_(items) {
       try {
         const csaf = JSON.parse(r.getContentText());
         ok++;
-        return { item: it, csaf: csaf, updatedAt: csafUpdatedAt_(csaf, it),
-          version: csafTrackingVersion_(csaf), error: '', missing: false };
+        return { item: it, csaf: csaf, updatedAt: nwCsafUpdatedAt_(csaf, it),
+          version: nwCsafTrackingVersion_(csaf), error: '', missing: false };
       } catch (e) {
         failed++;
-        return { item: it, csaf: null, updatedAt: lastSeenDate_(it), version: '',
+        return { item: it, csaf: null, updatedAt: nwLastSeenDate_(it), version: '',
           error: 'CSAF の解析に失敗: ' + e, missing: false };
       }
     }
 
     if (code === 404) {
       missing++;
-      return { item: it, csaf: null, updatedAt: lastSeenDate_(it), version: '',
+      return { item: it, csaf: null, updatedAt: nwLastSeenDate_(it), version: '',
         error: 'CSAF未作成（HTTP 404。ベンダーがこのアドバイザリの CSAF を出していない）',
         missing: true };
     }
 
     failed++;
-    return { item: it, csaf: null, updatedAt: lastSeenDate_(it), version: '',
+    return { item: it, csaf: null, updatedAt: nwLastSeenDate_(it), version: '',
       error: 'CSAF 取得失敗 HTTP ' + code, missing: false };
   });
 
@@ -1947,7 +2059,7 @@ function fetchAllCsaf_(items) {
  * 2026-08-27 に改訂しており、その事実は RSS の description にしか無い。
  * 判定には使わず、表示する日付としてだけ採用する。
  */
-function lastSeenDate_(item) {
+function nwLastSeenDate_(item) {
   const pub = (item && item.pubDate) || '';
   const rev = (item && item.revisedOn) || '';
   if (rev instanceof Date && pub instanceof Date) return rev > pub ? rev : pub;
@@ -1965,26 +2077,26 @@ function lastSeenDate_(item) {
  * Fortinet の CSAF は "2025-08-08T00:00:00" とタイムゾーンを持たず、
  * 実行環境のローカル時刻＝日本時間として解釈されるため、こちらは元から日付が動かない。
  */
-function csafDate_(value, fallback) {
+function nwCsafDate_(value, fallback) {
   if (!value) return fallback;
   const d = new Date(value);
   return isNaN(d.getTime()) ? fallback : d;
 }
 
-function csafUpdatedAt_(csaf, item) {
+function nwCsafUpdatedAt_(csaf, item) {
   const t = ((csaf || {}).document || {}).tracking || {};
-  if (t.current_release_date) return csafDate_(t.current_release_date, item.pubDate);
-  if (t.initial_release_date) return csafDate_(t.initial_release_date, item.pubDate);
+  if (t.current_release_date) return nwCsafDate_(t.current_release_date, item.pubDate);
+  if (t.initial_release_date) return nwCsafDate_(t.initial_release_date, item.pubDate);
   return item.pubDate;
 }
 
 /** CVSS ベクターから「無認証・リモート・利用者操作不要」かを判定する。LLM 不使用。 */
-function isUnauthRemote_(vector) {
+function nwIsUnauthRemote_(vector) {
   if (!vector) return false;
   return /AV:N/.test(vector) && /PR:N/.test(vector) && /UI:N/.test(vector);
 }
 
-function noteText_(v, matcher) {
+function nwNoteText_(v, matcher) {
   const notes = v.notes || [];
   for (let i = 0; i < notes.length; i++) {
     if (matcher(notes[i])) return String(notes[i].text || '').trim();
@@ -1997,7 +2109,7 @@ function noteText_(v, matcher) {
  * 実測（50アドバイザリ / 97要素）で、1要素に複数製品系列が混在した例は 0 件だった。
  * つまり CSAF の 1 要素が「CVE × 製品」1 行にちょうど対応する。
  */
-function extractRows_(csaf, item) {
+function nwExtractRows_(csaf, item) {
   const doc = csaf.document || {};
   const tracking = doc.tracking || {};
   const advisoryId = tracking.id || item.ir;
@@ -2007,9 +2119,9 @@ function extractRows_(csaf, item) {
   // 何か月も前の日付として沈み、「今月見るべきもの」から漏れる。
   // 初回公表日は処理済みシートに残す。
   const updatedAt = tracking.current_release_date
-    ? csafDate_(tracking.current_release_date, item.pubDate)
-    : csafDate_(tracking.initial_release_date, item.pubDate);
-  const initialAt = csafDate_(tracking.initial_release_date, updatedAt);
+    ? nwCsafDate_(tracking.current_release_date, item.pubDate)
+    : nwCsafDate_(tracking.initial_release_date, item.pubDate);
+  const initialAt = nwCsafDate_(tracking.initial_release_date, updatedAt);
 
   // 脆弱性名は document.title を使う。
   // vulnerabilities[].title は "FortiOS - LOW - FG-IR-24-257" のような
@@ -2028,7 +2140,7 @@ function extractRows_(csaf, item) {
   const vulns = csaf.vulnerabilities || [];
   if (!vulns.length) {
     Logger.log('vulnerabilities なし: ' + advisoryId + '（判定不能として1行記録します）');
-    return [noVulnRow_(item, advisoryId, updatedAt, initialAt, vulnName)];
+    return [nwNoVulnRow_(item, advisoryId, updatedAt, initialAt, vulnName)];
   }
 
   return vulns.map(function (v) {
@@ -2038,7 +2150,7 @@ function extractRows_(csaf, item) {
     let score = '', severity = '', vector = '';
 
     (v.scores || []).forEach(function (s) {
-      (s.products || []).forEach(function (p) { pushUnique_(products, p); });
+      (s.products || []).forEach(function (p) { nwPushUnique_(products, p); });
       const c = s.cvss_v4 || s.cvss_v3 || {};
       if (c.vectorString && !vector) vector = c.vectorString;
       if (c.baseScore !== undefined && (score === '' || c.baseScore > score)) {
@@ -2048,19 +2160,19 @@ function extractRows_(csaf, item) {
     });
 
     const affected = ((v.product_status || {}).known_affected || []);
-    const product = products[0] || guessProductFromAffected_(affected);
+    const product = products[0] || nwGuessProductFromAffected_(affected);
 
     const fixes = [];
     (v.remediations || []).forEach(function (r) {
-      if (r.category === 'vendor_fix' && r.details) pushUnique_(fixes, r.details);
+      if (r.category === 'vendor_fix' && r.details) nwPushUnique_(fixes, r.details);
     });
 
-    const workaround = noteText_(v, function (n) {
+    const workaround = nwNoteText_(v, function (n) {
       return String(n.title || '').toLowerCase().indexOf('workaround') !== -1;
     });
 
     return {
-      vendor: VENDOR_FORTINET,
+      vendor: NW_VENDOR_FORTINET,
       advisoryId: advisoryId,
       advisoryUrl: item.link,
       pubDate: updatedAt,
@@ -2071,9 +2183,9 @@ function extractRows_(csaf, item) {
       cvss: score,
       severity: severity,
       vector: vector,
-      unauthRemote: isUnauthRemote_(vector) ? 'はい' : 'いいえ',
+      unauthRemote: nwIsUnauthRemote_(vector) ? 'はい' : 'いいえ',
       affected: affected,                       // 配列のまま持つ
-      summary: noteText_(v, function (n) { return n.category === 'summary'; }),
+      summary: nwNoteText_(v, function (n) { return n.category === 'summary'; }),
       impact: (v.threats || [])
         .filter(function (t) { return t.category === 'impact'; })
         .map(function (t) { return t.details; })
@@ -2092,10 +2204,10 @@ function extractRows_(csaf, item) {
  * タイトルに CVE 番号が書かれていることがあるので拾う
  * （例: "Linux Kernel Vulnerability copy.fail - CVE-2026-31431"）。
  */
-function noVulnRow_(item, advisoryId, pubDate, initialAt, vulnName) {
+function nwNoVulnRow_(item, advisoryId, pubDate, initialAt, vulnName) {
   const m = /CVE-\d{4}-\d{4,}/.exec(vulnName || '');
   return {
-    vendor: VENDOR_FORTINET,
+    vendor: NW_VENDOR_FORTINET,
     advisoryId: advisoryId,
     advisoryUrl: item.link,
     pubDate: pubDate,
@@ -2105,7 +2217,7 @@ function noVulnRow_(item, advisoryId, pubDate, initialAt, vulnName) {
     product: '',
     cvss: '', severity: '', vector: '', unauthRemote: '',
     affected: [], summary: vulnName, impact: '', fixesRaw: '', workaround: '',
-    verdict: V_INVEST,
+    verdict: NW_V_INVEST,
     reason: 'この情報元だけでは自社への影響を自動判定できません。アドバイザリを人が読んで判定してください。',
     selfVersion: '', fixVersion: '',
     feature: '', impactJa: '', howToCheck: ''
@@ -2113,7 +2225,7 @@ function noVulnRow_(item, advisoryId, pubDate, initialAt, vulnName) {
 }
 
 /** scores に products がない場合の保険。既知の製品名で最長一致させる。 */
-function guessProductFromAffected_(affected) {
+function nwGuessProductFromAffected_(affected) {
   if (!affected.length) return '';
   const first = String(affected[0]);
   const m = /^([A-Za-z][\w-]*(?:\s(?:PaaS|Cloud|on-premise|Manager))?)/.exec(first);
@@ -2127,28 +2239,28 @@ function guessProductFromAffected_(affected) {
  * プログラムからは本文を取得できない（実測: "Just a moment — verifying connection security"）。
  * 一方 RSS の description には CVSS と説明文が入っており、追加のリクエストも要らない。
  * 取れる情報があるのに台帳から落として通知だけにするのは、確認の手がかりを捨てている。
- * Cisco は以前からこの形（extractCiscoRowFallback_）で、Fortinet だけ無かった。
+ * Cisco は以前からこの形（nwExtractCiscoRowFallback_）で、Fortinet だけ無かった。
  *
  * 製品は名乗らない（空のまま）。RSS のタイトルに製品名が無く、主力製品を充てると
  * 「分からない」が「FortiOS だと分かった」に化ける（§4.7）。詳細は本体のコメント。
  */
-function extractFortinetRowFallback_(item) {
-  const text = decodeCiscoHtml_(item.description || '');
+function nwExtractFortinetRowFallback_(item) {
+  const text = nwDecodeCiscoHtml_(item.description || '');
   const cvss = /CVSSv3 Score:\s*([\d.]+)/i.exec(text);
   const cves = text.match(/CVE-\d{4}-\d{4,}/gi) || [];
 
   return {
-    vendor: VENDOR_FORTINET,
+    vendor: NW_VENDOR_FORTINET,
     advisoryId: item.ir,
     advisoryUrl: item.link,
-    pubDate: lastSeenDate_(item),
+    pubDate: nwLastSeenDate_(item),
     initialDate: item.pubDate,
     title: item.title,
     cve: cves.length ? cves[0].toUpperCase() : '',
     // 製品は空のままにする。CSAF が無い以上どの製品かは分からず、
     // 自社の主力製品を充てると「分からない」が「FortiOS だと分かった」に化ける。
-    // decideNotification_ が空を見て「製品を特定できないため → 影響調査」に落とし、
-    // 台帳の製品列は toRowArray_ が「不明」と表示する。
+    // nwDecideNotification_ が空を見て「製品を特定できないため → 影響調査」に落とし、
+    // 台帳の製品列は nwToRowArray_ が「不明」と表示する。
     product: '',
     noCsaf: true,
     cvss: cvss ? cvss[1] : '',
@@ -2159,19 +2271,19 @@ function extractFortinetRowFallback_(item) {
     impact: '',
     fixesRaw: '',
     workaround: '',
-    verdict: V_INVEST,
-    // reasonPhrase に置く理由は extractCiscoRowFallback_ の同じ箇所。
+    verdict: NW_V_INVEST,
+    // reasonPhrase に置く理由は nwExtractCiscoRowFallback_ の同じ箇所。
     reasonPhrase: 'CSAF を取得できず製品も版も特定できないため',
     selfVersion: '', fixVersion: '',
     feature: '', impactJa: '', howToCheck: ''
   };
 }
 
-function pushUnique_(arr, val) {
+function nwPushUnique_(arr, val) {
   if (val && arr.indexOf(val) === -1) arr.push(val);
 }
 
-function uniqueStrings_(arr) {
+function nwUniqueStrings_(arr) {
   const seen = {};
   const out = [];
   (arr || []).forEach(function (v) {
@@ -2186,7 +2298,7 @@ function uniqueStrings_(arr) {
 // ============================================================
 
 /** "7.4.5" → [7,4,5]。数値に解釈できない要素があれば null（＝比較不能）を返す。 */
-function parseVersion_(s) {
+function nwParseVersion_(s) {
   if (s === undefined || s === null || s === '') return null;
   const parts = String(s).trim().split('.');
   const nums = [];
@@ -2199,7 +2311,7 @@ function parseVersion_(s) {
 }
 
 /** a < b なら -1、a > b なら 1、等しければ 0。桁数が違う場合は 0 で埋める。 */
-function compareVersion_(a, b) {
+function nwCompareVersion_(a, b) {
   const len = Math.max(a.length, b.length);
   for (let i = 0; i < len; i++) {
     const x = (a[i] === undefined) ? 0 : a[i];
@@ -2210,7 +2322,7 @@ function compareVersion_(a, b) {
 }
 
 /** known_affected の文字列から製品名の部分を取り除き、バージョン表記だけにする。 */
-function stripProductPrefix_(entry, product) {
+function nwStripProductPrefix_(entry, product) {
   const e = String(entry || '').trim();
   if (product && e.toLowerCase().indexOf(String(product).toLowerCase()) === 0) {
     return e.slice(String(product).length).trim();
@@ -2232,7 +2344,7 @@ function stripProductPrefix_(entry, product) {
  *   >=7.4|<=7.4.13       2桁の下限          1件
  *   25.1.c               非数値を含む       1件（→ null を返す）
  */
-function matchesSpec_(ver, body) {
+function nwMatchesSpec_(ver, body) {
   const b = String(body || '').trim();
   if (!b) return null;
 
@@ -2240,7 +2352,7 @@ function matchesSpec_(ver, body) {
 
   let m = /^(\d+(?:\.\d+)*)\s+all versions$/i.exec(b);
   if (m) {
-    const base = parseVersion_(m[1]);
+    const base = nwParseVersion_(m[1]);
     if (!base) return null;
     for (let i = 0; i < base.length; i++) {
       if ((ver[i] === undefined ? 0 : ver[i]) !== base[i]) return false;
@@ -2250,23 +2362,23 @@ function matchesSpec_(ver, body) {
 
   m = /^>=\s*([^\s|]+)\s*\|\s*<=\s*([^\s|]+)$/.exec(b);
   if (m) {
-    const lo = parseVersion_(m[1]), hi = parseVersion_(m[2]);
+    const lo = nwParseVersion_(m[1]), hi = nwParseVersion_(m[2]);
     if (!lo || !hi) return null;
-    return compareVersion_(ver, lo) >= 0 && compareVersion_(ver, hi) <= 0;
+    return nwCompareVersion_(ver, lo) >= 0 && nwCompareVersion_(ver, hi) <= 0;
   }
 
   m = /^([^\s]+)\s+and above$/i.exec(b);
   if (m) {
-    const lo2 = parseVersion_(m[1]);
+    const lo2 = nwParseVersion_(m[1]);
     if (!lo2) return null;
-    return compareVersion_(ver, lo2) >= 0;
+    return nwCompareVersion_(ver, lo2) >= 0;
   }
 
   m = /^([^\s]+)$/.exec(b);
   if (m) {
-    const ex = parseVersion_(m[1]);
+    const ex = nwParseVersion_(m[1]);
     if (!ex) return null;
-    return compareVersion_(ver, ex) === 0;
+    return nwCompareVersion_(ver, ex) === 0;
   }
 
   return null;  // 未知の表記。推測せず判定不能にする
@@ -2276,16 +2388,16 @@ function matchesSpec_(ver, body) {
  * 自社バージョン（複数可）と影響バージョン一覧を突き合わせる。
  * 戻り値: { hit: bool, unknown: bool, matched: '一致した表記' }
  */
-function judgeVersions_(assetVersions, affectedEntries, product) {
+function nwJudgeVersions_(assetVersions, affectedEntries, product) {
   let unknown = false, matched = '';
 
   for (let i = 0; i < assetVersions.length; i++) {
-    const ver = parseVersion_(assetVersions[i]);
+    const ver = nwParseVersion_(assetVersions[i]);
     if (!ver) { unknown = true; continue; }
 
     for (let j = 0; j < affectedEntries.length; j++) {
-      const body = stripProductPrefix_(affectedEntries[j], product);
-      const r = matchesSpec_(ver, body);
+      const body = nwStripProductPrefix_(affectedEntries[j], product);
+      const r = nwMatchesSpec_(ver, body);
       if (r === true) return { hit: true, unknown: false, matched: affectedEntries[j] };
       if (r === null) unknown = true;
     }
@@ -2306,8 +2418,8 @@ function judgeVersions_(assetVersions, affectedEntries, product) {
  *   FortiOS 7.2.2 and above   → 7.2.2 以上
  *   FortiOS 7.6.0             → 7.6.0
  */
-function jpRange_(entry, product) {
-  const b = stripProductPrefix_(entry, product);
+function nwJpRange_(entry, product) {
+  const b = nwStripProductPrefix_(entry, product);
   let m = /^>=\s*([^\s|]+)\s*\|\s*<=\s*([^\s|]+)$/.exec(b);
   if (m) return m[1] + '〜' + m[2];
   m = /^(\S+)\s+all versions$/i.exec(b);
@@ -2325,18 +2437,18 @@ function jpRange_(entry, product) {
  * 全部並べても、7.4.11 の利用者が読むのは 7.4 系の行だけである。
  * 戻り値: { branch: '7.4', range: '7.4.0〜7.4.7' } / 該当なしは null
  */
-function branchRange_(row, versions) {
+function nwBranchRange_(row, versions) {
   for (let i = 0; i < versions.length; i++) {
-    const v = parseVersion_(versions[i]);
+    const v = nwParseVersion_(versions[i]);
     if (!v || v.length < 2) continue;
     const branch = v.slice(0, 2).join('.');
 
     for (let j = 0; j < row.affected.length; j++) {
-      const body = stripProductPrefix_(row.affected[j], row.product);
+      const body = nwStripProductPrefix_(row.affected[j], row.product);
       const head = /^(?:>=\s*)?(\d+(?:\.\d+)+)/.exec(body);
       if (!head) continue;
       if (head[1].split('.').slice(0, 2).join('.') === branch) {
-        return { branch: branch, range: jpRange_(row.affected[j], row.product) };
+        return { branch: branch, range: nwJpRange_(row.affected[j], row.product) };
       }
     }
   }
@@ -2344,39 +2456,41 @@ function branchRange_(row, versions) {
 }
 
 /** 製品名を突合用に正規化する。"FortiClient EMS" と "FortiClientEMS" を同じ扱いにする。 */
-function normProduct_(s) {
+function nwNormProduct_(s) {
   return String(s || '').toLowerCase().replace(/[\s_-]/g, '');
 }
 
-function readAssets_() {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ASSET);
+function nwReadAssets_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NW_SHEET_ASSET);
   if (!sh || sh.getLastRow() < 2) return [];
 
   const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
   const isV7 = headers.indexOf('ベンダー') !== -1;
 
   if (isV7) {
-    const values = sh.getRange(2, 1, sh.getLastRow() - 1, ASSET_HEADERS.length).getValues();
-    return values.filter(function (r) { return r[2] || r[3]; }).map(function (r) {
-      return {
-        vendor: String(r[0] || '').trim(),
-        category: String(r[1] || '').trim(),
-        product: String(r[2] || '').trim(),
-        model: String(r[3] || '').trim(),
-        version: String(r[4] || '').trim(),
-        count: r[5],
-        toolTarget: String(r[6] || 'はい').trim(),
-        note: String(r[7] || '').trim(),
-        updatedAt: r[8] || ''
-      };
-    });
+    const values = sh.getRange(2, 1, sh.getLastRow() - 1, NW_ASSET_COLS.length).getValues();
+    return values.map(function (row) { return nwRowToRec_(NW_ASSET_COLS, row); })
+      .filter(function (a) { return a.product || a.model; })
+      .map(function (a) {
+        return {
+          vendor: String(a.vendor || '').trim(),
+          category: String(a.category || '').trim(),
+          product: String(a.product || '').trim(),
+          model: String(a.model || '').trim(),
+          version: String(a.version || '').trim(),
+          count: a.count,
+          toolTarget: String(a.toolTarget || 'はい').trim(),
+          note: String(a.note || '').trim(),
+          updatedAt: a.updatedAt || ''
+        };
+      });
   }
 
   // v6 互換
   const values = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
   return values.filter(function (r) { return r[0]; }).map(function (r) {
     return {
-      vendor: VENDOR_FORTINET,
+      vendor: NW_VENDOR_FORTINET,
       category: '',
       product: String(r[0]).trim(),
       model: '',
@@ -2388,28 +2502,28 @@ function readAssets_() {
   });
 }
 
-function fortinetAssets_(assets) {
+function nwFortinetAssets_(assets) {
   return assets.filter(function (a) {
     if (a.toolTarget === 'いいえ') return false;
-    const v = a.vendor || VENDOR_FORTINET;
-    return v === VENDOR_FORTINET && a.product && a.product !== '—';
+    const v = a.vendor || NW_VENDOR_FORTINET;
+    return v === NW_VENDOR_FORTINET && a.product && a.product !== '—';
   });
 }
 
-function ciscoAssets_(assets) {
+function nwCiscoAssets_(assets) {
   return assets.filter(function (a) {
     if (a.toolTarget === 'いいえ') return false;
-    return a.vendor === VENDOR_CISCO;
+    return a.vendor === NW_VENDOR_CISCO;
   });
 }
 
-function assetsForProduct_(assets, product) {
-  const p = normProduct_(product);
+function nwAssetsForProduct_(assets, product) {
+  const p = nwNormProduct_(product);
   if (!p) return [];
-  return assets.filter(function (a) { return normProduct_(a.product) === p; });
+  return assets.filter(function (a) { return nwNormProduct_(a.product) === p; });
 }
 
-function initDecisionFields_(row) {
+function nwInitDecisionFields_(row) {
   row.osStatus = row.osStatus || '';
   row.kev = row.kev || '';
   row.externalSurface = row.externalSurface || '';
@@ -2424,22 +2538,22 @@ function initDecisionFields_(row) {
   row.needsCodeDisplay = false;
 }
 
-function kevLabel_(cve) {
-  return isKevListed_(cve) ? KEV_YES : KEV_NO;
+function nwKevLabel_(cve) {
+  return nwIsKevListed_(cve) ? NW_KEV_YES : NW_KEV_NO;
 }
 
 /** AI 失敗時でも影響機能・確認方法・ユーザ影響を空にしない */
-function isFortinetFeatureVocab_(feature) {
-  return FORTINET_AI_FEATURES.indexOf(String(feature || '').trim()) !== -1;
+function nwIsFortinetFeatureVocab_(feature) {
+  return NW_FORTINET_AI_FEATURES.indexOf(String(feature || '').trim()) !== -1;
 }
 
 /**
  * タイトル・要約・impact から Fortinet 統制語彙へ寄せる。
  * 当てはまらなければ「その他」（機能を特定できないので影響調査に回る）。
  */
-function guessFortinetFeature_(row) {
+function nwGuessFortinetFeature_(row) {
   const text = [row.feature, row.title, row.summary, row.impact].join(' ').toLowerCase();
-  if (isFortinetFeatureVocab_(row.feature)) return row.feature;
+  if (nwIsFortinetFeatureVocab_(row.feature)) return row.feature;
   const rules = [
     [/ssl[- ]?vpn|sslvpn/, 'SSL-VPN'],
     [/ipsec/, 'IPsec VPN'],
@@ -2464,38 +2578,38 @@ function guessFortinetFeature_(row) {
   return 'その他';
 }
 
-function applyFallbackDisplayFields_(row) {
-  if (row.vendor === VENDOR_FORTINET) {
-    if (!isFortinetFeatureVocab_(row.feature) || row.feature === 'その他' || row.feature === '不明') {
-      const guessed = guessFortinetFeature_(row);
+function nwApplyFallbackDisplayFields_(row) {
+  if (row.vendor === NW_VENDOR_FORTINET) {
+    if (!nwIsFortinetFeatureVocab_(row.feature) || row.feature === 'その他' || row.feature === '不明') {
+      const guessed = nwGuessFortinetFeature_(row);
       if (guessed && guessed !== 'その他') row.feature = guessed;
-      else if (!isFortinetFeatureVocab_(row.feature)) row.feature = guessed;
+      else if (!nwIsFortinetFeatureVocab_(row.feature)) row.feature = guessed;
     }
   } else {
-    const fromTitle = normalizeCiscoFeature_(row.title || '');
-    if (isJunkCiscoFeature_(row.feature)) {
+    const fromTitle = nwNormalizeCiscoFeature_(row.title || '');
+    if (nwIsJunkCiscoFeature_(row.feature)) {
       row.feature = fromTitle;
     } else {
-      row.feature = normalizeCiscoFeature_(row.feature || row.title || '');
+      row.feature = nwNormalizeCiscoFeature_(row.feature || row.title || '');
     }
   }
 
-  row.howToCheck = normalizeHowToCheck_(row);
-  if (!isUsableCveSummary_(row.cveSummaryJa)) {
+  row.howToCheck = nwNormalizeHowToCheck_(row);
+  if (!nwIsUsableCveSummary_(row.cveSummaryJa)) {
     row.cveSummaryJa = '';
   }
-  row.impactJa = preferImpactJa_(row);
+  row.impactJa = nwPreferImpactJa_(row);
 }
 
-function truncateJa_(s, max) {
+function nwTruncateJa_(s, max) {
   const t = String(s || '').trim().replace(/\s+/g, ' ');
   if (!t) return '';
   return t.length > max ? t.slice(0, max) : t;
 }
 
 /** 英語タイトルコピーをやめ、アドバイザリ本文と CVSS から業務結果を引く */
-function fallbackImpactJa_(row) {
-  const parts = parseCvssCia_(row.vector);
+function nwFallbackImpactJa_(row) {
+  const parts = nwParseCvssCia_(row.vector);
   if (parts) {
     if (parts.C === 'H' && parts.I === 'H') {
       return '機器を乗っ取られ設定改ざんや通信傍受をされる恐れ';
@@ -2508,16 +2622,16 @@ function fallbackImpactJa_(row) {
     }
   }
 
-  if (isReloadDos_(row) || (parts && parts.A === 'H')) {
-    return isReloadDos_(row)
+  if (nwIsReloadDos_(row) || (parts && parts.A === 'H')) {
+    return nwIsReloadDos_(row)
       ? '機器が再起動し、拠点の通信が途切れる恐れ'
       : '機器が停止し、拠点の通信が途切れる恐れ';
   }
-  if (isMgmtPlaneDos_(row) || (parts && parts.A === 'L')) {
+  if (nwIsMgmtPlaneDos_(row) || (parts && parts.A === 'L')) {
     return '管理画面が応答しなくなり、運用に支障が出る恐れ';
   }
 
-  const text = advisoryCorpus_(row).toLowerCase();
+  const text = nwAdvisoryCorpus_(row).toLowerCase();
   if (/remote code|code execution|rce|arbitrary code|command injection/.test(text)) {
     return '機器を乗っ取られ設定改ざんや通信傍受をされる恐れ';
   }
@@ -2536,27 +2650,27 @@ function fallbackImpactJa_(row) {
   return '機器や接続端末が侵害され業務通信に支障が出る恐れ';
 }
 
-function advisoryCorpus_(r) {
+function nwAdvisoryCorpus_(r) {
   return [r.title, r.summary, r.impact, r.feature].join('\n');
 }
 
-function isReloadDos_(r) {
-  return /reload|reboot|unexpected(ly)? (reload|reboot)/i.test(advisoryCorpus_(r));
+function nwIsReloadDos_(r) {
+  return /reload|reboot|unexpected(ly)? (reload|reboot)/i.test(nwAdvisoryCorpus_(r));
 }
 
-function isResourceExhaustion_(r) {
-  return /resource exhaustion|without limits or throttling|allocation of resources/i.test(advisoryCorpus_(r));
+function nwIsResourceExhaustion_(r) {
+  return /resource exhaustion|without limits or throttling|allocation of resources/i.test(nwAdvisoryCorpus_(r));
 }
 
-function isMgmtPlaneDos_(r) {
+function nwIsMgmtPlaneDos_(r) {
   const f = String(r.feature || '');
   if (f === '管理GUI' || f === 'WebUI') return true;
-  return /web ui|webui|fortigate ui|\bgui\b|management (interface|plane)/i.test(advisoryCorpus_(r))
-    || isResourceExhaustion_(r);
+  return /web ui|webui|fortigate ui|\bgui\b|management (interface|plane)/i.test(nwAdvisoryCorpus_(r))
+    || nwIsResourceExhaustion_(r);
 }
 
 /** CVSS ベクターから C/I/A を取る。無ければ null */
-function parseCvssCia_(vector) {
+function nwParseCvssCia_(vector) {
   const s = String(vector || '');
   if (!s) return null;
   const C = (/\/C:([NHAL])/i.exec(s) || [])[1];
@@ -2570,7 +2684,7 @@ function parseCvssCia_(vector) {
   };
 }
 
-function normalizeCiscoFeature_(raw) {
+function nwNormalizeCiscoFeature_(raw) {
   let s = String(raw || '').trim().replace(/\s+/g, ' ');
   if (!s) return 'IOS XE 基盤';
   s = s.replace(/^Cisco\s+IOS\s*XE\s+Software\s*/i, '');
@@ -2589,11 +2703,11 @@ function normalizeCiscoFeature_(raw) {
 }
 
 /**
- * Cisco の影響機能の統制語彙。featureExposure_ が露出を引ける値だけを許す。
+ * Cisco の影響機能の統制語彙。nwFeatureExposure_ が露出を引ける値だけを許す。
  * ここに無い値が入ると exposure が unknown になり、判定が
  * 「影響機能を特定できないため」に固定される。
  */
-const CISCO_FEATURE_VOCAB = {
+var NW_CISCO_FEATURE_VOCAB = {
   'WebUI': 1, 'BEEP': 1, 'XMCP Server': 1, 'SD-WAN': 1, 'SNMP': 1, 'SSH': 1,
   'IOS XE 基盤': 1, 'データプレーン': 1, '管理GUI': 1, 'その他': 1
 };
@@ -2605,31 +2719,31 @@ const CISCO_FEATURE_VOCAB = {
  * 実測（2026-09-04）で「アクセス制御」「CLI処理」「メモリ管理」のような
  * **脆弱性の種類**が影響機能の欄に入り、機能とは軸の違う値が台帳に並んだ。
  *
- * featureExposure_ はそれらを unknown としか読めないので判定は動かないが、台帳を
+ * nwFeatureExposure_ はそれらを unknown としか読めないので判定は動かないが、台帳を
  * 眺めたときに「影響機能を特定できていない行」が実際より少なく見える。
  * **判定は変わらないのに見え方だけ壊れる**ので、直したつもりになってしまう。
  *
- * Fortinet には isFortinetFeatureVocab_ で同じ強制がある。ベンダーで差を付ける
+ * Fortinet には nwIsFortinetFeatureVocab_ で同じ強制がある。ベンダーで差を付ける
  * 根拠が無いので揃える。
  */
-function isJunkCiscoFeature_(feature) {
+function nwIsJunkCiscoFeature_(feature) {
   const s = String(feature || '').trim();
   if (!s || s === '不明') return true;
-  return !CISCO_FEATURE_VOCAB[s];
+  return !NW_CISCO_FEATURE_VOCAB[s];
 }
 
-function lookupCheckSteps_(row) {
-  if (row.vendor === VENDOR_FORTINET) {
+function nwLookupCheckSteps_(row) {
+  if (row.vendor === NW_VENDOR_FORTINET) {
     const f = row.feature || 'その他';
-    return CHECK_STEPS_FORTINET[f] || CHECK_STEPS_FORTINET['その他'];
+    return NW_CHECK_STEPS_FORTINET[f] || NW_CHECK_STEPS_FORTINET['その他'];
   }
   const text = [row.feature, row.title].join(' ');
-  for (let i = 0; i < CHECK_STEPS_CISCO.length; i++) {
-    if (CHECK_STEPS_CISCO[i].re.test(text)) return CHECK_STEPS_CISCO[i].text;
+  for (let i = 0; i < NW_CHECK_STEPS_CISCO.length; i++) {
+    if (NW_CHECK_STEPS_CISCO[i].re.test(text)) return NW_CHECK_STEPS_CISCO[i].text;
   }
   // 影響調査中に「臨時対応不要・定期更新枠」を出すと手がかりにならない
-  if (row.verdict === V_INVEST) return CHECK_STEPS_CISCO_INVEST;
-  return CHECK_STEPS_CISCO_DEFAULT;
+  if (row.verdict === NW_V_INVEST) return NW_CHECK_STEPS_CISCO_INVEST;
+  return NW_CHECK_STEPS_CISCO_DEFAULT;
 }
 
 /**
@@ -2638,13 +2752,13 @@ function lookupCheckSteps_(row) {
  * 機器固有のコマンドを書かない。**まずアドバイザリ本体を開くのが最初の一歩**で、
  * 製品が分からないまま打つコマンドには意味がない。
  */
-var CHECK_STEPS_NO_CSAF = [
+var NW_CHECK_STEPS_NO_CSAF = [
   '確認ポイント：アドバイザリ本体を開き、影響製品と影響範囲を確認する',
   'アクション：自社の保有製品に当たるかを判断し、当たるなら版を突き合わせる',
   '判断：当たらなければ対象外。当たるなら影響機能を特定して確認コマンドへ進む'
 ].join('\n');
 
-function normalizeHowToCheck_(row) {
+function nwNormalizeHowToCheck_(row) {
   const raw = String(row.howToCheck || '').trim();
 
   // 製品を特定できていない行に、機器固有のコマンドを出させない。
@@ -2654,30 +2768,30 @@ function normalizeHowToCheck_(row) {
   // 判定根拠は「製品も版も特定できない」なのに、確認方法は特定できている前提に
   // なっていて矛盾する。打っても意味がないうえ、出力が無いと「影響なし」と
   // 誤解される。AI は RSS の説明文から推測できてしまうので、ここで止める。
-  if (row.noCsaf || !String(row.product || '').trim()) return CHECK_STEPS_NO_CSAF;
+  if (row.noCsaf || !String(row.product || '').trim()) return NW_CHECK_STEPS_NO_CSAF;
 
-  // 版該否は decideNotification_ 済み。対象行に「show version」を出さない。
-  if (row.osStatus === '対象' && isVersionRecheckHowTo_(raw)) {
-    return lookupCheckSteps_(row);
+  // 版該否は nwDecideNotification_ 済み。対象行に「show version」を出さない。
+  if (row.osStatus === '対象' && nwIsVersionRecheckHowTo_(raw)) {
+    return nwLookupCheckSteps_(row);
   }
-  if (row.verdict === V_INVEST && isRegularUpdateHowTo_(raw)) {
-    return lookupCheckSteps_(row);
+  if (row.verdict === NW_V_INVEST && nwIsRegularUpdateHowTo_(raw)) {
+    return nwLookupCheckSteps_(row);
   }
-  return isActionableHowTo_(raw) ? raw : lookupCheckSteps_(row);
+  return nwIsActionableHowTo_(raw) ? raw : nwLookupCheckSteps_(row);
 }
 
 /** 「なし」向けの定期更新定型か */
-function isRegularUpdateHowTo_(text) {
+function nwIsRegularUpdateHowTo_(text) {
   return /定期更新枠|臨時対応は不要|次回メンテで更新すれば足りる/i.test(String(text || ''));
 }
 
 /** 版の再確認を求める確認方法か */
-function isVersionRecheckHowTo_(text) {
+function nwIsVersionRecheckHowTo_(text) {
   return /影響範囲内|稼働バージョン|show\s+version|get\s+system\s+status/i.test(String(text || ''));
 }
 
 /** 人が次の行動を取れる確認方法か（設定確認 or アクション提示） */
-function isActionableHowTo_(text) {
+function nwIsActionableHowTo_(text) {
   const raw = String(text || '').trim();
   if (!raw) return false;
   if (/アドバイザリの\s*(Affected|Fixed|Solution)|個別アドバイザリ|公開情報と対象バージョン/i.test(raw)) {
@@ -2697,7 +2811,7 @@ function isActionableHowTo_(text) {
  * 3行の位置そのものが「どこを見る／何を打つ／どう判断する」を示すので、
  * 表示では見出しを落として中身だけ残す。
  */
-function stripCheckLabels_(text) {
+function nwStripCheckLabels_(text) {
   return String(text || '')
     .split('\n')
     .map(function (line) {
@@ -2715,12 +2829,12 @@ function stripCheckLabels_(text) {
  * KEV カタログを取得し、成否と出典まで返す。NW と macOS の両方がこれを使う。
  *
  * **例外を投げない。**呼ぶ側が「取れなかった」と「掲載が無い」を区別できるようにするため。
- * 従来どおり例外で扱いたい経路には fetchKevCatalog_() を残してある。
+ * 従来どおり例外で扱いたい経路には nwFetchKevCatalog_() を残してある。
  *
  * キャッシュキーを kev_catalog_v2 にしてある。**戻り値の形を変えたので必ず変えること。**
  * 旧キーのままだと貼り替え直後の最大 6 時間、旧形（素のマップ）が返って
  * .map が undefined になり、KEV が全件「なし」に落ちる。
- * 同じ事故は値を true で入れていた頃に一度起きている（kevVendor_ のコメント）。
+ * 同じ事故は値を true で入れていた頃に一度起きている（nwKevVendor_ のコメント）。
  */
 function kevCatalogWithStatus_() {
   if (kevLastStatus_) return kevLastStatus_;
@@ -2751,7 +2865,7 @@ function kevCatalogWithStatus_() {
       const set = {};
       body.vulnerabilities.forEach(function (v) {
         // 値は true ではなく登録主体（vendorProject）。KEV の登録が別ベンダーの
-        // 製品に対するものかを判定根拠に書くために要る（kevVendor_ 参照）。
+        // 製品に対するものかを判定根拠に書くために要る（nwKevVendor_ 参照）。
         // 空文字は入れない。!!set[cve] で掲載を見ているので偽になってしまう。
         if (v.cveID) {
           set[String(v.cveID).toUpperCase()] = String(v.vendorProject || '').trim() || '登録元不明';
@@ -2779,16 +2893,16 @@ function kevCatalogWithStatus_() {
 }
 
 /** 従来の呼び出し口。素のマップを返し、取れなければ投げる。外形は変えていない。 */
-function fetchKevCatalog_() {
+function nwFetchKevCatalog_() {
   const r = kevCatalogWithStatus_();
   if (!r.ok) throw new Error('KEV 取得失敗 ' + r.error);
   return r.map;
 }
 
-function isKevListed_(cve) {
+function nwIsKevListed_(cve) {
   if (!cve) return false;
   try {
-    const set = fetchKevCatalog_();
+    const set = nwFetchKevCatalog_();
     return !!set[String(cve).toUpperCase()];
   } catch (e) {
     Logger.log('KEV 照合失敗: ' + e);
@@ -2802,10 +2916,10 @@ function isKevListed_(cve) {
  * 値が文字列でないときは空を返す。値を true で入れていた頃のキャッシュが
  * 最大 6 時間残るので、その間に落ちないようにする。
  */
-function kevVendor_(cve) {
+function nwKevVendor_(cve) {
   if (!cve) return '';
   try {
-    const v = fetchKevCatalog_()[String(cve).toUpperCase()];
+    const v = nwFetchKevCatalog_()[String(cve).toUpperCase()];
     return (typeof v === 'string') ? v : '';
   } catch (e) {
     return '';
@@ -2816,11 +2930,11 @@ function kevVendor_(cve) {
 // OS 該当・ベンダー別判定
 // ============================================================
 
-function judgeOsApplicability_(row, assets) {
+function nwJudgeOsApplicability_(row, assets) {
   if (!row.product) {
     return { os: 'unknown', label: '不明', detail: '製品不明' };
   }
-  const mine = assetsForProduct_(assets, row.product);
+  const mine = nwAssetsForProduct_(assets, row.product);
   if (!mine.length) {
     return { os: 'out', label: '対象外', detail: '非保有製品' };
   }
@@ -2831,21 +2945,21 @@ function judgeOsApplicability_(row, assets) {
   if (!versions.length) {
     return { os: 'unknown', label: '不明', detail: '版未記入' };
   }
-  const res = (row.vendor === VENDOR_CISCO)
-    ? judgeCiscoVersions_(versions, row.affected)
-    : judgeVersions_(versions, row.affected, row.product);
+  const res = (row.vendor === NW_VENDOR_CISCO)
+    ? nwJudgeCiscoVersions_(versions, row.affected)
+    : nwJudgeVersions_(versions, row.affected, row.product);
   if (res.hit) {
-    if (row.vendor !== VENDOR_CISCO) narrowFixVersion_(row, assets);
+    if (row.vendor !== NW_VENDOR_CISCO) nwNarrowFixVersion_(row, assets);
     return { os: 'hit', label: '対象', detail: '' };
   }
   if (res.unknown) {
     return { os: 'unknown', label: '不明', detail: '版解釈不能' };
   }
-  if (row.vendor === VENDOR_CISCO) {
-    const uniq = uniqueStrings_(versions);
+  if (row.vendor === NW_VENDOR_CISCO) {
+    const uniq = nwUniqueStrings_(versions);
     return { os: 'out', label: '対象外', detail: '自社版 ' + uniq.join(', ') + ' は影響対象外' };
   }
-  const b = branchRange_(row, versions);
+  const b = nwBranchRange_(row, versions);
   const detail = b
     ? b.branch + ' 系の影響は ' + b.range + ' まで'
     : '利用中の系列が影響対象外';
@@ -2856,17 +2970,17 @@ function judgeOsApplicability_(row, assets) {
  * 影響機能が外部から到達できる面に出ているか。
  *
  * **いまは判定に使っていない。**結果は row.externalSurface に入るだけで、台帳にも
- * 処理済みにも Slack にも出ない。自社影響を決めているのは featureExposure_
- * （FEATURE_ALWAYS_ON = 常時有効か、設定次第か）のほうで、社内ルールの条件と
+ * 処理済みにも Slack にも出ない。自社影響を決めているのは nwFeatureExposure_
+ * （NW_FEATURE_ALWAYS_ON = 常時有効か、設定次第か）のほうで、社内ルールの条件と
  * 直接対応するのはそちら。「外面」は社内ルールにも設計書にも無い概念。
  *
  * 将来の判定条件の候補として残している。使うなら社内ルール側に基準を作るのが先。
  */
-function isOnExternalSurface_(feature) {
+function nwIsOnExternalSurface_(feature) {
   const f = String(feature || '').trim();
   if (!f || f === '不明' || f === 'その他') return false;
   if (f === 'データプレーン') return true;
-  if (f === 'SSL-VPN' && !SSL_VPN_ENABLED) return false;
+  if (f === 'SSL-VPN' && !NW_SSL_VPN_ENABLED) return false;
   const surface = {
     'IPsec VPN': true, 'SSL-VPN': true, '管理GUI': true, 'SSH': true,
     'アンチウイルスエンジン': true, 'IPSエンジン': true,
@@ -2875,7 +2989,7 @@ function isOnExternalSurface_(feature) {
   return !!surface[f];
 }
 
-function normalizeServiceStop_(v) {
+function nwNormalizeServiceStop_(v) {
   if (v === true || v === 'true' || v === 'はい') return 'はい';
   if (v === false || v === 'false' || v === 'いいえ') return 'いいえ';
   return '不明';
@@ -2886,10 +3000,10 @@ function normalizeServiceStop_(v) {
  * 1行目は構造化された値、2行目は理由と結論。
  * 同じ区切り文字で並べると、文章もフィールドとして読まれて頭に入らない。
  */
-function buildDecisionReason_(row) {
-  const head = 'OS=' + (row.osStatus || '不明') + ' | KEV=' + (row.kev || KEV_NO);
+function nwBuildDecisionReason_(row) {
+  const head = 'OS=' + (row.osStatus || '不明') + ' | KEV=' + (row.kev || NW_KEV_NO);
   const tail = (row.reasonPhrase || '判定材料が不足しているため')
-             + '「' + (row.verdict || V_INVEST) + '」';
+             + '「' + (row.verdict || NW_V_INVEST) + '」';
   return head + '\n' + tail;
 }
 
@@ -2901,7 +3015,7 @@ function buildDecisionReason_(row) {
  *
  * @return {{pass: boolean, phrase: string}} pass=false なら定期更新で足りる
  */
-function ruleGate_(row) {
+function nwRuleGate_(row) {
   const v = String(row.vector || '');
   if (!v) {
     return { pass: true, phrase: '' };   // ベクター無しは断定できないので調査へ回す
@@ -2923,10 +3037,10 @@ function ruleGate_(row) {
  *   always   設定に関係なく常に有効       → 影響の重さで判定
  *   unknown  機能を特定できていない       → 影響調査
  *
- * CHECK_STEPS_FORTINET / CHECK_STEPS_CISCO のキーと対応させる。
+ * NW_CHECK_STEPS_FORTINET / NW_CHECK_STEPS_CISCO のキーと対応させる。
  * 確認方法に「出力があれば対応が必要」と書くなら、判定は config でなければ嘘になる。
  */
-const FEATURE_CONFIG_DEPENDENT = {
+var NW_FEATURE_CONFIG_DEPENDENT = {
   '管理GUI': true, 'SSH': true, 'IPsec VPN': true, 'SSL-VPN': true,
   'Webフィルタ': true, 'SSLインスペクション': true,
   'IPSエンジン': true, 'アンチウイルスエンジン': true,
@@ -2936,28 +3050,28 @@ const FEATURE_CONFIG_DEPENDENT = {
 /**
  * 設定に関係なく常に有効な機能（社内ルール 条件5）。
  *
- * **ここに設定依存の機能を足さないこと。**この表に載る行だけが impactSeverity_ の
+ * **ここに設定依存の機能を足さないこと。**この表に載る行だけが nwImpactSeverity_ の
  * 判定へ進み、そこでは A:H を「業務停止」と読んでいる。その読み方は
  * 「基盤が止まれば業務が止まる」という前提に立っているので、管理画面のように
  * 設定次第で止められる機能を足すと前提が崩れ、管理画面の DoS まで臨時更新に上がる
- * （impactSeverity_ のコメント参照）。
+ * （nwImpactSeverity_ のコメント参照）。
  */
-const FEATURE_ALWAYS_ON = {
+var NW_FEATURE_ALWAYS_ON = {
   'データプレーン': true, 'IOS XE 基盤': true
 };
 
-function featureExposure_(row) {
+function nwFeatureExposure_(row) {
   const f = String(row.feature || '').trim();
-  if (f === 'SSL-VPN' && !SSL_VPN_ENABLED) return 'disabled';
-  if (FEATURE_ALWAYS_ON[f]) return 'always';
-  if (FEATURE_CONFIG_DEPENDENT[f]) return 'config';
+  if (f === 'SSL-VPN' && !NW_SSL_VPN_ENABLED) return 'disabled';
+  if (NW_FEATURE_ALWAYS_ON[f]) return 'always';
+  if (NW_FEATURE_CONFIG_DEPENDENT[f]) return 'config';
   return 'unknown';
 }
 
 /**
  * 臨時更新条件4（悪用されると機器の制御を奪われるか業務停止に至る）の判定。詳細は設計書 §4.9。
  *
- * **一次情報は CVSS ベクターの C/I/A。**条件3 を ruleGate_ が同じベクターから読んでいるので、
+ * **一次情報は CVSS ベクターの C/I/A。**条件3 を nwRuleGate_ が同じベクターから読んでいるので、
  * 条件4も同じ構造化された値から読む（ベンダーが記述文に何を書くかに依存させない）。
  * マッピングは直下のコードのとおり。
  *
@@ -2967,11 +3081,11 @@ function featureExposure_(row) {
  * **A:H を「業務停止」と読んでよいのは、この判定に来る行が限られているから。**
  * CVSS の A:H は「影響を受けるコンポーネントの可用性が完全に失われる」で、
  * コンポーネント＝機器全体とは限らない（デーモン 1 本が落ちるだけでも付く）。
- * それでも丸めてよいのは、finalizeVerdict_ がここへ来るのを exposure が always の行
- * （FEATURE_ALWAYS_ON = データプレーン / IOS XE 基盤）だけに絞っているため。
+ * それでも丸めてよいのは、nwFinalizeVerdict_ がここへ来るのを exposure が always の行
+ * （NW_FEATURE_ALWAYS_ON = データプレーン / IOS XE 基盤）だけに絞っているため。
  * 基盤が止まれば業務が止まる。管理画面の DoS は config なので手前で「影響調査」になる。
  *
- * **FEATURE_ALWAYS_ON に設定依存の機能を足すと、この前提が崩れる。**
+ * **NW_FEATURE_ALWAYS_ON に設定依存の機能を足すと、この前提が崩れる。**
  * 管理画面の DoS まで臨時更新に上がるので、足すときはここも見直すこと。
  *
  * Scope は見ない（S:U でも基盤が止まれば業務は止まるので、絞ると見逃す方向に働く）。
@@ -2980,14 +3094,14 @@ function featureExposure_(row) {
  *
  * **ベクターを AI の出力より先に見る。**ベンダーが公開した構造化データより、記述文から
  * 推測した値（takeover / serviceStop）を優先する理由が無い。読めないときだけ AI と
- * 記述文へ落ちる（CVSS v4 は parseCvssCia_ が null を返すのでこの経路）。
+ * 記述文へ落ちる（CVSS v4 は nwParseCvssCia_ が null を返すのでこの経路）。
  * 拾えなければ unknown（＝調査へ）。
  *
  * @return {'yes'|'infoleak'|'no'|'unknown'}
  */
-function impactSeverity_(row) {
+function nwImpactSeverity_(row) {
   // ベクターが読めればそれが答え（理由は上の JSDoc）。
-  const p = parseCvssCia_(row.vector);
+  const p = nwParseCvssCia_(row.vector);
   if (p) {
     if (p.I === 'H' || p.A === 'H') return 'yes';
     if (p.C === 'H') return 'infoleak';
@@ -3011,95 +3125,95 @@ function impactSeverity_(row) {
 }
 
 /** 条件4を満たすか。KEV 分岐など真偽だけ要る場所から使う。 */
-function isSevereImpact_(row) {
-  return impactSeverity_(row) === 'yes';
+function nwIsSevereImpact_(row) {
+  return nwImpactSeverity_(row) === 'yes';
 }
 
 /**
- * 自社影響の確定。ベンダー差は featureExposure_ の語彙だけに閉じ込める。
+ * 自社影響の確定。ベンダー差は nwFeatureExposure_ の語彙だけに閉じ込める。
  * AI の後に呼ぶこと（影響機能が決まっていないと判定できない）。
  *
- * ルールゲートは decideNotification_ で先に当たっており、通常ここへ来る行は通過済み。
- * それでも同じ ruleGate_ を呼ぶのは、この関数単体で社内ルール全体を表現しておくため。
+ * ルールゲートは nwDecideNotification_ で先に当たっており、通常ここへ来る行は通過済み。
+ * それでも同じ nwRuleGate_ を呼ぶのは、この関数単体で社内ルール全体を表現しておくため。
  * 判定の入口が2つあると、片方だけ直して食い違う。
  */
-function finalizeVerdict_(row, opts) {
+function nwFinalizeVerdict_(row, opts) {
   if (!opts || !opts.skipKev) {
-    row.kev = kevLabel_(row.cve);
+    row.kev = nwKevLabel_(row.cve);
   }
   row.osStatus = row.osStatus || '対象';
 
-  if (row.vendor === VENDOR_FORTINET &&
-      (!row.aiOk || !isFortinetFeatureVocab_(row.feature) || row.aiConfidence === 'low')) {
-    row.feature = guessFortinetFeature_(row);
+  if (row.vendor === NW_VENDOR_FORTINET &&
+      (!row.aiOk || !nwIsFortinetFeatureVocab_(row.feature) || row.aiConfidence === 'low')) {
+    row.feature = nwGuessFortinetFeature_(row);
     if (!row.aiTechImpact) row.aiTechImpact = '不明';
   }
 
   row.takeover = row.aiTechImpact || '不明';
-  row.serviceStop = normalizeServiceStop_(row.aiServiceStop);
-  row.externalSurface = isOnExternalSurface_(row.feature) ? 'はい' : 'いいえ';
+  row.serviceStop = nwNormalizeServiceStop_(row.aiServiceStop);
+  row.externalSurface = nwIsOnExternalSurface_(row.feature) ? 'はい' : 'いいえ';
 
-  const gate = ruleGate_(row);
-  const exposure = featureExposure_(row);
+  const gate = nwRuleGate_(row);
+  const exposure = nwFeatureExposure_(row);
 
   // KEV は件数が稀すぎて主軸にならないが、悪用実績があるものを
   // 「使っていないはず」で流すとルール全体の信頼性が崩れる。最低ラインを調査に固定する。
-  if (row.kev === KEV_YES) {
+  if (row.kev === NW_KEV_YES) {
     // KEV の登録主体が、このアドバイザリのベンダーと違うことがある。
     // FG-IR-26-139 の CVE-2026-31431 は Fortinet の告知だが、KEV の登録は
     // Linux / Kernel で、FortiGate 上で悪用された実績ではない。
     // 判定は変えない（悪用実績を「使っていないはず」で流さない）が、
     // 根拠に由来を書かないと「悪用が確認されている」が言い過ぎになる。
-    const src = kevVendor_(row.cve);
+    const src = nwKevVendor_(row.cve);
     const note = (src && src !== row.vendor) ? '（KEV登録: ' + src + '）' : '';
-    if (exposure === 'always' && gate.pass && isSevereImpact_(row)) {
-      row.verdict = V_ACT;
+    if (exposure === 'always' && gate.pass && nwIsSevereImpact_(row)) {
+      row.verdict = NW_V_ACT;
       row.reasonPhrase = '悪用が確認されており外部から到達するため' + note;
     } else {
-      row.verdict = V_INVEST;
+      row.verdict = NW_V_INVEST;
       row.reasonPhrase = '悪用が確認されているため' + note;
     }
-    row.reason = buildDecisionReason_(row);
+    row.reason = nwBuildDecisionReason_(row);
     return;
   }
 
   if (!gate.pass) {
-    row.verdict = V_NONE;
+    row.verdict = NW_V_NONE;
     row.reasonPhrase = gate.phrase;
-    row.reason = buildDecisionReason_(row);
+    row.reason = nwBuildDecisionReason_(row);
     return;
   }
 
   if (exposure === 'disabled') {
-    row.verdict = V_NONE;
+    row.verdict = NW_V_NONE;
     row.reasonPhrase = row.feature + ' を自社で無効にしているため';
   } else if (exposure === 'config') {
-    row.verdict = V_INVEST;
+    row.verdict = NW_V_INVEST;
     row.reasonPhrase = row.feature + ' の利用有無が設定次第のため';
   } else if (exposure === 'unknown') {
-    row.verdict = V_INVEST;
+    row.verdict = NW_V_INVEST;
     row.reasonPhrase = '影響機能を特定できないため';
   } else {
-    // 条件4はベクターの C/I/A で決める（impactSeverity_）。
+    // 条件4はベクターの C/I/A で決める（nwImpactSeverity_）。
     // 「至らない」と言い切れるのはベクターが読めたときだけ。
     // 分からない行を「なし」にすると Slack からも消えて誰も気づけない。
-    const sev = impactSeverity_(row);
+    const sev = nwImpactSeverity_(row);
     if (sev === 'yes') {
-      row.verdict = V_ACT;
+      row.verdict = NW_V_ACT;
       row.reasonPhrase = '外部から無認証で' + row.feature +
                          'を悪用され、機器の制御を奪われるか業務停止に至るため';
     } else if (sev === 'infoleak') {
-      row.verdict = V_INVEST;
+      row.verdict = NW_V_INVEST;
       row.reasonPhrase = '読み取られる情報の範囲を確認する必要があるため';
     } else if (sev === 'unknown') {
-      row.verdict = V_INVEST;
+      row.verdict = NW_V_INVEST;
       row.reasonPhrase = '影響の種類を特定できず深刻度を判定できないため';
     } else {
-      row.verdict = V_NONE;
+      row.verdict = NW_V_NONE;
       row.reasonPhrase = '機器の制御を奪われることも業務停止に至ることもないため';
     }
   }
-  row.reason = buildDecisionReason_(row);
+  row.reason = nwBuildDecisionReason_(row);
 }
 
 /**
@@ -3109,15 +3223,15 @@ function finalizeVerdict_(row, opts) {
  * 追えるようにするため。人の判断をルールの中へ混ぜると、判定根拠を読んでも
  * それがツール由来か人由来か分からなくなる。
  */
-function decideNotification_(row, assets) {
-  decideByRules_(row, assets);
-  applyHumanDecision_(row);
+function nwDecideNotification_(row, assets) {
+  nwDecideByRules_(row, assets);
+  nwApplyHumanDecision_(row);
 }
 
 /** 判断記録を 1 実行につき 1 回だけ読む。 */
-function getDecisions_() {
-  if (!decisions_) decisions_ = readDecisions_();
-  return decisions_;
+function nwGetDecisions_() {
+  if (!nwDecisions_) nwDecisions_ = nwReadDecisions_();
+  return nwDecisions_;
 }
 
 /**
@@ -3129,29 +3243,31 @@ function getDecisions_() {
  * 「対応不要」を効かせると見逃しになるので、効かせない側に倒す。
  * 捨てた行はツールの判定のまま台帳に出続けるので、間違いに気づける。
  */
-function readDecisions_() {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_DECISION);
+function nwReadDecisions_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NW_SHEET_DECISION);
   if (!sh || sh.getLastRow() < 2) return {};
 
   const n = sh.getLastRow() - 1;
-  const range = sh.getRange(2, 1, n, DECISION_HEADERS.length);
+  const range = sh.getRange(2, 1, n, NW_DECISION_COLS.length);
   const text = range.getDisplayValues();   // ID は =HYPERLINK() のことがある
   const vals = range.getValues();          // 日付は Date のまま欲しい
 
   const map = {};
   let dropped = 0;
   for (let i = 0; i < n; i++) {
-    const id = String(text[i][1] || '').trim();
+    const t = nwRowToRec_(NW_DECISION_COLS, text[i]);
+    const v = nwRowToRec_(NW_DECISION_COLS, vals[i]);
+    const id = String(t.advisoryId || '').trim();
     if (!id) continue;
 
-    const action = String(text[i][3] || '').trim();
-    if (!DECISION_VERDICT.hasOwnProperty(action)) {
+    const action = String(t.action || '').trim();
+    if (!NW_DECISION_VERDICT.hasOwnProperty(action)) {
       Logger.log('判断記録: ' + id + ' の判断「' + action + '」は語彙に無いので無視します。');
       dropped++;
       continue;
     }
 
-    const asOf = vals[i][6];
+    const asOf = v.asOf;
     if (!(asOf instanceof Date) || isNaN(asOf.getTime())) {
       Logger.log('判断記録: ' + id + ' は対象時点が空なので無視します。' +
                  '改訂されたかどうかを判定できません。');
@@ -3159,11 +3275,11 @@ function readDecisions_() {
       continue;
     }
 
-    map[id + '|' + String(text[i][2] || '').trim().toUpperCase()] = {
-      decidedAt: vals[i][0],
+    map[id + '|' + String(t.cve || '').trim().toUpperCase()] = {
+      decidedAt: v.decidedAt,
       action: action,
-      note: String(text[i][4] || '').trim(),
-      by: String(text[i][5] || '').trim(),
+      note: String(t.note || '').trim(),
+      by: String(t.by || '').trim(),
       asOf: asOf
     };
   }
@@ -3180,16 +3296,16 @@ function readDecisions_() {
  * 最終更新日が対象時点より新しければ判断は無効にし、ツールの判定へ戻す。
  * 既読判定を current_release_date と版で行っているのと同じ考え方。
  */
-function lookupDecision_(row) {
+function nwLookupDecision_(row) {
   const id = String(row.advisoryId || '').trim();
   if (!id) return null;
 
-  const all = getDecisions_();
+  const all = nwGetDecisions_();
   const d = all[id + '|' + String(row.cve || '').trim().toUpperCase()] || all[id + '|'];
   if (!d) return null;
 
-  if (row.pubDate instanceof Date && ymd_(row.pubDate) > ymd_(d.asOf)) {
-    Logger.log('判断記録: ' + id + ' は ' + ymd_(d.asOf) + ' 以降に改訂されたため、' +
+  if (row.pubDate instanceof Date && nwYmd_(row.pubDate) > nwYmd_(d.asOf)) {
+    Logger.log('判断記録: ' + id + ' は ' + nwYmd_(d.asOf) + ' 以降に改訂されたため、' +
                '判断「' + d.action + '」を無効にしました。');
     return null;
   }
@@ -3202,17 +3318,17 @@ function lookupDecision_(row) {
  * AI は呼ばない。人が結論を出した行の影響機能を分類しても結論は変わらない。
  * ただし表示列は空にせず、コードのフォールバックで埋める（needsCodeDisplay）。
  */
-function applyHumanDecision_(row) {
-  const d = lookupDecision_(row);
+function nwApplyHumanDecision_(row) {
+  const d = nwLookupDecision_(row);
   if (!d) return;
 
-  const verdict = DECISION_VERDICT[d.action];
+  const verdict = NW_DECISION_VERDICT[d.action];
   if (verdict) row.verdict = verdict;
 
-  row.reasonPhrase = ymd_(d.decidedAt) + ' に ' + (d.by || '記名なし') +
+  row.reasonPhrase = nwYmd_(d.decidedAt) + ' に ' + (d.by || '記名なし') +
                      ' が「' + d.action + '」と判断' +
-                     (d.note ? '（' + truncateJa_(d.note, 60) + '）' : '');
-  row.reason = buildDecisionReason_(row);
+                     (d.note ? '（' + nwTruncateJa_(d.note, 60) + '）' : '');
+  row.reason = nwBuildDecisionReason_(row);
 
   row._lockedVerdict = true;
   row.needsVerdict = false;
@@ -3231,94 +3347,94 @@ function applyHumanDecision_(row) {
  *
  * ゲート落ちを AI の前に置くのは、影響機能を知る必要が無いから。
  * `PR:H` の行の影響機能を分類しても結論は変わらないので、その分の API を使わない。
- * 残った行（外部から無認証で悪用できる行）だけ AI へ回し、finalizeVerdict_ で確定する。
+ * 残った行（外部から無認証で悪用できる行）だけ AI へ回し、nwFinalizeVerdict_ で確定する。
  *
  * ベンダーで分岐しない（Cisco も設定次第の機能を持つので同じ扱いにする）。
  */
-function decideByRules_(row, assets) {
+function nwDecideByRules_(row, assets) {
   if (row._lockedVerdict) return;
 
-  initDecisionFields_(row);
-  row.fixVersion = pickFixVersion_(row);
+  nwInitDecisionFields_(row);
+  row.fixVersion = nwPickFixVersion_(row);
 
   if (!row.product) {
-    row.verdict = V_INVEST;
+    row.verdict = NW_V_INVEST;
     row.osStatus = '不明';
-    row.kev = kevLabel_(row.cve);
+    row.kev = nwKevLabel_(row.cve);
     // 行が理由を持っていればそれを使う。CSAF が取れなかった行にとっては
     // 「製品を特定できない」は結果であって理由ではない。
     row.reasonPhrase = row.reasonPhrase || '製品を特定できないため';
     row.needsDisplayAi = true;
-    row.reason = buildDecisionReason_(row);
+    row.reason = nwBuildDecisionReason_(row);
     row._lockedVerdict = true;
     return;
   }
 
-  const mine = assetsForProduct_(assets, row.product);
+  const mine = nwAssetsForProduct_(assets, row.product);
   if (!mine.length) {
-    row.verdict = V_NONE;
+    row.verdict = NW_V_NONE;
     row.osStatus = '対象外';
-    row.kev = kevLabel_(row.cve);
+    row.kev = nwKevLabel_(row.cve);
     row.reasonPhrase = row.product + ' を自社で使用していないため';
-    row.reason = buildDecisionReason_(row);
+    row.reason = nwBuildDecisionReason_(row);
     row._lockedVerdict = true;
     return;
   }
 
-  const os = judgeOsApplicability_(row, assets);
+  const os = nwJudgeOsApplicability_(row, assets);
   row.osStatus = os.label;
 
   if (os.os === 'out') {
-    row.verdict = V_NONE;
-    row.kev = kevLabel_(row.cve);
+    row.verdict = NW_V_NONE;
+    row.kev = nwKevLabel_(row.cve);
     if (os.detail && /ため$/.test(os.detail)) {
       row.reasonPhrase = os.detail;
     } else {
       row.reasonPhrase = (os.detail || '影響対象外') + 'のため';
     }
-    row.reason = buildDecisionReason_(row);
+    row.reason = nwBuildDecisionReason_(row);
     row._lockedVerdict = true;
     return;
   }
 
   if (os.os === 'unknown') {
-    row.verdict = V_INVEST;
-    row.kev = kevLabel_(row.cve);
+    row.verdict = NW_V_INVEST;
+    row.kev = nwKevLabel_(row.cve);
     row.reasonPhrase = '自社利用バージョンを判定できないため';
     row.needsDisplayAi = true;
-    row.reason = buildDecisionReason_(row);
+    row.reason = nwBuildDecisionReason_(row);
     row._lockedVerdict = true;
     return;
   }
 
   // 版が影響範囲内。ここから社内ルールを当てる。
-  row.kev = kevLabel_(row.cve);
+  row.kev = nwKevLabel_(row.cve);
 
-  const gate = ruleGate_(row);
+  const gate = nwRuleGate_(row);
   if (!gate.pass) {
     // KEV 掲載は最低ラインを調査に固定する例外。ゲートで落とさない。
-    if (row.kev === KEV_YES) {
-      row.verdict = V_INVEST;
+    if (row.kev === NW_KEV_YES) {
+      row.verdict = NW_V_INVEST;
       row.reasonPhrase = '悪用が確認されているため';
       row.needsDisplayAi = true;
     } else {
-      row.verdict = V_NONE;
+      row.verdict = NW_V_NONE;
       row.reasonPhrase = gate.phrase;
       // 表示列はコードのフォールバックで埋める。AI は呼ばない。
       row.needsCodeDisplay = true;
     }
-    row.reason = buildDecisionReason_(row);
+    row.reason = nwBuildDecisionReason_(row);
     row._lockedVerdict = true;
     return;
   }
 
   // 影響機能が決まらないと判定できないので AI へ回す。
-  row.needsFortinetAi = (row.vendor === VENDOR_FORTINET);
+  row.needsFortinetAi = (row.vendor === NW_VENDOR_FORTINET);
   row.needsVerdict = true;
   row.needsDisplayAi = true;
-  row.verdict = V_INVEST;
+  row.verdict = NW_V_INVEST;
   row.reasonPhrase = '影響機能を確認中のため';
-  row.reason = buildDecisionReason_(row);
+  row.reason = nwBuildDecisionReason_(row);
 }
 
 /**
@@ -3327,7 +3443,7 @@ function decideByRules_(row, assets) {
  *   "FortiOS 7.6: Upgrade to 7.6.4 or above\nFortiOS 7.4: Upgrade to 7.4.9 or above\n..."
  * のように系列ごとに1行で並ぶ。全部を1セルに入れると読み手が自分の行を探すことになる。
  */
-function pickFixVersion_(row) {
+function nwPickFixVersion_(row) {
   const raw = String(row.fixesRaw || '').trim();
   if (!raw) return '';
   const lines = raw.split('\n').map(function (s) { return s.trim(); }).filter(function (s) { return s; });
@@ -3335,12 +3451,12 @@ function pickFixVersion_(row) {
 }
 
 /** 自社バージョンが決まったあとに、該当系列の修正指示だけへ絞り込む。 */
-function narrowFixVersion_(row, assets) {
-  const mine = assetsForProduct_(assets, row.product);
+function nwNarrowFixVersion_(row, assets) {
+  const mine = nwAssetsForProduct_(assets, row.product);
   if (!mine.length || !row.fixesRaw) return;
 
   const branches = mine.map(function (a) {
-    const v = parseVersion_(a.version);
+    const v = nwParseVersion_(a.version);
     return v ? v.slice(0, 2).join('.') : '';
   }).filter(function (b) { return b; });
   if (!branches.length) return;
@@ -3364,7 +3480,7 @@ function narrowFixVersion_(row, assets) {
  * v6 初版は同じ内容を AI に「対応方針」として日本語化させていたが、
  * 修正バージョン列の訳文にしかなっていなかった。決定的な変換に AI を使う理由がない。
  */
-function jpFix_(row) {
+function nwJpFix_(row) {
   const narrowed = String(row.fixVersion || '').trim();
   if (!narrowed) return '';
 
@@ -3389,7 +3505,7 @@ function jpFix_(row) {
     // ベンダー自身が示した更新先があるので、そこから移行先を引く（推測はしない）。
     if (/Migrate to a fixed release/i.test(action)) {
       const b = branch.replace(/^\S+\s*/, '');
-      const target = migrateTarget_(row, branch);
+      const target = nwMigrateTarget_(row, branch);
       // 「何をすればよいか」を先に言い、理由を括弧に回す
       return target
         ? target + ' 以上に更新が必要（' + b + ' 系に修正版なし）'
@@ -3404,21 +3520,21 @@ function jpFix_(row) {
  * 「Upgrade to X or above」から引く。自社の系列より上で最も低いものを返す。
  * 見つからなければ空文字（推測して埋めない）。
  */
-function migrateTarget_(row, branchLabel) {
-  const cur = parseVersion_(String(branchLabel).replace(/^\S+\s*/, ''));
+function nwMigrateTarget_(row, branchLabel) {
+  const cur = nwParseVersion_(String(branchLabel).replace(/^\S+\s*/, ''));
   if (!cur) return '';
 
   let best = null;
   String(row.fixesRaw || '').split('\n').forEach(function (line) {
     const m = /^(.+?)\s*:\s*(.+)$/.exec(line.trim());
     if (!m) return;
-    const b = parseVersion_(m[1].replace(/^\S+\s*/, ''));
+    const b = nwParseVersion_(m[1].replace(/^\S+\s*/, ''));
     const u = /Upgrade to\s+(?:upcoming\s+)?([\d.]+)\s+or above/i.exec(m[2]);
     if (!b || !u) return;
-    if (compareVersion_(b, cur) <= 0) return;               // 自社系列より上だけ
-    const v = parseVersion_(u[1]);
+    if (nwCompareVersion_(b, cur) <= 0) return;               // 自社系列より上だけ
+    const v = nwParseVersion_(u[1]);
     if (!v) return;
-    if (!best || compareVersion_(v, best.v) < 0) best = { v: v, s: u[1] };
+    if (!best || nwCompareVersion_(v, best.v) < 0) best = { v: v, s: u[1] };
   });
   return best ? best.s : '';
 }
@@ -3428,7 +3544,7 @@ function migrateTarget_(row, branchLabel) {
  * （リンクは付けない）。**空文字を返さないこと。**
  *
  * 以前は Fortinet で修正版が取れないと空を返していた。台帳の列が空欄になると
- * 入力漏れと区別が付かず（§4.1）、しかも Slack 側は slackActionLine_ が
+ * 入力漏れと区別が付かず（§4.1）、しかも Slack 側は nwSlackActionLine_ が
  * 「アドバイザリを確認」を補っていたので、同じ行が台帳と Slack で違って見えていた。
  *
  * Cisco:
@@ -3436,10 +3552,10 @@ function migrateTarget_(row, branchLabel) {
  *   - どちらも無いとき（GAS では openVuln 不可）は「更新先はアドバイザリで確認」
  *   - 「回避策なし」は CSAF Workarounds の公式文 "There are no workarounds..." の訳
  */
-function formatOfficialAction_(row) {
-  if (row.vendor !== VENDOR_CISCO) {
-    const fix = jpFix_(row);
-    return fix ? jpFixEnglishFallback_(fix) : '更新先はアドバイザリで確認';
+function nwFormatOfficialAction_(row) {
+  if (row.vendor !== NW_VENDOR_CISCO) {
+    const fix = nwJpFix_(row);
+    return fix ? nwJpFixEnglishFallback_(fix) : '更新先はアドバイザリで確認';
   }
 
   const lines = [];
@@ -3447,7 +3563,7 @@ function formatOfficialAction_(row) {
   if (vers.length) lines.push(vers[0] + ' 以上に更新が必要');
 
   const cmds = row.workaroundCmds || [];
-  const hint = truncateJa_(row.workaroundJa || '', 40);
+  const hint = nwTruncateJa_(row.workaroundJa || '', 40);
   if (cmds.length) {
     lines.push('更新できない場合の回避策: ' + cmds.join(' / ')
              + (hint ? '（' + hint + '）' : ''));
@@ -3464,7 +3580,7 @@ function formatOfficialAction_(row) {
 }
 
 /** 残った英語の修正指示を日本語の定型へ */
-function jpFixEnglishFallback_(text) {
+function nwJpFixEnglishFallback_(text) {
   return String(text || '').split('\n').map(function (line) {
     const t = line.trim();
     if (!t) return '';
@@ -3479,9 +3595,9 @@ function jpFixEnglishFallback_(text) {
   }).filter(Boolean).join('\n');
 }
 
-function countVerdicts_(rows) {
+function nwCountVerdicts_(rows) {
   const c = {};
-  c[V_ACT] = 0; c[V_INVEST] = 0; c[V_NONE] = 0;
+  c[NW_V_ACT] = 0; c[NW_V_INVEST] = 0; c[NW_V_NONE] = 0;
   rows.forEach(function (r) { if (c[r.verdict] !== undefined) c[r.verdict]++; });
   return c;
 }
@@ -3490,17 +3606,17 @@ function countVerdicts_(rows) {
 // AI による機能分類・確認方法（台帳表示列）
 // ============================================================
 
-function enrichWithAI_(targets) {
-  // 呼び出し元（fillLedgerDisplay_）が needsVerdict || needsDisplayAi で絞った
+function nwEnrichWithAI_(targets) {
+  // 呼び出し元（nwFillLedgerDisplay_）が needsVerdict || needsDisplayAi で絞った
   // 空でない配列だけを渡す。ここで同じ条件をもう一度書かない。
   let ok = 0;
 
-  for (let i = 0; i < targets.length; i += AI_CHUNK_SIZE) {
-    const chunk = targets.slice(i, i + AI_CHUNK_SIZE);
-    const label = (Math.floor(i / AI_CHUNK_SIZE) + 1) + '回目(' + chunk.length + '件)';
+  for (let i = 0; i < targets.length; i += NW_AI_CHUNK_SIZE) {
+    const chunk = targets.slice(i, i + NW_AI_CHUNK_SIZE);
+    const label = (Math.floor(i / NW_AI_CHUNK_SIZE) + 1) + '回目(' + chunk.length + '件)';
 
     try {
-      const prompt = buildEnrichPrompt_(chunk);
+      const prompt = nwBuildEnrichPrompt_(chunk);
       const text = (AI_PROVIDER === 'claude') ? callClaude_(prompt) : callGemini_(prompt);
 
       const s = text.indexOf('[');
@@ -3512,7 +3628,7 @@ function enrichWithAI_(targets) {
       parsed.forEach(function (v) { byKey[v.key] = v; });
 
       chunk.forEach(function (r) {
-        const v = byKey[rowKey_(r)];
+        const v = byKey[nwRowKey_(r)];
         if (!v) {
           r.aiOk = false;
           return;
@@ -3521,17 +3637,17 @@ function enrichWithAI_(targets) {
         r.aiTechImpact = v.technical_impact || '不明';
         r.aiServiceStop = v.service_stop;
         r.aiConfidence = v.confidence || '';
-        r.impactJa = truncateJa_(pickAiField_(v, ['ユーザ影響', 'user_impact', 'impact_ja']) || '', 50);
-        r.cveSummaryJa = truncateJa_(pickAiField_(v, ['内容要約', '脆弱性名和訳', 'cve_summary', 'summary_ja']) || '', 30);
+        r.impactJa = nwTruncateJa_(nwPickAiField_(v, ['ユーザ影響', 'user_impact', 'impact_ja']) || '', 50);
+        r.cveSummaryJa = nwTruncateJa_(nwPickAiField_(v, ['内容要約', '脆弱性名和訳', 'cve_summary', 'summary_ja']) || '', 30);
         if (!r.cveSummaryJa) {
-          Logger.log('AI 内容要約なし: ' + rowKey_(r));
+          Logger.log('AI 内容要約なし: ' + nwRowKey_(r));
         }
         r.howToCheck = v['確認方法'] || '';
-        r.workaroundJa = truncateJa_(v['回避策'] || '', 40);
-        if (r.vendor === VENDOR_CISCO) {
-          r.feature = normalizeCiscoFeature_(r.feature);
+        r.workaroundJa = nwTruncateJa_(v['回避策'] || '', 40);
+        if (r.vendor === NW_VENDOR_CISCO) {
+          r.feature = nwNormalizeCiscoFeature_(r.feature);
           r.aiOk = true;
-        } else if (!isFortinetFeatureVocab_(r.feature)) {
+        } else if (!nwIsFortinetFeatureVocab_(r.feature)) {
           r.aiOk = false;
         } else {
           r.aiOk = !!(r.feature && r.feature !== '不明' && r.aiConfidence !== 'low');
@@ -3543,7 +3659,7 @@ function enrichWithAI_(targets) {
       Logger.log('AI 生成 ' + label + ' 失敗: ' + err);
       chunk.forEach(function (r) { r.aiOk = false; });
     }
-    if (i + AI_CHUNK_SIZE < targets.length) Utilities.sleep(1000);
+    if (i + NW_AI_CHUNK_SIZE < targets.length) Utilities.sleep(1000);
   }
 
   Logger.log('AI 生成: ' + AI_PROVIDER + ' / 成功 ' + ok + ' / 対象 ' + targets.length + ' 行');
@@ -3552,11 +3668,11 @@ function enrichWithAI_(targets) {
   }
 }
 
-function rowKey_(r) {
+function nwRowKey_(r) {
   return r.advisoryId + '|' + r.cve + '|' + r.product;
 }
 
-function pickAiField_(obj, names) {
+function nwPickAiField_(obj, names) {
   if (!obj) return '';
   for (let i = 0; i < names.length; i++) {
     const v = obj[names[i]];
@@ -3565,11 +3681,11 @@ function pickAiField_(obj, names) {
   return '';
 }
 
-function buildEnrichPrompt_(rows) {
+function nwBuildEnrichPrompt_(rows) {
   const payload = rows.map(function (r) {
     return {
-      key: rowKey_(r),
-      ベンダー: r.vendor || VENDOR_FORTINET,
+      key: nwRowKey_(r),
+      ベンダー: r.vendor || NW_VENDOR_FORTINET,
       対象製品: r.product,
       CVE: r.cve,
       脆弱性名: r.title,
@@ -3605,7 +3721,7 @@ function buildEnrichPrompt_(rows) {
     '',
     '【出力フィールド】',
     'affected_feature:',
-    '  Fortinet: 次のいずれか1つ → ' + FORTINET_AI_FEATURES.join(' / '),
+    '  Fortinet: 次のいずれか1つ → ' + NW_FORTINET_AI_FEATURES.join(' / '),
     '  Cisco: 短い機能名（例: WebUI / BEEP / XMCP Server / SNMP）。製品名の長いタイトルは不可',
     'technical_impact: total / partial / 不明',
     'service_stop: true / false / null',
@@ -3690,7 +3806,7 @@ function callGeminiModel_(model, prompt, responseSchema) {
     payload: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       // responseSchema は省略可。渡さなければ従来と同じ設定になるので、
-      // 既存の呼び出し（enrichWithAI_）の挙動は変わらない。
+      // 既存の呼び出し（nwEnrichWithAI_）の挙動は変わらない。
       generationConfig: responseSchema
         ? { responseMimeType: 'application/json', maxOutputTokens: 32768, responseSchema: responseSchema }
         : { responseMimeType: 'application/json', maxOutputTokens: 32768 }
@@ -3774,45 +3890,39 @@ function callClaude_(prompt) {
 // 台帳への記録
 // ============================================================
 
-const COL = {};
-LEDGER_HEADERS.forEach(function (h, i) { COL[h] = i + 1; });
-
 /**
  * 既読のアドバイザリ ID を集める。
  *
  * 台帳ではなく処理済みシートから読む。台帳には自社製品の行しか無いため、
  * 台帳を既読の根拠にすると、他社製品だけのアドバイザリを毎回取り直してしまう。
  */
-function getKnownState_(vendor) {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_STATE);
+function nwGetKnownState_(vendor) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NW_SHEET_STATE);
   const dates = {};
   const versions = {};
   if (!sh || sh.getLastRow() < 2) return { dates: dates, versions: versions };
 
-  const values = sh.getRange(2, 1, sh.getLastRow() - 1, STATE_HEADERS.length).getValues();
-  const cVendor = STATE_HEADERS.indexOf('ベンダー');
-  const cUpd = STATE_HEADERS.indexOf('最終更新日');
-  const cId = STATE_HEADERS.indexOf('アドバイザリID');
-  const cVer = STATE_HEADERS.indexOf('CSAF版');
+  const values = sh.getRange(2, 1, sh.getLastRow() - 1, NW_STATE_COLS.length).getValues();
 
-  values.forEach(function (r) {
-    const rowVendor = String(r[cVendor]).trim();
+  values.forEach(function (row) {
+    const r = nwRowToRec_(NW_STATE_COLS, row);
+    const rowVendor = String(r.vendor).trim();
     if (vendor && rowVendor !== vendor) return;
-    const id = String(r[cId]).trim();
+    const id = String(r.advisoryId).trim();
     if (!id) return;
-    dates[id] = ymd_(r[cUpd]);
-    // r[cVer] が数値 0 でも保持する。Fortinet の CSAF は tracking.version が
+    dates[id] = nwYmd_(r.updatedAt);
+    // r.csafVersion が数値 0 でも保持する。Fortinet の CSAF は tracking.version が
     // 常に "0" で、セルに書くと数値 0 になる。`|| ''` だと falsy で空文字に化け、
     // CSAF 側の "0" と一致せず毎回「改訂」と誤判定して再通知していた。
-    versions[id] = r[cVer] != null ? String(r[cVer]).trim() : '';
+    versions[id] = r.csafVersion != null ? String(r.csafVersion).trim() : '';
   });
   return { dates: dates, versions: versions };
 }
 
-function vendorFromAdvisoryId_(advisoryId) {
+function nwVendorFromAdvisoryId_(advisoryId) {
   const id = String(advisoryId || '').trim();
-  if (/^cisco-sa-/i.test(id)) return VENDOR_CISCO;
-  if (/^FG-IR-/i.test(id)) return VENDOR_FORTINET;
+  if (/^cisco-sa-/i.test(id)) return NW_VENDOR_CISCO;
+  if (/^FG-IR-/i.test(id)) return NW_VENDOR_FORTINET;
   return '';
 }
 
@@ -3820,14 +3930,14 @@ function vendorFromAdvisoryId_(advisoryId) {
  * 指定したアドバイザリの行を、台帳と処理済みシートから消す。
  * 改訂されたアドバイザリを入れ直す前に呼ぶ。
  */
-function removeRowsFor_(vendor, advisoryIds) {
+function nwRemoveRowsFor_(vendor, advisoryIds) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const targets = {};
   advisoryIds.forEach(function (id) { targets[id] = true; });
 
   const specs = [
-    { sh: ss.getSheetByName(SHEET_LEDGER), col: COL['アドバイザリ'], width: LEDGER_HEADERS.length, inferVendor: true },
-    { sh: ss.getSheetByName(SHEET_STATE), colVendor: STATE_HEADERS.indexOf('ベンダー') + 1, col: STATE_HEADERS.indexOf('アドバイザリID') + 1, width: STATE_HEADERS.length }
+    { sh: ss.getSheetByName(NW_SHEET_LEDGER), col: nwCol_(NW_LEDGER_COLS, 'advisory'), width: NW_LEDGER_COLS.length, inferVendor: true },
+    { sh: ss.getSheetByName(NW_SHEET_STATE), colVendor: nwCol_(NW_STATE_COLS, 'vendor'), col: nwCol_(NW_STATE_COLS, 'advisoryId'), width: NW_STATE_COLS.length }
   ];
 
   specs.forEach(function (spec) {
@@ -3840,12 +3950,12 @@ function removeRowsFor_(vendor, advisoryIds) {
     let removed = 0;
     for (let i = ids.length - 1; i >= 0; i--) {
       if (spec.inferVendor) {
-        if (vendorFromAdvisoryId_(ids[i][0]) !== vendor) continue;
+        if (nwVendorFromAdvisoryId_(ids[i][0]) !== vendor) continue;
       } else {
-        const rowVendor = String(vendors[i][0] || VENDOR_FORTINET).trim();
+        const rowVendor = String(vendors[i][0] || NW_VENDOR_FORTINET).trim();
         if (rowVendor !== vendor) continue;
       }
-      if (targets[String(ids[i][0]).trim()]) { deleteSheetRowSafe_(sh, i + 2); removed++; }
+      if (targets[String(ids[i][0]).trim()]) { nwDeleteSheetRowSafe_(sh, i + 2); removed++; }
     }
     if (removed) Logger.log(sh.getName() + ' から古い ' + removed + ' 行を削除しました（改訂のため入れ直します）。');
   });
@@ -3856,21 +3966,21 @@ function removeRowsFor_(vendor, advisoryIds) {
  *
  * 台帳に載らなかった件は、載せなかった根拠がどこにも残らない。
  * 分母（公表 N 件）だけあっても「なぜ 44 件を対象外としたのか」を後から説明できないので、
- * 判定の結論だけをここに書き写す。判断そのものは decideNotification_ が済ませたもので、
+ * 判定の結論だけをここに書き写す。判断そのものは nwDecideNotification_ が済ませたもので、
  * ここで新しい判断はしない。
  */
-function ownershipJudgement_(f, advisoryRows, assets) {
+function nwOwnershipJudgement_(f, advisoryRows, assets) {
   // 値の先頭は必ず 対象 / 対象外 / 判定不能 にする。列を眺めたときに
   // 可否が最初の 2〜3 文字で読めないと、根拠として使えない。
   if (f && f.error) {
     return { label: '判定不能', reason: 'CSAF を取得できず判定できない' };
   }
-  if (isCiscoInformationalAdvisory_(f && f.csaf, f && f.item)) {
-    return { label: STATE_JUDGE_INFO, reason: '脆弱性ではなく公開一覧のお知らせ' };
+  if (nwIsCiscoInformationalAdvisory_(f && f.csaf, f && f.item)) {
+    return { label: NW_STATE_JUDGE_INFO, reason: '脆弱性ではなく公開一覧のお知らせ' };
   }
 
   const owned = (advisoryRows || []).filter(function (r) {
-    return r.product && assetsForProduct_(assets || [], r.product).length;
+    return r.product && nwAssetsForProduct_(assets || [], r.product).length;
   });
   if (!owned.length) {
     return { label: '対象外-未保有', reason: '資産に該当する製品が無い' };
@@ -3879,13 +3989,13 @@ function ownershipJudgement_(f, advisoryRows, assets) {
   const hit = owned.filter(function (r) { return r.osStatus !== '対象外'; });
   if (hit.length) {
     // ここで reasonPhrase を使ってはいけない。版が影響範囲内だった行では
-    // decideNotification_ が社内ルールを当てて「悪用に管理者権限が必要なため」のような
+    // nwDecideNotification_ が社内ルールを当てて「悪用に管理者権限が必要なため」のような
     // 通知要否の理由で上書きしている。この列が答えるのは「なぜ対象と判定したか」であって
     // 「なぜ緊急でないか」ではない。後者は台帳の判定根拠が持っている。
     const self = String(hit[0].selfVersion || '').replace(/\n/g, ' / ').trim();
     return { label: '対象', reason: (self ? self + '｜' : '') + '影響範囲内' };
   }
-  return { label: '対象外-OS影響外', reason: judgeReasonText_(owned[0], '影響対象外') };
+  return { label: '対象外-OS影響外', reason: nwJudgeReasonText_(owned[0], '影響対象外') };
 }
 
 /**
@@ -3896,7 +4006,7 @@ function ownershipJudgement_(f, advisoryRows, assets) {
  * 突き合わせができる。台帳に載らなかった行は台帳の判定根拠を参照できないため、
  * この列が唯一の記録になる。
  */
-function judgeReasonText_(row, fallback) {
+function nwJudgeReasonText_(row, fallback) {
   const self = String(row.selfVersion || '').replace(/\n/g, ' / ').trim();
   const phrase = String(row.reasonPhrase || '').replace(/のため$/, '').trim();
   const parts = [];
@@ -3905,12 +4015,12 @@ function judgeReasonText_(row, fallback) {
   return parts.join('｜');
 }
 
-function writeState_(vendor, todo, rows, assets) {
+function nwWriteState_(vendor, todo, rows, assets) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sh = ss.getSheetByName(SHEET_STATE);
+  let sh = ss.getSheetByName(NW_SHEET_STATE);
   if (!sh) {
-    sh = ss.insertSheet(SHEET_STATE);
-    sh.appendRow(STATE_HEADERS);
+    sh = ss.insertSheet(NW_SHEET_STATE);
+    sh.appendRow(NW_STATE_HEADERS);
     sh.setFrozenRows(1);
   }
 
@@ -3918,7 +4028,7 @@ function writeState_(vendor, todo, rows, assets) {
   rows.forEach(function (r) {
     const a = byAdvisory[r.advisoryId] ||
       (byAdvisory[r.advisoryId] = { products: [], initial: r.initialDate, rows: [] });
-    pushUnique_(a.products, r.product);
+    nwPushUnique_(a.products, r.product);
     a.rows.push(r);
   });
 
@@ -3927,37 +4037,37 @@ function writeState_(vendor, todo, rows, assets) {
     const item = f.item || f;
     const id = item.ir || item.id;
     const a = byAdvisory[id] || { products: [], initial: f.updatedAt || item.pubDate, rows: [] };
-    const judgement = ownershipJudgement_(f, a.rows, assets);
+    const judgement = nwOwnershipJudgement_(f, a.rows, assets);
     // CSAF から製品名が取れていればそれを使う（自社保有と無関係に「何の製品か」を残す）。
     // 取れない場合だけ、台帳へ展開した行から拾った製品名に落とす。
     const products = (f.products && f.products.length) ? f.products : a.products;
-    return [
-      f.updatedAt || item.pubDate || '',
-      stateInitialDate_(f, a, item),
-      vendor,
-      csafCveList_(f.csaf).join(', '),
-      stateTitle_(f, item),
-      countLabel_(labelCounts, judgement.label),
-      judgement.reason,
-      products.join(', '),
-      advisoryIdCell_(vendor, id, item),
-      f.version || ''
-    ];
+    return nwRecToRow_(NW_STATE_COLS, {
+      updatedAt: f.updatedAt || item.pubDate || '',
+      initialDate: nwStateInitialDate_(f, a, item),
+      vendor: vendor,
+      cve: nwCsafCveList_(f.csaf).join(', '),
+      title: nwStateTitle_(f, item),
+      judgement: nwCountLabel_(labelCounts, judgement.label),
+      reason: judgement.reason,
+      products: products.join(', '),
+      advisoryId: nwAdvisoryIdCell_(vendor, id, item),
+      csafVersion: f.version || ''
+    });
   });
 
   if (!values.length) return labelCounts;
 
-  if (sh.getMaxColumns() < STATE_HEADERS.length) {
-    sh.insertColumnsAfter(sh.getMaxColumns(), STATE_HEADERS.length - sh.getMaxColumns());
+  if (sh.getMaxColumns() < NW_STATE_COLS.length) {
+    sh.insertColumnsAfter(sh.getMaxColumns(), NW_STATE_COLS.length - sh.getMaxColumns());
   }
 
   const startRow = sh.getLastRow() + 1;
-  sh.getRange(startRow, 1, values.length, STATE_HEADERS.length).setValues(values);
-  sh.getRange(startRow, STATE_HEADERS.indexOf('最終更新日') + 1, values.length, 2)
+  sh.getRange(startRow, 1, values.length, NW_STATE_COLS.length).setValues(values);
+  sh.getRange(startRow, nwCol_(NW_STATE_COLS, 'updatedAt'), values.length, 2)
     .setNumberFormat('yyyy/mm/dd');
   Logger.log('処理済みシートに ' + values.length + ' 件のアドバイザリを記録しました。');
 
-  sortState_(sh);
+  nwSortState_(sh);
   return labelCounts;
 }
 
@@ -3970,13 +4080,13 @@ function writeState_(vendor, todo, rows, assets) {
  * 並んでいないのは筋が通らない。
  * アドバイザリID はハイパーリンクの数式なので、値ではなく数式のまま入れ替える。
  */
-function sortState_(sh) {
+function nwSortState_(sh) {
   if (!sh || sh.getLastRow() < 3) return;
 
   const n = sh.getLastRow() - 1;
-  const range = sh.getRange(2, 1, n, STATE_HEADERS.length);
-  const cUpd = STATE_HEADERS.indexOf('最終更新日');
-  const cId = STATE_HEADERS.indexOf('アドバイザリID');
+  const range = sh.getRange(2, 1, n, NW_STATE_HEADERS.length);
+  const cUpd = nwCol_(NW_STATE_COLS, 'updatedAt') - 1;
+  const cId = nwCol_(NW_STATE_COLS, 'advisoryId') - 1;
 
   const formulas = range.getFormulas();
   const values = range.getValues();
@@ -4001,13 +4111,13 @@ function sortState_(sh) {
  * URL 体系が変わると過去行のリンクは古いままになるが、ID の文字列は残るので
  * 人が検索すればたどれる。セルに数式を置く以上これは避けられない。
  */
-function advisoryUrlFor_(vendor, advisoryId, item) {
+function nwAdvisoryUrlFor_(vendor, advisoryId, item) {
   const fromFeed = String((item && item.link) || '').trim();
   if (fromFeed) return fromFeed;
 
   const id = String(advisoryId || '').trim();
   if (!id) return '';
-  if (vendor === VENDOR_CISCO) return ciscoHumanAdvisoryUrl_(id);
+  if (vendor === NW_VENDOR_CISCO) return nwCiscoHumanAdvisoryUrl_(id);
   if (/^FG-IR-/i.test(id)) return 'https://fortiguard.fortinet.com/psirt/' + id;
   return '';
 }
@@ -4015,12 +4125,12 @@ function advisoryUrlFor_(vendor, advisoryId, item) {
 /**
  * 処理済みの判定に使う値だけを、AI 生成の前に控えておく。
  *
- * 台帳を先に書くようにしたため、writeState_ は fillLedgerDisplay_ の後に走る。
- * fillLedgerDisplay_ は reasonPhrase を通知判定の文言（「管理GUI の利用有無が
+ * 台帳を先に書くようにしたため、nwWriteState_ は nwFillLedgerDisplay_ の後に走る。
+ * nwFillLedgerDisplay_ は reasonPhrase を通知判定の文言（「管理GUI の利用有無が
  * 設定次第のため」など）に書き換えるので、そのまま渡すと処理済みの判定根拠に
  * 「自社が対象か」ではなく「なぜ通知するか」が入り、列の意味が変わってしまう。
  */
-function snapshotJudgeRows_(rows) {
+function nwSnapshotJudgeRows_(rows) {
   return rows.map(function (r) {
     return {
       advisoryId: r.advisoryId, initialDate: r.initialDate, product: r.product,
@@ -4030,7 +4140,7 @@ function snapshotJudgeRows_(rows) {
 }
 
 /** バッチごとの判定内訳を 1 実行分に足し込む。 */
-function mergeCounts_(into, counts) {
+function nwMergeCounts_(into, counts) {
   Object.keys(counts || {}).forEach(function (k) {
     into[k] = (into[k] || 0) + counts[k];
   });
@@ -4043,7 +4153,7 @@ function mergeCounts_(into, counts) {
  * ID 列と同じ文字列が 2 列並ぶだけになる（実測 50/50 行）。
  * 人が読める題名は CSAF の中にあるので、そちらを使う。
  */
-function stateTitle_(f, item) {
+function nwStateTitle_(f, item) {
   const t = String((((f || {}).csaf || {}).document || {}).title || '').trim();
   return t || (item && item.title) || '';
 }
@@ -4055,10 +4165,10 @@ function stateTitle_(f, item) {
  * 最終更新日が代入され、初出か改訂かの区別が付かなくなる（実測 Cisco 19/50 行）。
  * 日付を 2 列並べる意味そのものが失われるため、CSAF の値を使う。
  */
-function stateInitialDate_(f, a, item) {
+function nwStateInitialDate_(f, a, item) {
   const t = ((((f || {}).csaf || {}).document || {}).tracking) || {};
   if (t.initial_release_date) {
-    return csafDate_(t.initial_release_date, a.initial || f.updatedAt || '');
+    return nwCsafDate_(t.initial_release_date, a.initial || f.updatedAt || '');
   }
   return a.initial || f.updatedAt || (item && item.pubDate) || '';
 }
@@ -4068,22 +4178,22 @@ function stateInitialDate_(f, a, item) {
  * 台帳は自社該当分しか持たないので、除外した件の CVE はここにしか残らない。
  * ニュースで見た CVE 番号から自社影響の有無を引けるようにするための列。
  */
-function csafCveList_(csaf) {
+function nwCsafCveList_(csaf) {
   const out = [];
   ((csaf || {}).vulnerabilities || []).forEach(function (v) {
-    if (v && v.cve) pushUnique_(out, String(v.cve).trim());
+    if (v && v.cve) nwPushUnique_(out, String(v.cve).trim());
   });
   return out;
 }
 
 /** アドバイザリID のセル。リンクを張れるときは数式にする（値は ID のまま）。 */
-function advisoryIdCell_(vendor, id, item) {
-  const url = advisoryUrlFor_(vendor, id, item);
+function nwAdvisoryIdCell_(vendor, id, item) {
+  const url = nwAdvisoryUrlFor_(vendor, id, item);
   return url ? '=HYPERLINK("' + url + '","' + id + '")' : id;
 }
 
-/** 判定を数えながらそのまま返す。writeState_ の中で 1 度だけ判定するための小道具。 */
-function countLabel_(counts, label) {
+/** 判定を数えながらそのまま返す。nwWriteState_ の中で 1 度だけ判定するための小道具。 */
+function nwCountLabel_(counts, label) {
   counts[label] = (counts[label] || 0) + 1;
   return label;
 }
@@ -4091,14 +4201,14 @@ function countLabel_(counts, label) {
 /**
  * JPCERT/CC の注意喚起のうち、自社ベンダーに当たり、まだ知らせていないものを返す。
  *
- * 落ちても main() は止めない。JPCERT は補助の経路で、これが取れないことで
+ * 落ちても nwDaily() は止めない。JPCERT は補助の経路で、これが取れないことで
  * 本体の日次処理を落とすのは本末転倒。
  */
-function newJpcertAlerts_(assets) {
+function nwNewJpcertAlerts_(assets) {
   try {
-    const alerts = fetchJpcertAlerts_();
-    const words = jpcertKeywords_(assets);
-    const seen = jpcertSeenIds_();
+    const alerts = nwFetchJpcertAlerts_();
+    const words = nwJpcertKeywords_(assets);
+    const seen = nwJpcertSeenIds_();
 
     const hit = alerts.filter(function (a) {
       if (seen[a.id]) return false;
@@ -4118,8 +4228,8 @@ function newJpcertAlerts_(assets) {
  * RDF から注意喚起（/at/）だけ取り出す。Weekly Report は定常報告なので捨てる。
  * RSS 1.0 なので item は channel の下ではなく rdf:RDF の直下にある。
  */
-function fetchJpcertAlerts_() {
-  const res = UrlFetchApp.fetch(JPCERT_RSS_URL, { muteHttpExceptions: true });
+function nwFetchJpcertAlerts_() {
+  const res = UrlFetchApp.fetch(NW_JPCERT_RSS_URL, { muteHttpExceptions: true });
   if (res.getResponseCode() !== 200) {
     throw new Error('JPCERT RDF 取得失敗 HTTP ' + res.getResponseCode());
   }
@@ -4133,7 +4243,7 @@ function fetchJpcertAlerts_() {
       id: String(it.getChildText('identifier', dc) || '').trim(),
       title: String(it.getChildText('title', rss) || '').trim(),
       link: link,
-      date: parsePubDate_(it.getChildText('date', dc))
+      date: nwParsePubDate_(it.getChildText('date', dc))
     };
   }).filter(function (a) {
     return a.id && a.link.indexOf('/at/') !== -1;
@@ -4150,24 +4260,24 @@ function fetchJpcertAlerts_() {
  * at260019「Fortinet製品に関連する認証情報の漏えい」（FortiBleed）が含まれる。
  * 絞らないことで増えるハズレは 4 年で 2 件。落とすのは年 1 件の当たりで割に合わない。
  */
-function jpcertKeywords_(assets) {
+function nwJpcertKeywords_(assets) {
   const words = [];
   (assets || []).forEach(function (a) {
     if (a.toolTarget === 'いいえ') return;
     [a.vendor, a.product].forEach(function (v) {
       const w = String(v || '').trim().toLowerCase();
-      if (w && w !== '—') pushUnique_(words, w);
+      if (w && w !== '—') nwPushUnique_(words, w);
     });
   });
   // 題名が製品ブランドで書かれることがある（「Fortinet製FortiGate」など）。
   ['fortigate', 'fortios', 'catalyst', 'ios xe', 'ios-xe'].forEach(function (w) {
-    pushUnique_(words, w);
+    nwPushUnique_(words, w);
   });
   return words;
 }
 
-function jpcertSeenIds_() {
-  const raw = PropertiesService.getScriptProperties().getProperty(JPCERT_SEEN_PROP) || '';
+function nwJpcertSeenIds_() {
+  const raw = PropertiesService.getScriptProperties().getProperty(NW_JPCERT_SEEN_PROP) || '';
   const map = {};
   raw.split(',').forEach(function (s) { const t = s.trim(); if (t) map[t] = true; });
   return map;
@@ -4177,25 +4287,25 @@ function jpcertSeenIds_() {
  * 通知できた分だけ既読にする。送る前に印を付けると、Webhook が失効していた日の
  * 注意喚起が誰にも届かないまま消える。
  */
-function markJpcertSeen_(alerts) {
+function nwMarkJpcertSeen_(alerts) {
   if (!alerts || !alerts.length) return;
-  const seen = Object.keys(jpcertSeenIds_());
+  const seen = Object.keys(nwJpcertSeenIds_());
   alerts.forEach(function (a) { if (seen.indexOf(a.id) === -1) seen.push(a.id); });
-  const keep = seen.slice(-JPCERT_SEEN_MAX);
-  PropertiesService.getScriptProperties().setProperty(JPCERT_SEEN_PROP, keep.join(','));
+  const keep = seen.slice(-NW_JPCERT_SEEN_MAX);
+  PropertiesService.getScriptProperties().setProperty(NW_JPCERT_SEEN_PROP, keep.join(','));
   Logger.log('JPCERT 注意喚起 ' + alerts.length + ' 件を通知済みにしました。');
 }
 
 /**
- * 実行を 1 行残す。通知は増やさない。main() から 1 実行につき 1 回だけ呼ぶ。
+ * 実行を 1 行残す。通知は増やさない。nwDaily() から 1 実行につき 1 回だけ呼ぶ。
  *
  * 記録に失敗しても本体は止めない。履歴のために日次処理を落とすのは本末転倒。
  */
-function writeRunLog_(errorText) {
+function nwWriteRunLog_(errorText) {
   try {
-    if (!runStats_) return;
+    if (!nwRunStats_) return;
 
-    const v = runStats_.vendors;
+    const v = nwRunStats_.vendors;
     function sum(key) {
       return v.reduce(function (a, x) { return a + x[key]; }, 0);
     }
@@ -4207,7 +4317,7 @@ function writeRunLog_(errorText) {
     // 毎日同じ文字列が並ぶだけで読む価値がなく、空欄にしておけば
     // 「何か書いてある行＝見るべき行」として拾える。
     // JPCERT の注意喚起は出た日だけ書く。CVE の件数とは別枠なので数字に混ぜない。
-    const jpNote = runStats_.jpcert ? 'JPCERT注意喚起 ' + runStats_.jpcert + ' 件' : '';
+    const jpNote = nwRunStats_.jpcert ? 'JPCERT注意喚起 ' + nwRunStats_.jpcert + ' 件' : '';
 
     // KEV が取れなかった日は必ず書く。取得失敗と「掲載なし」が同じ見た目になるため、
     // ここに出さないと判定が緩んだ日を後から見分けられない（README §4.15）。
@@ -4266,36 +4376,36 @@ function writeRunLog_(errorText) {
     const result = errorText ? '失敗' : (sum('failed') ? '要確認' : '正常');
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let sh = ss.getSheetByName(SHEET_RUNLOG);
+    let sh = ss.getSheetByName(NW_SHEET_RUNLOG);
     if (!sh) {
-      sh = ss.insertSheet(SHEET_RUNLOG);
-      sh.appendRow(RUNLOG_HEADERS);
+      sh = ss.insertSheet(NW_SHEET_RUNLOG);
+      sh.appendRow(NW_RUNLOG_HEADERS);
       sh.setFrozenRows(1);
     } else {
       const cur = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getDisplayValues()[0];
-      const same = cur.length === RUNLOG_HEADERS.length &&
-                   RUNLOG_HEADERS.every(function (h, i) { return cur[i] === h; });
+      const same = cur.length === NW_RUNLOG_HEADERS.length &&
+                   NW_RUNLOG_HEADERS.every(function (h, i) { return cur[i] === h; });
       if (!same) {
         // 列を減らしたときは右端の古い見出しを消す。残すと見出しだけ 11 列、
         // データは 9 列という状態になり、読む側が列を数え違える。
-        if (sh.getLastColumn() > RUNLOG_HEADERS.length) {
-          sh.deleteColumns(RUNLOG_HEADERS.length + 1, sh.getLastColumn() - RUNLOG_HEADERS.length);
+        if (sh.getLastColumn() > NW_RUNLOG_HEADERS.length) {
+          sh.deleteColumns(NW_RUNLOG_HEADERS.length + 1, sh.getLastColumn() - NW_RUNLOG_HEADERS.length);
         }
-        sh.getRange(1, 1, 1, RUNLOG_HEADERS.length).setValues([RUNLOG_HEADERS]);
-        Logger.log('実行履歴の見出しを ' + RUNLOG_HEADERS.length + ' 列に更新しました。');
+        sh.getRange(1, 1, 1, NW_RUNLOG_HEADERS.length).setValues([NW_RUNLOG_HEADERS]);
+        Logger.log('実行履歴の見出しを ' + NW_RUNLOG_HEADERS.length + ' 列に更新しました。');
       }
     }
 
     const row = sh.getLastRow() + 1;
-    sh.getRange(row, 1, 1, RUNLOG_HEADERS.length).setValues([[
-      new Date(),
-      result,
-      sum('rss'),
+    sh.getRange(row, 1, 1, NW_RUNLOG_COLS.length).setValues([nwRecToRow_(NW_RUNLOG_COLS, {
+      ranAt: new Date(),
+      result: result,
+      checked: sum('rss'),
       // 差分なしは「確認したが前回から変わっていなかった」件数。
       // 差分ゼロの日は他が全部 0 になり、動いた形跡が読めなくなるため列に出す。
-      sum('rss') - sum('processed'),
-      sum('processed'),
-      judged('対象'),
+      unchanged: sum('rss') - sum('processed'),
+      updated: sum('processed'),
+      target: judged('対象'),
       // 「対象以外」は差し引きで出す。未保有だけを数えると、OS影響外・情報通知・
       // 判定不能がどの列にも現れず、更新あり ＝ 対象 ＋ 対象以外 が崩れる。
       //
@@ -4304,14 +4414,14 @@ function writeRunLog_(errorText) {
       // 判定不能（CSAF が取れず判定できなかった件）も入る。
       // 判定できなかった件を「対象外」と名乗らせると、分からなかった事実が消える。
       // 内訳は備考の 判定[…] にそのまま出る。
-      sum('processed') - judged('対象'),
-      sum('failed'),
-      Math.round((Date.now() - runStats_.startedAt) / 1000),
-      aiRequestCount_ - runStats_.aiAtStart,
-      [errorText ? 'エラー: ' + errorText : '',
-       worthWriting ? detail : '',
-       jpNote, kevNote, macosNote].filter(function (t) { return t; }).join('  /  ')
-    ]]);
+      nonTarget: sum('processed') - judged('対象'),
+      failed: sum('failed'),
+      seconds: Math.round((Date.now() - nwRunStats_.startedAt) / 1000),
+      aiCalls: aiRequestCount_ - nwRunStats_.aiAtStart,
+      note: [errorText ? 'エラー: ' + errorText : '',
+             worthWriting ? detail : '',
+             jpNote, kevNote, macosNote].filter(function (t) { return t; }).join('  /  ')
+    })]);
     sh.getRange(row, 1).setNumberFormat('yyyy/mm/dd hh:mm');
   } catch (e) {
     Logger.log('実行履歴の記録に失敗: ' + e);
@@ -4320,75 +4430,79 @@ function writeRunLog_(errorText) {
 
 /** 処理済みシートの自社判定に書く値。情報通知は Cisco が同じ内容を個別アドバイザリで
  *  出し直す重複なので、脆弱性の公表件数として数えると水増しになる。記録は証跡として残す。 */
-const STATE_JUDGE_INFO = '対象外-情報通知';
+var NW_STATE_JUDGE_INFO = '対象外-情報通知';
 
-function toRowArray_(r) {
+function nwToRowArray_(r) {
   const advisoryCell = r.advisoryUrl
     ? '=HYPERLINK("' + r.advisoryUrl + '","' + r.advisoryId + '")'
     : r.advisoryId;
 
-  const action = formatOfficialAction_(r);
+  const action = nwFormatOfficialAction_(r);
   const cvss = (r.cvss === '' || r.cvss === undefined) ? '' : String(r.cvss);
 
-  return [
-    r.pubDate || '',                  // 1  最終更新日
-    r.verdict || '',                  // 2  自社影響
-    r.product || '不明',              // 3  製品
-    r.cve || '',                      // 4  CVE
-    cvss,                             // 5  CVSS
-    r.kev || '',                      // 6  KEV
-    shortTitle_(r.title),             // 7  脆弱性名
-    r.impactJa || '',                 // 8  ユーザ影響
-    r.feature || '',                  // 9  影響機能
-    r.reason || '',                   // 10 判定根拠
-    stripCheckLabels_(r.howToCheck),  // 11 確認方法
-    action,                           // 12 公式推奨対応
-    advisoryCell,                     // 13 アドバイザリ
-    r.vector || ''                    // 14 CVSSベクター
-  ];
+  // 列の並びは NW_LEDGER_COLS が決める。ここは key ごとの値を用意するだけ。
+  return nwRecToRow_(NW_LEDGER_COLS, {
+    pubDate: r.pubDate || '',
+    verdict: r.verdict || '',
+    product: r.product || '不明',
+    cve: r.cve || '',
+    cvss: cvss,
+    kev: r.kev || '',
+    title: nwShortTitle_(r.title),
+    impactJa: r.impactJa || '',
+    feature: r.feature || '',
+    reason: r.reason || '',
+    howToCheck: nwStripCheckLabels_(r.howToCheck),
+    action: action,
+    advisory: advisoryCell,
+    vector: r.vector || ''
+  });
 }
 
 /** 台帳向けにタイトルを短くする（英語の長い文書名を切る） */
-function shortTitle_(s) {
+function nwShortTitle_(s) {
   const t = String(s || '').trim().replace(/\s+/g, ' ');
   if (!t) return '';
   return t.length > 60 ? t.slice(0, 60) + '…' : t;
 }
 
-function writeLedger_(rows) {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LEDGER);
-  if (!sh) throw new Error('「台帳」シートがありません。setup() を先に実行してください。');
+function nwWriteLedger_(rows) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NW_SHEET_LEDGER);
+  if (!sh) throw new Error('「' + NW_SHEET_LEDGER + '」シートがありません。nwSetup() を先に実行してください。');
   if (!rows.length) return;
 
-  const values = rows.map(toRowArray_);
+  const values = rows.map(nwToRowArray_);
   const startRow = sh.getLastRow() + 1;
-  sh.getRange(startRow, 1, values.length, LEDGER_HEADERS.length).setValues(values);
-  sh.getRange(startRow, COL['最終更新日'], values.length, 1).setNumberFormat('yyyy/mm/dd');
+  sh.getRange(startRow, 1, values.length, NW_LEDGER_HEADERS.length).setValues(values);
+  sh.getRange(startRow, nwCol_(NW_LEDGER_COLS, 'pubDate'), values.length, 1).setNumberFormat('yyyy/mm/dd');
   Logger.log('台帳に ' + values.length + ' 行を追記しました。');
 }
 
 /** あり（対応検討）→ あり（影響調査）→ なし の順、同じ判定なら公開日の新しい順に並べ替える。 */
-function sortLedger_() {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LEDGER);
+function nwSortLedger_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(NW_SHEET_LEDGER);
   if (!sh || sh.getLastRow() < 3) return;
 
   const n = sh.getLastRow() - 1;
-  const range = sh.getRange(2, 1, n, LEDGER_HEADERS.length);
+  const range = sh.getRange(2, 1, n, NW_LEDGER_HEADERS.length);
   const rank = {};
-  rank[V_ACT] = 0; rank[V_INVEST] = 1; rank[V_NONE] = 2;
+  rank[NW_V_ACT] = 0; rank[NW_V_INVEST] = 1; rank[NW_V_NONE] = 2;
 
+  const cAdv = nwCol_(NW_LEDGER_COLS, 'advisory') - 1;
+  const cVerdict = nwCol_(NW_LEDGER_COLS, 'verdict') - 1;
+  const cDate = nwCol_(NW_LEDGER_COLS, 'pubDate') - 1;
   const formulas = range.getFormulas();
   const values = range.getValues();
   for (let i = 0; i < values.length; i++) {
-    const f = formulas[i][COL['アドバイザリ'] - 1];
-    if (f) values[i][COL['アドバイザリ'] - 1] = f;
+    const f = formulas[i][cAdv];
+    if (f) values[i][cAdv] = f;
   }
 
   values.sort(function (a, b) {
-    const ra = rank[a[COL['自社影響'] - 1]], rb = rank[b[COL['自社影響'] - 1]];
+    const ra = rank[a[cVerdict]], rb = rank[b[cVerdict]];
     const va = (ra === undefined) ? 3 : ra, vb = (rb === undefined) ? 3 : rb;
     if (va !== vb) return va - vb;
-    const da = a[COL['最終更新日'] - 1], db = b[COL['最終更新日'] - 1];
+    const da = a[cDate], db = b[cDate];
     if (da instanceof Date && db instanceof Date) return db - da;
     return 0;
   });
@@ -4396,23 +4510,23 @@ function sortLedger_() {
   range.setValues(values);
 }
 
-function formatLedger_(sh) {
-  sh.getRange(1, 1, 1, LEDGER_HEADERS.length)
+function nwFormatLedger_(sh) {
+  sh.getRange(1, 1, 1, NW_LEDGER_HEADERS.length)
     .setFontWeight('bold')
     .setBackground('#f0f0f0');
 
-  // 幅は列名で引く。位置で並べると、列順を変えたときに黙ってずれる。
+  // 幅は列の key で引く。位置で並べると、列順を変えたときに黙ってずれる。
   const widths = {
-    '最終更新日': 100, '自社影響': 90, '製品': 100, 'CVE': 140, 'CVSS': 70, 'KEV': 55,
-    '脆弱性名': 220, 'ユーザ影響': 220, '影響機能': 120, '判定根拠': 280,
-    '確認方法': 320, '公式推奨対応': 220, 'アドバイザリ': 150
+    pubDate: 100, verdict: 90, product: 100, cve: 140, cvss: 70, kev: 55,
+    title: 220, impactJa: 220, feature: 120, reason: 280,
+    howToCheck: 320, action: 220, advisory: 150
   };
-  LEDGER_HEADERS.forEach(function (h, i) { sh.setColumnWidth(i + 1, widths[h] || 120); });
+  NW_LEDGER_COLS.forEach(function (c, i) { sh.setColumnWidth(i + 1, widths[c.key] || 120); });
 
   // 「いつ・対応要否・どの機器・どれくらい危ないか」までを固定して、右へ読み進める。
   sh.setFrozenColumns(6);
 
-  const all = sh.getRange(1, 1, sh.getMaxRows(), LEDGER_HEADERS.length);
+  const all = sh.getRange(1, 1, sh.getMaxRows(), NW_LEDGER_HEADERS.length);
   all.setVerticalAlignment('top');
   all.setWrap(true);
 }
@@ -4437,7 +4551,7 @@ function formatLedger_(sh) {
  *
  * @return {boolean} 実際に送ったか。呼び出し側が既読を進めてよいかの判断に使う。
  */
-function notifySlack_(rows, alerts) {
+function nwNotifySlack_(rows, alerts) {
   const url = String(PropertiesService.getScriptProperties()
     .getProperty(SLACK_WEBHOOK_PROP) || '').trim();
   if (!url) {
@@ -4446,18 +4560,18 @@ function notifySlack_(rows, alerts) {
   }
 
   const hits = rows
-    .filter(function (r) { return r.verdict === V_ACT || r.verdict === V_INVEST; })
-    .sort(slackHitSort_);
+    .filter(function (r) { return r.verdict === NW_V_ACT || r.verdict === NW_V_INVEST; })
+    .sort(nwSlackHitSort_);
   const notes = alerts || [];
 
-  if (!hits.length && !notes.length && !NOTIFY_WHEN_NO_HITS) {
+  if (!hits.length && !notes.length && !NW_NOTIFY_WHEN_NO_HITS) {
     Logger.log('OS 更新の可能性がある新着なし。Slack 通知はスキップします。');
     return false;
   }
 
   const sheetUrl = SpreadsheetApp.getActiveSpreadsheet().getUrl();
-  const shown = hits.slice(0, SLACK_MAX_ITEMS);
-  const payload = buildSlackPayload_(shown, sheetUrl, hits, notes);
+  const shown = hits.slice(0, NW_SLACK_MAX_ITEMS);
+  const payload = nwBuildSlackPayload_(shown, sheetUrl, hits, notes);
 
   const code = postSlack_(url, payload);
   Logger.log('Slack 通知を送信しました: ' +
@@ -4486,9 +4600,9 @@ function postSlack_(url, payload) {
   return code;
 }
 
-function slackHitSort_(a, b) {
-  const da = slackDeviceLabel_(a);
-  const db = slackDeviceLabel_(b);
+function nwSlackHitSort_(a, b) {
+  const da = nwSlackDeviceLabel_(a);
+  const db = nwSlackDeviceLabel_(b);
   if (da !== db) return da === 'FortiGate' ? -1 : 1;
   return (Number(b.cvss) || 0) - (Number(a.cvss) || 0);
 }
@@ -4498,14 +4612,14 @@ function slackHitSort_(a, b) {
  *   1行目: 新しい脆弱性が発表されました🔍
  *   2行目: FortiGate:1件 Cisco:2件
  */
-function buildSlackPayload_(shown, sheetUrl, all, alerts) {
+function nwBuildSlackPayload_(shown, sheetUrl, all, alerts) {
   // サマリは表示分ではなく全件で数える。ここを shown で数えると、
   // 2 行目の内訳とカードの枚数が一致してしまい、切られた事実がどこにも出ない。
   // 読む人は 2 行目を「今日の該当件数」として読むので、そこが表示件数だと
   // 末尾の残り件数が何に対する残りなのか繋がらなくなる。
   const total = all || shown;
   const rest = total.length - shown.length;
-  const summary = slackDeviceSummary_(total);
+  const summary = nwSlackDeviceSummary_(total);
   const title = '新しい脆弱性が発表されました:mag:';
   const blocks = [{
     type: 'header',
@@ -4520,7 +4634,7 @@ function buildSlackPayload_(shown, sheetUrl, all, alerts) {
 
   shown.forEach(function (r) {
     blocks.push({ type: 'divider' });
-    formatSlackItemBlocks_(r).forEach(function (b) { blocks.push(b); });
+    nwFormatSlackItemBlocks_(r).forEach(function (b) { blocks.push(b); });
   });
 
   // JPCERT の注意喚起は CVE のカードと混ぜない。判定を通っていないので、
@@ -4533,14 +4647,14 @@ function buildSlackPayload_(shown, sheetUrl, all, alerts) {
         text: ':loudspeaker: *JPCERT/CC 注意喚起*（自社ベンダー該当・判定はしていません）' } });
     }
     blocks.push({ type: 'section', text: { type: 'mrkdwn',
-      text: '<' + a.link + '|' + jpcertShortTitle_(a.title) + '>' } });
+      text: '<' + a.link + '|' + nwJpcertShortTitle_(a.title) + '>' } });
   });
 
   const foot = [];
   // 「は台帳」とは書かない。直下のリンクが台帳を指しているので重複する。
   // ここが担うのは「全部は出していない」という事実と、その分母だけ。
   if (rest > 0) foot.push('全 ' + total.length + ' 件のうち ' + shown.length + ' 件を表示');
-  const links = ['<' + SECURITY_NEXT_VULN_URL + '|Security NEXTで確認>'];
+  const links = ['<' + NW_SECURITY_NEXT_VULN_URL + '|Security NEXTで確認>'];
   if (sheetUrl) links.push('<' + sheetUrl + '|判定台帳を確認>');
   foot.push(links.join('  /  '));
   if (foot.length) {
@@ -4558,16 +4672,16 @@ function buildSlackPayload_(shown, sheetUrl, all, alerts) {
 }
 
 /** 注意喚起の題名。先頭の「注意喚起: 」と末尾の「(公開)」「(更新)」を落として読みやすくする。 */
-function jpcertShortTitle_(s) {
+function nwJpcertShortTitle_(s) {
   const t = String(s || '').replace(/^注意喚起:\s*/, '').replace(/\s*\((公開|更新)\)\s*$/, '').trim();
   return t.length > 70 ? t.slice(0, 70) + '…' : t;
 }
 
-function slackDeviceSummary_(rows) {
+function nwSlackDeviceSummary_(rows) {
   const order = ['FortiGate', 'Cisco'];
   const m = {};
   rows.forEach(function (r) {
-    const k = slackDeviceLabel_(r);
+    const k = nwSlackDeviceLabel_(r);
     m[k] = (m[k] || 0) + 1;
   });
   const keys = order.filter(function (k) { return m[k]; }).concat(
@@ -4576,8 +4690,8 @@ function slackDeviceSummary_(rows) {
   return keys.map(function (k) { return k + ':' + m[k] + '件'; }).join(' ');
 }
 
-function slackDeviceLabel_(r) {
-  if ((r.vendor || '') === VENDOR_CISCO) return 'Cisco';
+function nwSlackDeviceLabel_(r) {
+  if ((r.vendor || '') === NW_VENDOR_CISCO) return 'Cisco';
   return 'FortiGate';
 }
 
@@ -4589,21 +4703,21 @@ function slackDeviceLabel_(r) {
  *   影響：業務結果（主語は機器）
  *   推奨対応：…
  */
-function formatSlackItemBlocks_(r) {
-  const band = slackCvssBand_(r.cvss);
-  const cve = slackCveLink_(r) || '（CVEなし）';
+function nwFormatSlackItemBlocks_(r) {
+  const band = nwSlackCvssBand_(r.cvss);
+  const cve = nwSlackCveLink_(r) || '（CVEなし）';
   const cvss = (r.cvss === '' || r.cvss === undefined || r.cvss === null)
     ? 'CVSS — [' + band.label + ']'
     : 'CVSS ' + r.cvss + ' [' + band.label + ']';
   const head = [band.emoji + ' *' + cve + '*', cvss];
-  const upd = slackUpdatedLabel_(r);
+  const upd = nwSlackUpdatedLabel_(r);
   if (upd) head.push(upd);
   const lines = [
     head.join('  /  '),
-    '機器：' + slackDeviceLabel_(r),
-    '内容：' + slackContentsJa_(r),
-    '影響：' + slackImpactJa_(r),
-    '推奨対応：' + slackActionLine_(r)
+    '機器：' + nwSlackDeviceLabel_(r),
+    '内容：' + nwSlackContentsJa_(r),
+    '影響：' + nwSlackImpactJa_(r),
+    '推奨対応：' + nwSlackActionLine_(r)
   ];
 
   return [{
@@ -4613,29 +4727,29 @@ function formatSlackItemBlocks_(r) {
 }
 
 /** アドバイザリの最終更新日。CVE 行の mm/dd更新 */
-function slackUpdatedLabel_(r) {
+function nwSlackUpdatedLabel_(r) {
   const d = r.pubDate instanceof Date ? r.pubDate : (r.pubDate ? new Date(r.pubDate) : null);
   if (!d || isNaN(d.getTime())) return '';
   return Utilities.formatDate(d, 'Asia/Tokyo', 'MM/dd') + '更新';
 }
 
-function slackActionLine_(r) {
-  // formatOfficialAction_ は空を返さないので、ここで補わない。
+function nwSlackActionLine_(r) {
+  // nwFormatOfficialAction_ は空を返さないので、ここで補わない。
   // 補うと台帳（補わない側）と Slack で文言が食い違う。
-  const first = String(formatOfficialAction_(r) || '').split(/\n/)[0].trim();
+  const first = String(nwFormatOfficialAction_(r) || '').split(/\n/)[0].trim();
   return first.length > 40 ? first.slice(0, 40) + '…' : first;
 }
 
 /** Slack の「内容」。AI の日本語要約。無ければ公式タイトルの日本語訳。 */
-function slackContentsJa_(r) {
+function nwSlackContentsJa_(r) {
   // AI の要約が無い/使えない日は、アドバイザリのタイトルをそのまま出す。
   // 以前は英語を正規表現で日本語へ組み直していたが、AI が動く日は 1 行も通らなかった。
   const ai = String(r.cveSummaryJa || '').trim();
-  const text = isUsableCveSummary_(ai) ? ai : String(r.title || '').trim();
+  const text = nwIsUsableCveSummary_(ai) ? ai : String(r.title || '').trim();
   return text.length > 30 ? text.slice(0, 30) + '…' : text;
 }
 
-function isUsableCveSummary_(s) {
+function nwIsUsableCveSummary_(s) {
   if (!s) return false;
   if (/認証なし.*機器が(応答停止|再起動)/.test(s)) return false;
   if (/^(サービス停止|遠隔コード実行|権限昇格|情報漏えい|脆弱性)$/.test(s)) return false;
@@ -4647,14 +4761,14 @@ function isUsableCveSummary_(s) {
 }
 
 /** Slack の「影響」。主語は機器。機能名は足さない。 */
-function slackImpactJa_(r) {
+function nwSlackImpactJa_(r) {
   const ja = String(r.impactJa || '').trim();
-  const text = ja || fallbackImpactJa_(r);
+  const text = ja || nwFallbackImpactJa_(r);
   return text.length > 40 ? text.slice(0, 40) + '…' : text;
 }
 
 /** CVE 文字列を公式アドバイザリへリンク。無ければ ID だけ。 */
-function slackCveLink_(r) {
+function nwSlackCveLink_(r) {
   const cve = String(r.cve || '').trim();
   const url = String(r.advisoryUrl || '').trim();
   const label = cve || String(r.advisoryId || '').trim();
@@ -4666,7 +4780,7 @@ function slackCveLink_(r) {
  * CVSS 定性区分。
  *   緊急 9.0–10.0 / 高 7.0–8.9 / 中 4.0–6.9 / 低 0.1–3.9
  */
-function slackCvssBand_(score) {
+function nwSlackCvssBand_(score) {
   const n = Number(score);
   if (score === '' || score === undefined || score === null || isNaN(n)) {
     return { label: '不明', emoji: ':white_circle:' };
@@ -4680,12 +4794,12 @@ function slackCvssBand_(score) {
 
 /**
  * 表示確認に使うサンプル 3 行。台帳の実データではない。
- * 確認用ファイルの testSlackBlocks() が呼ぶ（同一スコープなので本体側にあってよい）。
+ * 確認用ファイルの nwTestSlackBlocks() が呼ぶ（同一スコープなので本体側にあってよい）。
  */
-function sampleSlackRows_() {
+function nwSampleSlackRows_() {
   return [
     {
-      vendor: VENDOR_FORTINET, verdict: V_ACT, product: 'FortiOS',
+      vendor: NW_VENDOR_FORTINET, verdict: NW_V_ACT, product: 'FortiOS',
       selfVersion: 'FortiOS 7.4.11', cve: 'CVE-2026-0001', cvss: 9.8,
       advisoryUrl: 'https://fortiguard.fortinet.com/psirt/FG-IR-26-001',
       advisoryId: 'FG-IR-26-001',
@@ -4697,7 +4811,7 @@ function sampleSlackRows_() {
       pubDate: new Date('2026-08-12')
     },
     {
-      vendor: VENDOR_CISCO, verdict: V_INVEST, product: 'IOS-XE',
+      vendor: NW_VENDOR_CISCO, verdict: NW_V_INVEST, product: 'IOS-XE',
       selfVersion: 'IOS-XE 17.15.5', cve: 'CVE-2026-0002', cvss: 7.5,
       advisoryUrl: 'https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-example',
       advisoryId: 'cisco-sa-example',
@@ -4709,7 +4823,7 @@ function sampleSlackRows_() {
       pubDate: new Date('2026-08-05')
     },
     {
-      vendor: VENDOR_FORTINET, verdict: V_INVEST, product: 'FortiOS',
+      vendor: NW_VENDOR_FORTINET, verdict: NW_V_INVEST, product: 'FortiOS',
       selfVersion: '7.4.11', cve: 'CVE-2026-0003', cvss: 6.5,
       advisoryUrl: 'https://fortiguard.fortinet.com/psirt/FG-IR-26-003',
       advisoryId: 'FG-IR-26-003', title: 'Information disclosure',
