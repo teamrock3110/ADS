@@ -39,7 +39,7 @@ Google スプレッドシート + Apps Script。毎朝 9 時台に Fortinet と 
 
 ### コードのどこを見るか
 
-本体は 1 ファイル 4639 行だが、**全部を読む必要はない。**
+本体は 1 ファイル 4,702 行だが、**全部を読む必要はない。**
 セクションのコメントバナー（`// =====`）で区切ってある。
 
 | やること | 見るセクション | 行数 |
@@ -695,8 +695,9 @@ GAS ファイル 2 枚。Apps Script は全ファイルでグローバルスコ�
 
 | ファイル | 行数 | 関数 | 中身 |
 |---|---|---|---|
-| `fortinet_psirt_watcher_v7.gs` | 4639 | 180 | 本体（NW） |
+| `fortinet_psirt_watcher_v7.gs` | 4,702 | 183 | 本体（NW） |
 | `fortinet_psirt_watcher_v7_tests.gs` | 664 | 24 | 動作確認用（NW） |
+| `appsscript.json` | — | — | マニフェスト。GEMINI_BACKEND = vertex の GAS はこの oauthScopes が要る（readme.gs §6） |
 | `macos_release_monitor.gs` | 1,824 | 75 | macOS リリース監視。NW とは postSlack_ / kevCatalogWithStatus_ / callGemini_ / countAiRequest_ / SLACK_WEBHOOK_PROP だけ共有 |
 
 **確認用ファイルから参照する定数は、本体側で `const` ではなく `var` で宣言する。**
@@ -705,7 +706,7 @@ Apps Script は全ファイルをグローバルスコープで実行するが�
 `const` は参照できないことがある**（2026-09-06 実測: `test.gs` の `nwTestAi` から
 `NW_V_INVEST` が `ReferenceError`）。関数と `var` はファイルをまたいで確実に共有される。
 
-対象は 13 個（`AI_PROVIDER` / `NW_V_ACT` / `NW_V_INVEST` / `NW_V_NONE` / `NW_VENDOR_FORTINET` /
+対象は 15 個（`AI_PROVIDER` / `GEMINI_BACKEND` / `GCP_PROJECT_ID` / `NW_V_ACT` / `NW_V_INVEST` / `NW_V_NONE` / `NW_VENDOR_FORTINET` /
 `NW_VENDOR_CISCO` / `NW_KEV_YES` / `NW_KEV_NO` / `SLACK_WEBHOOK_PROP` / `NW_SSL_VPN_ENABLED` /
 `NW_CHECK_STEPS_FORTINET` / `NW_CHECK_STEPS_NO_CSAF` / `NW_CHECK_STEPS_CISCO_DEFAULT`）。
 確認用から新しい定数を参照したくなったら、その宣言も `var` へ変えて

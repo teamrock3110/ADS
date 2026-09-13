@@ -197,3 +197,19 @@ readme.gs は §4 を削って 8 節に、README §2.5 / §4.13 は廃止の記�
 
 `nwReadAssets_` の v6 資産シート互換読みを削除。見出し 1 列目が「ベンダー」でなければ例外で止める
 （黙って別解釈で読まない）。ハーネスで出力一致を確認。残り候補 5・6 は「今はやらない」で利用者と合意。
+
+### 9-4. Gemini の呼び出し経路を切り替え可能に（2026-09-13）
+
+別セッションで会社側 GAS（GCP `it-dx-prod`）に Vertex AI 経由の呼び出しを入れたが、その変更は git に無く、
+会社側の `nw.gs`（**改名前の v7 に Vertex 対応だけ足したもの**）にしか無い。会社側は `test.gs` だけ改名後で
+本体が改名前という食い違いが起きている（引き継ぎ「既知の残課題」）。
+
+こちらの本体に同じ設計を入れた: `GEMINI_BACKEND`（`'aistudio'` 既定 / `'vertex'`）と `GCP_PROJECT_ID`、
+`buildAiStudioRequest_` / `buildVertexRequest_`（`callGeminiModel_` はリトライと解析だけ）、
+`shouldFallbackGeminiModel_` / `geminiRetryWaitMs_` の RESOURCE_EXHAUSTED 対応、ログ「AI 生成: gemini（vertex）」。
+`appsscript.json`（cloud-platform スコープ入り）を git に置き、readme.gs §3・§6 に手順を書いた。
+ハーネスで両経路の URL・認証ヘッダ・safetySettings・フォールバック判定を確認。aistudio の実データ出力は不変。
+
+**会社側 GAS の食い違いを解消する手順**: main の 3 ファイル＋macOS を貼り、`GEMINI_BACKEND` を `'vertex'` に変え、
+`nwSetup()`・トリガー張り替え（`main`→`nwDaily`）・`nwTestSharedConstants()`（15 / 15）・`nwTestAi()`。
+会社側で足した簡易 `testAi()` は不要になるので消す。会社側の共有ユーザで macOS 側（`macosSelfTest()`）の確認は未実施。

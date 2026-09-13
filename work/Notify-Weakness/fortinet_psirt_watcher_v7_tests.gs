@@ -72,7 +72,10 @@ function nwTestSlackBlocks() {
 function nwTestProps() {
   const p = PropertiesService.getScriptProperties();
   Logger.log('AI_PROVIDER        : ' + AI_PROVIDER);
-  Logger.log('GEMINI_API_KEY     : ' + (p.getProperty('GEMINI_API_KEY') ? 'OK' : '未設定'));
+  Logger.log('GEMINI_BACKEND     : ' + GEMINI_BACKEND +
+             (GEMINI_BACKEND === 'vertex' ? '（GCP: ' + GCP_PROJECT_ID + '。API キー不要）' : ''));
+  Logger.log('GEMINI_API_KEY     : ' + (p.getProperty('GEMINI_API_KEY') ? 'OK' : '未設定') +
+             (GEMINI_BACKEND === 'vertex' ? '（vertex では使わない）' : ''));
   Logger.log('ANTHROPIC_API_KEY  : ' + (p.getProperty('ANTHROPIC_API_KEY') ? 'OK' : '未設定'));
   Logger.log(SLACK_WEBHOOK_PROP + ' : ' +
              (p.getProperty(SLACK_WEBHOOK_PROP) ? 'OK' : '未設定'));
@@ -648,7 +651,7 @@ function nwTestGuessFortinetFeature() {
  */
 function nwTestSharedConstants() {
   const names = [
-    'AI_PROVIDER', 'NW_V_ACT', 'NW_V_INVEST', 'NW_V_NONE',
+    'AI_PROVIDER', 'GEMINI_BACKEND', 'GCP_PROJECT_ID', 'NW_V_ACT', 'NW_V_INVEST', 'NW_V_NONE',
     'NW_VENDOR_FORTINET', 'NW_VENDOR_CISCO', 'NW_KEV_YES', 'NW_KEV_NO',
     'SLACK_WEBHOOK_PROP', 'NW_SSL_VPN_ENABLED',
     'NW_CHECK_STEPS_FORTINET', 'NW_CHECK_STEPS_NO_CSAF', 'NW_CHECK_STEPS_CISCO_DEFAULT'

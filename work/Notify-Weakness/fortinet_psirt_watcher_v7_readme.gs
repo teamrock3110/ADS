@@ -76,11 +76,20 @@
  *
  * スクリプト プロパティ（プロジェクトの設定 → スクリプト プロパティ）
  *
- *   GEMINI_API_KEY      台帳の AI 3 列を作るのに使う
+ *   GEMINI_API_KEY      台帳の AI 3 列を作るのに使う。**GEMINI_BACKEND = 'aistudio' のときだけ**
  *   ANTHROPIC_API_KEY   AI_PROVIDER を 'claude' にしたときだけ使う
  *   SLACK_WEBHOOK_URL   Slack の宛先。**この名前を変えないこと**（変えると通知が
  *                       黙って止まり、「該当が無くて静かな日」と区別が付かない）
  *   JPCERT_SEEN_AT      ツールが自動で書く。触らない
+ *
+ * Gemini の呼び出し経路は本体の GEMINI_BACKEND で切り替える（NW と macOS の両方に効く）。
+ *
+ *   'aistudio'  個人の AI Studio。GEMINI_API_KEY が要る。個人開発はこちら（既定）
+ *   'vertex'    会社の Vertex AI（GCP プロジェクト it-dx-prod）。API キー不要。
+ *               実行アカウントに roles/aiplatform.user と、マニフェストの cloud-platform スコープが要る（下記 6）
+ *
+ * 切り替えは値を変えて保存するだけ。判定・プロンプト・回数の計数は変わらない。
+ * どちらで動いているかは nwTestProps() か、実行ログの「AI 生成: gemini（vertex）」で分かる。
  *
  *
  * ============================================================
@@ -163,6 +172,21 @@
  * （実測: test.gs から NW_V_INVEST が ReferenceError）。関数と var は確実に共有される。
  * これを守れているかを nwTestSharedConstants() が見張っている。
  *
+ * ■ GEMINI_BACKEND = 'vertex' で動かす GAS（会社側）は、マニフェストにスコープを明示する
+ *
+ *   プロジェクトの設定 → 「appsscript.json」をエディタで表示 → oauthScopes を次にする（git の appsscript.json と同じ）。
+ *
+ *     "oauthScopes": [
+ *       "https://www.googleapis.com/auth/spreadsheets",
+ *       "https://www.googleapis.com/auth/script.external_request",
+ *       "https://www.googleapis.com/auth/script.container.ui",
+ *       "https://www.googleapis.com/auth/cloud-platform"
+ *     ]
+ *
+ *   oauthScopes を手で書くと自動判定が止まり、書いた配列がスコープの全てになる。
+ *   cloud-platform だけ足すのではなく、既存機能の 3 つも揃えて書くこと。
+ *   'aistudio' の GAS はこの節は不要（未設定のままでよい）。
+ *
  * ■ 2026-09-13 の貼り替え（関数名・シート名に NW の接頭辞を付けた版）に限って、貼ったあとに 2 つ
  *
  *   1. nwSetup() を 1 回実行する。既存の「台帳」「資産」「処理済み」「実行履歴」が
@@ -178,7 +202,7 @@
  * 7. 貼ったあとのテスト
  * ============================================================
  *
- * **nwTestSharedConstants() を最初に実行する。**「13 / 13 件」と出れば、確認用ファイルから
+ * **nwTestSharedConstants() を最初に実行する。**「15 / 15 件」と出れば、確認用ファイルから
  * 本体の定数が見えている。1 件でも NG なら他は ReferenceError で落ちるだけで原因が読めない。
  *
  * 次にこの 3 つが通れば、判定は変わっていない。

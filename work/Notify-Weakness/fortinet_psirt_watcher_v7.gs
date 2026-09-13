@@ -8,8 +8,8 @@
  * 運用・貼り替え・テストの手順は readme.gs。判定ルールは `社内ルール案_OS更新基準.md`。
  *
  * スクリプト プロパティ:
- *   GEMINI_API_KEY / ANTHROPIC_API_KEY / SLACK_WEBHOOK_URL /
- *   JPCERT_SEEN_AT（ツールが書く）
+ *   GEMINI_API_KEY（GEMINI_BACKEND = 'aistudio' のときだけ）/ ANTHROPIC_API_KEY /
+ *   SLACK_WEBHOOK_URL / JPCERT_SEEN_AT（ツールが書く）
  *
  * 名前の規則（macos_release_monitor.gs と同じ）:
  *   NW 専用の関数は nw〜、定数は NW_〜、シートは「NW〜」。macOS 側は macos〜 / MACOS_〜 / 「macOS〜」。
@@ -42,7 +42,7 @@
  * const は参照できないことがある（2026-09-06 実測: test.gs の nwTestAi から NW_V_INVEST が
  * ReferenceError）。var と関数はファイルをまたいで確実に共有される。
  *
- * 対象: AI_PROVIDER / NW_V_ACT / NW_V_INVEST / NW_V_NONE / NW_VENDOR_FORTINET / NW_VENDOR_CISCO /
+ * 対象: AI_PROVIDER / GEMINI_BACKEND / GCP_PROJECT_ID / NW_V_ACT / NW_V_INVEST / NW_V_NONE / NW_VENDOR_FORTINET / NW_VENDOR_CISCO /
  *       NW_KEV_YES / NW_KEV_NO / SLACK_WEBHOOK_PROP / NW_SSL_VPN_ENABLED /
  *       NW_CHECK_STEPS_FORTINET / NW_CHECK_STEPS_NO_CSAF / NW_CHECK_STEPS_CISCO_DEFAULT
  *
@@ -76,6 +76,23 @@ var GEMINI_MODEL_FALLBACKS = [
  * 呼び出しには ANTHROPIC_API_KEY（スクリプト プロパティ）が要る。
  */
 var CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+
+/**
+ * Gemini をどの経路で呼ぶか。**macOS 側と共有**（callGemini_ の内側で効く）。
+ *   'aistudio'  個人の AI Studio。認証はスクリプト プロパティ GEMINI_API_KEY。個人開発はこちら
+ *   'vertex'    会社の Vertex AI（GCP プロジェクト GCP_PROJECT_ID）。認証は実行アカウントの OAuth。
+ *               会社の GAS で使う。有料なので入力が Google の製品改善に使われない
+ *
+ * 2026-09-13 に会社側で 'vertex' の動作を確認済み。切り替えはこの値を変えて保存するだけ。
+ * 判定ロジック・プロンプト・呼び出し回数の計数は経路に依存しない。
+ *
+ * 'vertex' にするときは、マニフェスト（appsscript.json）の oauthScopes に
+ * https://www.googleapis.com/auth/cloud-platform が要る（readme.gs §6）。
+ */
+var GEMINI_BACKEND = 'aistudio';
+
+/** GEMINI_BACKEND = 'vertex' のときに Vertex AI を呼ぶ GCP プロジェクト */
+var GCP_PROJECT_ID = 'it-dx-prod';
 
 /**
  * AI に投げた HTTP リクエストの回数。実行履歴に残して無料枠の消費を追えるようにする。
@@ -3466,7 +3483,8 @@ function nwEnrichWithAI_(targets) {
     if (i + NW_AI_CHUNK_SIZE < targets.length) Utilities.sleep(1000);
   }
 
-  Logger.log('AI 生成: ' + AI_PROVIDER + ' / 成功 ' + ok + ' / 対象 ' + targets.length + ' 行');
+  Logger.log('AI 生成: ' + AI_PROVIDER + (AI_PROVIDER === 'gemini' ? '（' + GEMINI_BACKEND + '）' : '') +
+             ' / 成功 ' + ok + ' / 対象 ' + targets.length + ' 行');
   if (!ok) {
     Logger.log('AI が0件のため、Slackの内容は公式タイトルの日本語訳、影響・確認方法はコード側の文面になります。');
   }
@@ -3584,43 +3602,31 @@ function callGemini_(prompt, responseSchema) {
 /**
  * 次のモデルへ退避すべきエラーか。
  *
- * 1. 日次上限（本文に PerDay）。**503 は過負荷で別物なので退避しない**
- *    （退避すると枠の残る世代を無駄に消費する）
+ * 1. 日次上限（aistudio は本文に PerDay、vertex は RESOURCE_EXHAUSTED）。
+ *    **503 は過負荷で別物なので退避しない**（退避すると枠の残る世代を無駄に消費する）
  * 2. モデル ID が無効・提供終了（404 / NOT_FOUND）。退避しないと AI 出力が全滅し、
  *    台帳の 3 列がコードのフォールバック文言だけになる
  */
 function shouldFallbackGeminiModel_(err) {
   const msg = String(err && err.message ? err.message : err);
-  if (/PerDay/i.test(msg)) return true;
+  if (/PerDay/i.test(msg)) return true;             // aistudio の日次上限
+  if (/RESOURCE_EXHAUSTED/i.test(msg)) return true; // vertex の割り当て超過
   return /HTTP 404/.test(msg) || /NOT_FOUND/i.test(msg);
 }
 
+/**
+ * Gemini を 1 モデルで呼ぶ。リトライとレスポンス解析はここが持ち、
+ * リクエストの組み立て（URL・認証）だけ GEMINI_BACKEND で分ける。
+ */
 function callGeminiModel_(model, prompt, responseSchema) {
-  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-  if (!apiKey) throw new Error('GEMINI_API_KEY がスクリプト プロパティに未設定です。');
-
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
-              model + ':generateContent';
-
-  const options = {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { 'x-goog-api-key': apiKey },
-    muteHttpExceptions: true,
-    payload: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      // responseSchema は省略可。渡さなければ従来と同じ設定になるので、
-      // 既存の呼び出し（nwEnrichWithAI_）の挙動は変わらない。
-      generationConfig: responseSchema
-        ? { responseMimeType: 'application/json', maxOutputTokens: 32768, responseSchema: responseSchema }
-        : { responseMimeType: 'application/json', maxOutputTokens: 32768 }
-    })
-  };
+  const req = (GEMINI_BACKEND === 'vertex')
+    ? buildVertexRequest_(model, prompt, responseSchema)
+    : buildAiStudioRequest_(model, prompt, responseSchema);
 
   let res;
   for (let attempt = 1; attempt <= 3; attempt++) {
     countAiRequest_();
-    res = UrlFetchApp.fetch(url, options);
+    res = UrlFetchApp.fetch(req.url, req.options);
     const code = res.getResponseCode();
     if (code === 200) break;
 
@@ -3646,10 +3652,67 @@ function callGeminiModel_(model, prompt, responseSchema) {
   return parts.map(function (p) { return p.text || ''; }).join('');
 }
 
-/** 429 の日次上限はリトライしない（同じ枠を消費するだけ）。分次制限は Retry-After を待つ。 */
+/** 生成設定。responseSchema は省略可。渡さなければ従来と同じ設定になる。 */
+function geminiGenerationConfig_(responseSchema) {
+  return responseSchema
+    ? { responseMimeType: 'application/json', maxOutputTokens: 32768, responseSchema: responseSchema }
+    : { responseMimeType: 'application/json', maxOutputTokens: 32768 };
+}
+
+/** 個人の AI Studio。認証はスクリプト プロパティの API キー。 */
+function buildAiStudioRequest_(model, prompt, responseSchema) {
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) throw new Error('GEMINI_API_KEY がスクリプト プロパティに未設定です（GEMINI_BACKEND = aistudio）。');
+  return {
+    url: 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent',
+    options: {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-goog-api-key': apiKey },
+      muteHttpExceptions: true,
+      payload: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: geminiGenerationConfig_(responseSchema)
+      })
+    }
+  };
+}
+
+/**
+ * 会社の Vertex AI。認証は実行アカウントの OAuth トークン（API キー不要）。
+ * 実行アカウントに roles/aiplatform.user が要る。
+ *
+ * 安全フィルタは全カテゴリ OFF にする。脆弱性の攻撃手法の説明が「危険なコンテンツ」に
+ * 引っかかって出力が空になることがあるため（2026-09-13、会社側で設定）。
+ */
+function buildVertexRequest_(model, prompt, responseSchema) {
+  if (!GCP_PROJECT_ID) throw new Error('GCP_PROJECT_ID が空です（GEMINI_BACKEND = vertex）。');
+  const categories = ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH',
+                      'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT'];
+  return {
+    url: 'https://aiplatform.googleapis.com/v1/projects/' + GCP_PROJECT_ID +
+         '/locations/global/publishers/google/models/' + model + ':generateContent',
+    options: {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true,
+      payload: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: geminiGenerationConfig_(responseSchema),
+        safetySettings: categories.map(function (c) { return { category: c, threshold: 'BLOCK_NONE' }; })
+      })
+    }
+  };
+}
+
+/**
+ * 429 の日次上限はリトライしない（同じ枠を消費するだけ）。分次制限は Retry-After を待つ。
+ * 日次上限の印は経路で違う: aistudio は PerDay、vertex は RESOURCE_EXHAUSTED。
+ */
 function geminiRetryWaitMs_(code, bodyText, attempt) {
   if (code !== 429 && code !== 503) return 0;
-  if (code === 429 && /PerDay/i.test(bodyText || '')) return 0;
+  if (code === 429 && /PerDay|RESOURCE_EXHAUSTED/i.test(bodyText || '')) return 0;
   let delaySec = attempt * 5;
   try {
     const details = (JSON.parse(bodyText).error || {}).details || [];
