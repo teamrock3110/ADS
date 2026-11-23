@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<!-- {{TITLE}}：h1 の題名（.title-grad の中の言葉）と同じにする。副題は入れない -->
+<title>{{TITLE}}</title>
+<meta name="description" content="{{原理の1文}}">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#171717">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230D6CA7'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='white' stroke-width='2.4'/%3E%3Cpath d='M20 12l-2.2 5.8L12 20l2.2-5.8z' fill='white'/%3E%3C/svg%3E">
+<style>
+/* ============================================================
+   色はここだけで決める。本文の要素に色を直接書かない。
+   明るい側と暗い側の 2 組。図（SVG）は「白い紙」として明暗で反転しない。
+   ============================================================ */
+:root {
+  color-scheme: light dark;
+  --bg: 255 255 255;
+  --surface: 248 250 251;
+  --surface-2: 241 245 249;
+  --border: 226 232 240;
+  --text: 26 35 50;
+  --body: 64 74 90;
+  --muted: 90 107 125;
+  --line: 115 115 115;
+  --accent: 13 108 167;
+  --accent-deep: 11 94 147;
+  --accent-light: 58 143 202;
+  --positive: 21 128 61;
+  --negative: 185 28 28;
+  --font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Segoe UI", "Yu Gothic UI", Meiryo, "Noto Sans JP", sans-serif;
+}
+@media screen and (prefers-color-scheme: dark) {
+  :root {
+    --bg: 23 23 23;
+    --surface: 10 10 10;
+    --surface-2: 0 0 0;
+    --border: 38 38 38;
+    --text: 245 245 245;
+    --body: 212 212 212;
+    --muted: 163 163 163;
+    --accent: 96 165 250;
+    --accent-deep: 96 165 250;
+    --accent-light: 147 197 253;
+    --positive: 134 239 172;
+    --negative: 252 165 165;
+  }
+  body { -webkit-font-smoothing: antialiased; }
+}
+
+/* ---------- 土台 ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0; background: rgb(var(--bg)); color: rgb(var(--body));
+  font-family: var(--font); line-height: 1.625; text-wrap: pretty;
+}
+h1, h2, h3, h4, p, figure, ul, ol, dl, dd { margin: 0; }
+strong { font-weight: 700; color: rgb(var(--text)); }
+a { color: rgb(var(--accent)); text-decoration: underline; text-underline-offset: .2em; }
+::selection { background: rgb(var(--accent) / .25); color: rgb(var(--text)); }
+:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; }
+.nb { display: inline-block; }          /* 文節のかたまり。見出しの変な位置での改行を防ぐ */
+main { max-width: 48rem; margin: 0 auto; padding: 2.5rem 1.25rem; }
+@media (min-width: 768px) { main { padding: 4rem 1.25rem; } }
+.icon { width: 1.5rem; height: 1.5rem; flex-shrink: 0; }
+.icon-sm { width: 1rem; height: 1rem; flex-shrink: 0; }
+
+/* ---------- 表紙（ヒーロー） ---------- */
+.hero { text-align: center; margin-bottom: 2.5rem; }
+.pill {
+  display: inline-flex; align-items: center; gap: .5rem;
+  background: rgb(var(--accent) / .1); color: rgb(var(--accent));
+  padding: .375rem 1rem; border-radius: 9999px; font-size: .875rem; font-weight: 500; margin-bottom: 1.5rem;
+}
+.hero h1 { font-size: 1.875rem; line-height: 1.25; font-weight: 900; letter-spacing: -.025em; color: rgb(var(--text)); }
+@media (min-width: 768px) { .hero h1 { font-size: 3rem; } }
+.title-grad {
+  display: block;
+  background-image: linear-gradient(to right, rgb(var(--accent-deep)), rgb(var(--accent-light)));
+  -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+}
+.subtitle { display: block; margin-top: 1rem; font-size: 1.25rem; font-weight: 700; color: rgb(var(--muted)); letter-spacing: 0; }
+@media (min-width: 768px) { .subtitle { font-size: 1.5rem; } }
+.hero .lead { margin: 1.5rem auto 0; max-width: 36rem; font-size: 1.0625rem; color: rgb(var(--muted)); }
+
+/* ---------- 今回の全体像 ---------- */
+.overview {
+  background: rgb(var(--surface)); border: 1px solid rgb(var(--border));
+  border-radius: 1rem; padding: 1.25rem; margin-bottom: 4rem;
+}
+@media (min-width: 768px) { .overview { padding: 2rem; } }
+.eyebrow { font-size: .75rem; font-weight: 700; letter-spacing: .1em; color: rgb(var(--accent)); margin-bottom: 1rem; }
+.overview h2 { font-size: 1.5rem; line-height: 1.6; font-weight: 700; color: rgb(var(--text)); margin-bottom: 1.5rem; }
+@media (min-width: 768px) { .overview h2 { font-size: 1.875rem; } }
+.cards3 { display: grid; gap: 1rem; }
+@media (min-width: 640px) {
+  .cards3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cards3.cards4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }   /* カードが 4 枚のとき class="cards3 cards4" */
+  .cards3.cards2col { grid-template-columns: repeat(2, minmax(0, 1fr)); } /* カードが 2 枚のとき class="cards3 cards2col" */
+}
+.card { background: rgb(var(--bg)); border: 1px solid rgb(var(--border)); border-radius: .75rem; padding: 1.25rem; }
+.card .icon { color: rgb(var(--accent)); margin-bottom: .75rem; }
+.card h3 { font-size: .875rem; line-height: 1.5rem; font-weight: 700; color: rgb(var(--accent)); margin-bottom: .75rem; }
+.card p { font-size: .875rem; line-height: 2; color: rgb(var(--text)); }
+.down { text-align: center; color: rgb(var(--accent)); padding: .75rem 0; }
+.goal {
+  border: 1px solid rgb(var(--accent) / .3); background: rgb(var(--bg)); border-radius: .75rem;
+  padding: 1rem; text-align: center; font-weight: 700; color: rgb(var(--accent)); line-height: 1.8;
+}
+.scope { margin-top: 1.25rem; font-size: .875rem; line-height: 2; color: rgb(var(--muted)); }
+
+/* ---------- パート（大見出し）とセクション ---------- */
+.part { margin-bottom: 4rem; }
+@media (min-width: 768px) { .part { margin-bottom: 5rem; } }
+.part-head { display: flex; align-items: center; gap: 1.5rem; margin-bottom: 2rem; }
+.part-head h2 { flex-shrink: 0; font-size: 1.25rem; line-height: 1.375; font-weight: 700; color: rgb(var(--text)); }
+@media (min-width: 768px) { .part-head h2 { font-size: 1.5rem; } }
+.part-head::after { content: ""; flex: 1; border-top: 1px solid rgb(var(--border)); }
+.part-intro { line-height: 2; margin: -1rem 0 2rem; }
+.sec + .sec { margin-top: 2.5rem; }
+@media (min-width: 768px) { .sec + .sec { margin-top: 3rem; } }
+.sec-head { display: flex; align-items: baseline; gap: .75rem; margin-bottom: 1rem; }
+.sec-num { flex-shrink: 0; font-size: 1.125rem; font-weight: 700; line-height: 1.25; color: rgb(var(--muted)); }
+.sec-head h3 { font-size: 1.125rem; line-height: 1.375; font-weight: 700; color: rgb(var(--text)); }
+.sec p { line-height: 2; }
+.sec p + p { margin-top: 1.25rem; }
+.sec h4 { font-size: 1rem; font-weight: 700; color: rgb(var(--text)); margin: 1.5rem 0 .5rem; }
+.answer { font-weight: 700; color: rgb(var(--text)); }
+
+/* ---------- 図 ---------- */
+.fig { margin: 1.5rem 0; }
+.fig-frame {
+  background: #ffffff; border: 1px solid rgb(var(--border)); border-radius: .5rem; overflow: hidden;
+  print-color-adjust: exact; -webkit-print-color-adjust: exact; color-scheme: light;
+}
+.fig-frame svg { display: block; width: 100%; height: auto; }
+/* 狭い画面では図を幅 720px で出し、枠の中だけ横にスクロールさせる（図の 22 の字が約 12px で読める）。
+   ページ全体は横にスクロールさせない */
+@media (max-width: 639px) {
+  .fig-frame { overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+  .fig-frame svg { width: 720px; max-width: none; }
+  .fig::before { content: "図は横にスクロールして見られます →"; display: block; font-size: .75rem; color: rgb(var(--muted)); margin-bottom: .375rem; text-align: right; }
+}
+.fig figcaption { margin-top: .75rem; font-size: .875rem; line-height: 2; color: rgb(var(--muted)); }
+.fig-note { font-size: .75rem; color: rgb(var(--muted)); margin-top: .25rem; }
+
+/* ---------- 本文の部品 ---------- */
+.bridge {
+  border-left: 3px solid rgb(var(--accent)); padding: .25rem 0 .25rem 1rem; margin-top: 1.5rem;
+  font-weight: 500; color: rgb(var(--text)); line-height: 2;
+}
+.note { border: 1px solid rgb(var(--border)); background: rgb(var(--surface)); border-radius: .75rem; padding: 1.25rem; margin-top: 1.25rem; }
+.note h4 { margin: 0 0 .5rem; }
+.note p { font-size: .875rem; line-height: 2; }
+.vs, .cards2 { display: grid; gap: 1rem; margin-top: 1.25rem; }
+@media (min-width: 768px) { .vs, .cards2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.vs > div, .cards2 > div { border-radius: .75rem; padding: 1.25rem; border: 1px solid rgb(var(--border)); }
+.vs h4, .cards2 h4 { display: flex; align-items: baseline; gap: .5rem; margin: 0 0 .75rem; line-height: 1.4; }
+.vs p, .cards2 p { font-size: .875rem; line-height: 2; }
+.vs .ok { border-color: rgb(var(--accent) / .2); background: rgb(var(--accent) / .05); }
+.vs .ok h4 { color: rgb(var(--accent)); }
+.vs .ng { background: rgb(var(--bg)); }
+.vs .ng h4 { color: rgb(var(--muted)); }
+.vs .mark { font-size: 1.25rem; flex-shrink: 0; }
+.cards2 > div { background: rgb(var(--surface)); }
+.cards2 .icon { color: rgb(var(--accent)); margin-bottom: .75rem; }
+.terms { display: grid; grid-template-columns: 7rem 1fr; gap: .5rem .75rem; font-size: .875rem; line-height: 2; margin-top: 1.25rem;
+  border-top: 1px solid rgb(var(--border)); padding-top: 1rem; }
+.terms dt { font-weight: 700; color: rgb(var(--text)); }
+.terms dd { min-width: 0; }
+.steps { list-style: none; padding: 1rem; margin-top: 1.25rem; border: 1px solid rgb(var(--border)); border-radius: .75rem; }
+@media (min-width: 768px) { .steps { padding: 1.5rem; } }
+.steps li { display: grid; grid-template-columns: 2rem 1fr; gap: .25rem .5rem; }
+.steps li + li { margin-top: .75rem; }
+.steps .n { grid-row: span 2; font-weight: 700; color: rgb(var(--accent)); }
+.steps b { color: rgb(var(--text)); }
+.steps span { font-size: .875rem; line-height: 1.8; }
+.calc { display: grid; grid-template-columns: 1fr 1rem 1fr 1rem 1fr; gap: .25rem; align-items: center; text-align: center; margin-top: 1.25rem; }
+@media (min-width: 768px) { .calc { gap: .75rem; } }
+.calc > div { border: 1px solid rgb(var(--border)); border-radius: .5rem; padding: .75rem; background: rgb(var(--bg)); }
+.calc small { display: block; font-size: .75rem; color: rgb(var(--muted)); margin-bottom: .5rem; }
+.calc b { font-size: 1.25rem; font-weight: 900; color: rgb(var(--text)); }
+.calc .op { color: rgb(var(--muted)); font-size: 1.125rem; }
+.calc .result b { color: rgb(var(--accent)); }
+.takeaway {
+  border-left: 4px solid rgb(var(--accent)); background: rgb(var(--accent) / .05);
+  padding: 1rem 1.25rem; margin-top: 1.25rem; font-weight: 700; color: rgb(var(--accent)); line-height: 2;
+}
+.caveat { font-size: .75rem; line-height: 2; color: rgb(var(--muted)); margin-top: .75rem; }
+
+/* ---------- まとめ・出典 ---------- */
+.closing {
+  margin: 2rem 0 4rem; border: 1px solid rgb(var(--accent) / .3); border-radius: 1rem;
+  background: rgb(var(--bg)); padding: 1.5rem; text-align: center;
+}
+@media (min-width: 768px) { .closing { padding: 2rem; } }
+.closing .icon { width: 2rem; height: 2rem; color: rgb(var(--accent)); margin: 0 auto 1rem; display: block; }
+.closing .principle { font-size: 1.25rem; line-height: 1.7; font-weight: 700; color: rgb(var(--accent)); }
+@media (min-width: 768px) { .closing .principle { font-size: 1.5rem; } }
+.closing p + p { margin-top: 1rem; font-size: .875rem; line-height: 2; color: rgb(var(--text)); }
+.sources { border-top: 1px solid rgb(var(--border)); padding-top: 1.5rem; font-size: .75rem; line-height: 2; color: rgb(var(--muted)); }
+.sources h2 { font-size: .75rem; font-weight: 700; letter-spacing: .1em; margin-bottom: .5rem; }
+.sources ul { padding-left: 1.2rem; }
+.sources a { color: rgb(var(--muted)); word-break: break-all; }
+
+/* ---------- 先頭へ戻る ---------- */
+#to-top {
+  position: fixed; bottom: 24px; left: max(24px, calc(50% - 384px - 56px)); z-index: 30;
+  display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+  border-radius: .75rem; border: 1px solid rgb(var(--border) / .7); background: rgb(var(--bg) / .8);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: rgb(var(--muted)); cursor: pointer;
+  transition: opacity .15s ease, visibility .15s ease, color .15s ease;
+}
+#to-top:hover { color: rgb(var(--accent)); }
+#to-top[data-hidden] { opacity: 0; visibility: hidden; pointer-events: none; }
+
+/* ---------- 印刷 ---------- */
+@media print {
+  :root { color-scheme: light; }
+  #to-top { display: none !important; }
+  .title-grad { background: none; color: rgb(11 94 147); -webkit-text-fill-color: rgb(11 94 147); }
+  .fig, .card, .note, .vs > div, .cards2 > div, .steps, .closing { break-inside: avoid; }
+  .cards3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .vs, .cards2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fig::before { display: none; }
+  .fig-frame { overflow: hidden; }
+  .fig-frame svg { width: 100%; }
+}
+</style>
+</head>
+<body id="top">
+<main>
+
+<!-- ============================================================
+     表紙：ラベル → 題名（技術名＋仕組み）→ 副題（流れを 3 つの動詞で）→ リード（1〜2 文）
+     ============================================================ -->
+<header class="hero">
+  <div class="pill">
+    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/></svg>
+    仕組み図解
+  </div>
+  <h1>
+    <span class="title-grad"><span class="nb">{{技術名が}}</span><span class="nb">{{動く仕組み}}</span></span>
+    <span class="subtitle"><span class="nb">{{動詞1}}</span> <span class="nb">{{動詞2}}</span> <span class="nb">{{動詞3まで}}</span></span>
+  </h1>
+  <p class="lead"><span class="nb">{{読む前の困りごとに}}</span><span class="nb">{{答える 1〜2 文}}</span></p>
+</header>
+
+<!-- ============================================================
+     今回の全体像：1 文の見出し → 段階カード（3 枚が基本）→ ↓ → 読み終えるとできること
+     ============================================================ -->
+<section class="overview" aria-labelledby="overview-title">
+  <p class="eyebrow">今回の全体像</p>
+  <h2 id="overview-title"><span class="nb">{{技術}}の仕組みを</span><span class="nb">{{3段階}}で理解する</span></h2>
+  <div class="cards3">
+    <div class="card">
+      <!-- アイコンは references/icons.md から選ぶ -->
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <h3>{{段階1の名前}}</h3>
+      <p>{{段階1を 1 文で。常体}}</p>
+    </div>
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+      <h3>{{段階2の名前}}</h3>
+      <p>{{段階2を 1 文で}}</p>
+    </div>
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+      <h3>{{段階3の名前}}</h3>
+      <p>{{段階3を 1 文で}}</p>
+    </div>
+  </div>
+  <div class="down" aria-hidden="true">↓</div>
+  <div class="goal">{{読み終えると、何がわかり／できるようになるか}}</div>
+  <p class="scope">{{扱う範囲の断り。例：〇〇には複数の方式があります。今回は、<strong>代表的な〇〇</strong>を扱います。}}</p>
+</section>
+
+<!-- ============================================================
+     パート：全体像のカードと同じ名前・同じ順番。番号はパートをまたいで通し（01, 02 …）
+     ============================================================ -->
+<section class="part" aria-labelledby="part-1">
+  <div class="part-head"><h2 id="part-1">{{パート名＝段階1の名前}}</h2></div>
+
+  <!-- セクションの基本形：見出し（主張）→ リード → 図 → 説明 → 橋渡し -->
+  <section class="sec" aria-labelledby="s1">
+    <div class="sec-head"><span class="sec-num">01</span><h3 id="s1">{{主張の見出し。例：画像の正体は}}<span class="nb">{{数字の集まり}}</span></h3></div>
+    <p>{{リード：主張と理由を 1〜3 文。初出の用語は<strong>太字</strong>}}</p>
+
+    <figure class="fig">
+      <div class="fig-frame">
+        <!-- 図は references/figures.md の型で描く。viewBox は 1280x720 固定 -->
+        <svg viewBox="0 0 1280 720" role="img" aria-labelledby="f1-t f1-d" font-family="-apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Segoe UI', 'Yu Gothic UI', Meiryo, sans-serif">
+          <title id="f1-t">{{図のタイトル}}</title>
+          <desc id="f1-d">{{図に何が描いてあるかを文章で}}</desc>
+          <defs>
+            <linearGradient id="f1-rule" x1="0" x2="1"><stop offset="0" stop-color="#1B4B68"/><stop offset="1" stop-color="#A5C5D8" stop-opacity="0"/></linearGradient>
+          </defs>
+          <rect width="1280" height="720" fill="#FFFFFF"/>
+          <text x="48" y="74" font-size="38" font-weight="700" fill="#1B4B68">{{図のタイトル}}</text>
+          <rect x="0" y="100" width="780" height="3" fill="url(#f1-rule)"/>
+          <!-- ここに中身 -->
+        </svg>
+      </div>
+      <figcaption>{{図の補足。図だけでは足りない条件・例外}}</figcaption>
+    </figure>
+
+    <p class="bridge">{{次のセクションへの橋渡し。例：では、なぜ〇〇なのでしょうか。}}</p>
+  </section>
+</section>
+
+<!-- ============================================================
+     まとめ：原理を 1〜2 行 → それを知ると何ができるか 1 行
+     ============================================================ -->
+<div class="closing">
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/></svg>
+  <p class="principle"><span class="nb">{{原理の前半、}}</span><br><span class="nb">{{原理の後半。}}</span></p>
+  <p>{{この原理がわかると、仕事で何を判断できるか}}</p>
+</div>
+
+<!-- ============================================================
+     出典：確かめた一次情報。本文の事実の裏付け
+     ============================================================ -->
+<footer class="sources">
+  <h2>出典・確認した資料</h2>
+  <ul>
+    <li><a href="{{URL}}">{{資料名}}</a>（{{確認日 YYYY-MM-DD}}）</li>
+  </ul>
+</footer>
+
+</main>
+
+<button type="button" id="to-top" data-hidden aria-label="一番上に戻る" title="一番上に戻る">
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+</button>
+<script>
+(() => {
+  const b = document.getElementById("to-top");
+  if (!b) return;
+  b.addEventListener("click", () => document.getElementById("top").scrollIntoView());
+  let wait = false;
+  const sync = () => {
+    wait = false;
+    const y = window.scrollY, hidden = b.hasAttribute("data-hidden");
+    if (hidden && y > 320) b.removeAttribute("data-hidden");
+    else if (!hidden && y < 160) b.setAttribute("data-hidden", "");
+  };
+  window.addEventListener("scroll", () => { if (!wait) { wait = true; requestAnimationFrame(sync); } }, { passive: true });
+  sync();
+})();
+</script>
+</body>
+</html>
